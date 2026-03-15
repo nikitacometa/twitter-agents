@@ -1,6 +1,7 @@
 {
   "compilerOptions": {
-    "target": "ES2022",
+    "target": "ES2023",
+    "lib": ["ES2023"],
     "module": "NodeNext",
     "moduleResolution": "NodeNext",
     "outDir": "dist",
@@ -22,13 +23,17 @@
     "sourceMap": true,
     "paths": {
       "@common/*": ["./src/common/*"],
+      "@agent/*": ["./src/agent/*"],
       "@twitter/*": ["./src/twitter/*"],
       "@roast/*": ["./src/roast/*"],
       "@news/*": ["./src/news/*"],
-      "@content/*": ["./src/content/*"]
+      "@content/*": ["./src/content/*"],
+      "@storage/*": ["./src/storage/*"],
+      "@queue/*": ["./src/queue/*"],
+      "@scheduler/*": ["./src/scheduler/*"]
     },
     "baseUrl": "."
   },
   "include": ["src/**/*.ts"],
-  "exclude": ["node_modules", "dist", "**/*.spec.ts", "**/*.test.ts"]
+  "exclude": ["node_modules", "dist"]
 }

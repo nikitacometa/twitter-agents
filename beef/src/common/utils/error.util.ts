@@ -26,7 +26,7 @@ export async function retryWithBackoff<T>(
       }
       const delay = baseDelayMs * Math.pow(2, attempt) * (0.5 + Math.random() * 0.5);
       console.warn(
-        `${label} failed (attempt ${attempt + 1}/${maxRetries + 1}): ${getErrorMessage(error)}. Retrying in ${Math.round(delay)}ms`,
+        `${label} failed (attempt ${String(attempt + 1)}/${String(maxRetries + 1)}): ${getErrorMessage(error)}. Retrying in ${String(Math.round(delay))}ms`,
       );
       await new Promise((resolve) => setTimeout(resolve, delay));
     }

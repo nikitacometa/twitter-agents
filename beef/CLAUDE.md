@@ -8,7 +8,7 @@ Single AI bot that roasts crypto projects, tokens, and narratives on Twitter. Co
 
 ```
 1. Bot autonomously monitors crypto news, launches, and narratives
-2. Posts savage roasts of projects, tokens, trends (2-5/day)
+2. Posts savage roasts of projects, tokens, trends (5-10/day + 40-60 replies)
 3. Users burn $BEEF to submit roast requests (target a specific project)
 4. If bot roasts with false info → community challenges via Snapshot vote
 5. Valid challenge → challenger rewarded from treasury
@@ -42,16 +42,17 @@ If a roast contains provably false claims, any $BEEF holder can challenge it via
 | Layer | Choice | Why |
 |-------|--------|-----|
 | **Framework** | Custom TypeScript | ElizaOS Twitter plugin has active bugs (#5172, #4921). Custom = stable, debuggable |
-| **Twitter auth** | `agent-twitter-client` (cookie) → `twitter-api-v2` (API) | Cookie for MVP ($0). Upgrade to Basic ($200/mo) after validation |
-| **LLM** | Claude Sonnet 4.6 (`@anthropic-ai/sdk`) | Best character consistency. Haiku for content filter |
+| **Twitter auth** | `twitter-api-v2` (API Basic tier) | $200/mo, 3K writes/mo, no cookie auth risk |
+| **LLM** | Claude Code Agent (CLI subprocess) | Claude Max = unlimited tokens. Agent has Perplexity MCP, WebSearch, multi-step reasoning |
+| **Research** | Perplexity MCP (via Claude Code Agent) | Deep research: controversies, team history, live data |
 | **Chain** | Base (Ethereum L2) | #1 L2 by TVL ($3.9B), low gas, Coinbase ecosystem |
 | **Token launch** | Bankr (@bankrbot on Twitter) | Instant ERC-20 + Uniswap V3 pool. 0.684% creator fee |
-| **News feeds** | RSS + DexScreener SSE + Twitter trending | Autonomous target discovery |
-| **Fact-checking** | Claude Haiku + web search pre-publish | Verify claims before posting |
+| **News feeds** | RSS + DexScreener + Agent research | Agent uses Perplexity for target discovery |
+| **Fact-checking** | Claude Code Agent + WebSearch | Agent verifies claims via web search, not separate LLM call |
 | **Voting** | Snapshot.org (off-chain) | Free, gasless, token-weighted governance |
 | **Farcaster** | Neynar SDK | Secondary channel, crypto-native, no bot restrictions |
-| **Crypto data** | CoinGecko API + DexScreener API | Price, volume, liquidity monitoring |
-| **Hosting** | Hetzner VPS ($6-8/mo) | European, cheap, reliable |
+| **Crypto data** | CoinGecko + DexScreener + DefiLlama (via agent curl) | Agent fetches live data during research |
+| **Hosting** | Hostinger VPS (existing) | 2 vCPU, 8GB RAM, Claude Code CLI pre-installed |
 | **Process mgmt** | PM2 | Auto-restart, log aggregation |
 | **Error tracking** | Sentry (free tier) | Crash reporting |
 | **Alerts** | Telegram bot | Critical alerts to founders |
@@ -77,43 +78,40 @@ beef/
 │   ├── test/              # Contract tests
 │   └── foundry.toml       # Foundry config
 └── src/                   # TypeScript bot source
-    ├── twitter/           # Twitter client (cookie + API auth)
-    ├── roast/             # Roast generation engine (Claude Sonnet)
-    ├── news/              # News monitoring (RSS, DexScreener, trending)
-    ├── content/           # Fact-checker + content filter
-    ├── voting/            # Snapshot integration for challenges
-    ├── token/             # Token monitoring (price, volume, burns)
-    └── index.ts           # Entry point + scheduler
+    ├── agent/             # ★ Claude Code Agent layer (subprocess runner + prompts)
+    ├── twitter/           # Twitter client (API auth) + rate limiter
+    ├── roast/             # Roast engine (orchestrates agent calls)
+    ├── news/              # News monitoring (RSS, DexScreener)
+    ├── content/           # Content filter (regex, no LLM)
+    ├── queue/             # Priority queue (SQLite)
+    ├── scheduler/         # Human-like jitter scheduling
+    ├── storage/           # SQLite (10 tables + FTS5) + repositories
+    ├── learning/          # Engagement tracking + feedback loop
+    ├── admin/             # Telegram admin bot
+    ├── health/            # Health monitor + metrics
+    └── index.ts           # Entry point + graceful shutdown
 ```
 
 ## Architecture
 
+Node.js orchestrator (scheduling, Twitter API, SQLite) + Claude Code Agent subprocess (research, generation, fact-checking via Perplexity MCP + WebSearch). See `docs/architecture.md` for full diagram.
+
 ```
-┌─────────────────────────────────────────────────┐
-│                   Scheduler (cron)               │
-│  ┌──────────┐  ┌──────────┐  ┌───────────────┐  │
-│  │ News     │  │ Mention  │  │ Autonomous    │  │
-│  │ Monitor  │  │ Poller   │  │ Roast Timer   │  │
-│  └────┬─────┘  └────┬─────┘  └──────┬────────┘  │
-│       │              │               │           │
-│       ▼              ▼               ▼           │
-│  ┌──────────────────────────────────────────┐    │
-│  │           Roast Engine (Claude Sonnet)    │    │
-│  │  character.json + target context + news   │    │
-│  └──────────────────┬───────────────────────┘    │
-│                     │                            │
-│       ┌─────────────┼─────────────┐              │
-│       ▼             ▼             ▼              │
-│  ┌─────────┐  ┌──────────┐  ┌─────────┐         │
-│  │ Fact    │  │ Content  │  │ Length   │         │
-│  │ Checker │  │ Filter   │  │ Check   │         │
-│  └────┬────┘  └────┬─────┘  └────┬────┘         │
-│       └─────────────┼─────────────┘              │
-│                     ▼                            │
-│  ┌──────────────────────────────────────────┐    │
-│  │        Twitter Client (post/reply)        │    │
-│  └──────────────────────────────────────────┘    │
-└─────────────────────────────────────────────────┘
+Node.js Orchestrator (PM2, always running)
+  ├── Scheduler (human-like jitter, quiet hours, burst patterns)
+  │   └── Jobs → Queue → process queue item
+  ├── Queue Manager (SQLite, priority)
+  │   └── Dequeue → spawn Claude Code Agent subprocess
+  ├── ★ Claude Code Agent (claude CLI, Sonnet model)
+  │   ├── Perplexity MCP → deep crypto research
+  │   ├── WebSearch → fact verification
+  │   ├── curl → live prices (CoinGecko, DexScreener)
+  │   └── Read → local knowledge base, past roasts
+  ├── Content Filter (regex, no LLM) → safety net
+  ├── Twitter Client (post, reply, poll)
+  ├── Telegram Admin Bot (11 commands)
+  ├── Health Monitor + Metrics
+  └── SQLite (10 tables + 2 FTS5 virtual tables)
 ```
 
 ## Development Workflow
@@ -249,13 +247,14 @@ Single bot: **$BEEF** — aggressive degen roaster, crypto-native, meme-fluent.
 | Item | Cost |
 |------|------|
 | Initial liquidity (Bankr pool) | $800-1,000 |
-| Twitter API (cookie MVP → Basic later) | $0 → $200/mo |
+| Twitter API Basic tier | $200/mo |
 | X Premium | $8/mo |
-| LLM API (Claude Sonnet) | $20-40/mo |
-| VPS (Hetzner) | $6-8/mo |
+| Claude API (Claude Max) | $0 (included in subscription) |
+| Perplexity MCP | $0 (included in subscription) |
+| VPS (Hostinger) | $0 (existing shared server) |
 | 1-2 micro-KOL seeds | $500-1,000 |
-| **Total launch** | **$1,334-2,056** |
-| **Monthly recurring** | **$34-56** (cookie) / **$234-256** (API) |
+| **Total launch** | **$1,308-2,008** |
+| **Monthly recurring** | **$208/mo** |
 
 ## External Knowledge (Cometa Project)
 

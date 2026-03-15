@@ -24,28 +24,30 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.39.0",
-    "twitter-api-v2": "^1.18.0",
-    "viem": "^2.21.0",
-    "zod": "^3.24.0",
+    "better-sqlite3": "^12.8.0",
+    "cron": "^3.3.0",
+    "dotenv": "^16.4.0",
     "pino": "^9.6.0",
     "pino-pretty": "^13.0.0",
-    "cron": "^3.3.0",
-    "dotenv": "^16.4.0"
+    "twitter-api-v2": "^1.18.0",
+    "viem": "^2.21.0",
+    "zod": "^3.24.0"
   },
   "devDependencies": {
+    "@eslint/js": "^9.0.0",
+    "@types/better-sqlite3": "^7.6.13",
     "@types/node": "^22.0.0",
-    "typescript": "^5.7.0",
-    "tsx": "^4.19.0",
-    "vitest": "^3.0.0",
     "@vitest/coverage-v8": "^3.0.0",
     "eslint": "^9.0.0",
-    "@eslint/js": "^9.0.0",
-    "typescript-eslint": "^8.0.0",
     "eslint-config-prettier": "^10.0.0",
     "eslint-plugin-prettier": "^5.0.0",
-    "prettier": "^3.4.0",
     "husky": "^9.0.0",
-    "lint-staged": "^16.0.0"
+    "lint-staged": "^16.0.0",
+    "prettier": "^3.4.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.7.0",
+    "typescript-eslint": "^8.0.0",
+    "vitest": "^3.0.0"
   },
   "lint-staged": {
     "*.ts": [

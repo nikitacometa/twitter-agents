@@ -13,8 +13,11 @@ const envSchema = z
     TWITTER_PASSWORD: z.string().optional(),
     TWITTER_EMAIL: z.string().optional(),
 
-    // Anthropic
-    ANTHROPIC_API_KEY: z.string().min(1, 'ANTHROPIC_API_KEY is required'),
+    // Anthropic SDK — fallback only (primary = Claude Code CLI via Claude Max)
+    ANTHROPIC_API_KEY: z.string().optional(),
+
+    // Database
+    DB_PATH: z.string().default('./data/beef.db'),
 
     // Base chain
     BASE_RPC_URL: z.string().url().default('https://mainnet.base.org'),
@@ -22,9 +25,12 @@ const envSchema = z
 
     // Bot config
     BOT_NAME: z.string().default('0xBeef'),
-    ROASTS_PER_DAY: z.coerce.number().int().min(1).max(20).default(5),
+    ROASTS_PER_DAY: z.coerce.number().int().min(1).max(20).default(10),
     MENTION_POLL_INTERVAL_MS: z.coerce.number().int().min(60_000).default(600_000),
-    POST_JITTER_PERCENT: z.coerce.number().int().min(0).max(50).default(30),
+    DRY_RUN: z
+      .enum(['true', 'false'])
+      .default('false')
+      .transform((v) => v === 'true'),
 
     // Monitoring
     SENTRY_DSN: z.string().optional(),

@@ -1,0 +1,85 @@
+import { mkdtempSync, rmSync } from 'node:fs';
+import { join } from 'node:path';
+import { tmpdir } from 'node:os';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { createDatabase } from './database.js';
+import { logger } from '@common/utils/logger.js';
+
+describe('createDatabase', () => {
+  let tmpDir: string;
+  let dbPath: string;
+
+  beforeEach(() => {
+    tmpDir = mkdtempSync(join(tmpdir(), 'beef-test-'));
+    dbPath = join(tmpDir, 'test.db');
+  });
+
+  afterEach(() => {
+    rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it('creates database with WAL mode', () => {
+    const db = createDatabase(dbPath, logger);
+    const mode = db.pragma('journal_mode', { simple: true }) as string;
+    expect(mode).toBe('wal');
+    db.close();
+  });
+
+  it('applies all migrations', () => {
+    const db = createDatabase(dbPath, logger);
+    const migrations = db.prepare('SELECT name FROM _migrations ORDER BY id').all() as Array<{ name: string }>;
+    expect(migrations).toHaveLength(2);
+    expect(migrations[0]!.name).toBe('001-initial.sql');
+    expect(migrations[1]!.name).toBe('002-extended.sql');
+    db.close();
+  });
+
+  it('creates all expected tables', () => {
+    const db = createDatabase(dbPath, logger);
+    const tables = db
+      .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE '\\_%' ESCAPE '\\' ORDER BY name")
+      .all() as Array<{ name: string }>;
+
+    const tableNames = tables.map((t) => t.name);
+    expect(tableNames).toContain('roasts');
+    expect(tableNames).toContain('mentions');
+    expect(tableNames).toContain('queue');
+    expect(tableNames).toContain('config');
+    expect(tableNames).toContain('tweets_observed');
+    expect(tableNames).toContain('target_profiles');
+    expect(tableNames).toContain('llm_log');
+    expect(tableNames).toContain('engagement_snapshots');
+    expect(tableNames).toContain('news_items');
+    expect(tableNames).toContain('users');
+    db.close();
+  });
+
+  it('creates FTS5 virtual tables', () => {
+    const db = createDatabase(dbPath, logger);
+    const tables = db
+      .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name LIKE '%_fts'")
+      .all() as Array<{ name: string }>;
+
+    const tableNames = tables.map((t) => t.name);
+    expect(tableNames).toContain('tweets_fts');
+    expect(tableNames).toContain('roasts_fts');
+    db.close();
+  });
+
+  it('is idempotent — running twice does not error', () => {
+    const db1 = createDatabase(dbPath, logger);
+    db1.close();
+
+    const db2 = createDatabase(dbPath, logger);
+    const migrations = db2.prepare('SELECT COUNT(*) as count FROM _migrations').get() as { count: number };
+    expect(migrations.count).toBe(2);
+    db2.close();
+  });
+
+  it('inserts default config values', () => {
+    const db = createDatabase(dbPath, logger);
+    const paused = db.prepare("SELECT value FROM config WHERE key = 'paused'").get() as { value: string };
+    expect(paused.value).toBe('false');
+    db.close();
+  });
+});
