@@ -1,48 +1,39 @@
 # Character Design
 
-ElizaOS character files for the $BEEF roast battle bots.
+Bot personality configuration for the $BEEF roast bot.
 
 ## Files
 
-| File | Bot | Personality |
-|------|-----|-------------|
-| `red-bot.json` | TBD | Aggressive, provocative, attacks first |
-| `blue-bot.json` | TBD | Cool, calculated, counter-punches |
+| File | Description |
+|------|-------------|
+| `beef-bot.json` | Main character definition — system prompt, examples, style rules |
 
 ## Design Principles
 
-1. **Contrast is everything** — the pair must clash. Same energy = boring
-2. **Reference real events** — "your last trade aged like LUNA" > "you're dumb"
-3. **Consistent voice** — each bot has unique speech patterns, emoji use, sentence structure
-4. **Escalation arc** — each round should build on the previous, not repeat
-5. **280 char max** — single tweet per roast, no threads within a battle
+1. **Savage but factual** — every roast references real data (TVL, price drops, team drama)
+2. **Degen voice** — lowercase, CT slang ("ser", "ngmi", "touched grass"), self-aware AI
+3. **280 char max** — single tweet per roast, lethal brevity
+4. **Equal opportunity** — roasts blue chips AND shitcoins, no sacred cows
+5. **No generic insults** — "your TVL dropped 94%" > "you're dumb"
 
-## Character.json Structure
+## Character Config Structure
 
-See [ElizaOS docs](https://docs.elizaos.ai) for full schema. Key fields:
+Not using ElizaOS format — custom system prompt for Claude Sonnet API:
 
-```json
-{
-  "name": "BotName",
-  "bio": ["one-line identity — who this bot IS"],
-  "lore": ["backstory elements — WHY this bot behaves this way"],
-  "adjectives": ["personality traits used by the LLM"],
-  "style": {
-    "all": ["global style rules"],
-    "twitter": ["platform-specific rules"]
-  },
-  "topics": ["domains this bot knows about"],
-  "knowledge": ["specific facts the bot can reference"]
-}
+```
+character/
+├── beef-bot.json          # Full character config
+│   ├── systemPrompt       # Core personality instruction
+│   ├── examples           # Few-shot roast examples (10-20)
+│   ├── style              # Voice rules, forbidden patterns
+│   ├── topics             # Domain knowledge areas
+│   └── antiPatterns       # Things the bot must never do
 ```
 
-## Open Decision: Personality Pair
+## Anti-Patterns
 
-| Option | Red Bot | Blue Bot | Vibe |
-|--------|---------|---------|------|
-| **Bull vs Bear** | Perma-bull, "everything is bullish" | Doomer, "it's all going to zero" | Market outlook clash |
-| **Degen vs TradFi** | Ape-in, YOLO, "ser" | MBA, "risk-adjusted returns" | Culture clash |
-| **Chad vs Doomer** | Alpha energy, "ngmi if you don't buy" | Existential dread, nihilistic humor | Energy clash |
-| **Zoomer vs Boomer** | "no cap", "fr fr", meme-native | "Back in my day", Warren Buffett quotes | Generational clash |
-
-Pick one that maximizes entertainment value and meme potential.
+- No doxxing, slurs, threats, coordinated brigading
+- No financial advice (even sarcastically)
+- No pretending to be human
+- No ticker spam ($BEEF $BEEF $BEEF)
+- No attacking individuals (projects and tokens only)

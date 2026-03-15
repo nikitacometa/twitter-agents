@@ -1,42 +1,56 @@
-# $BEEF — AI Roast Battle PVP
+# $BEEF — AI Crypto Roast Bot
 
-Two AI bots with distinct personalities roast each other on Twitter. Community bets on who's funnier with $BEEF token.
+Single AI bot that roasts crypto projects, tokens, and narratives on Twitter. Community interacts via burn-to-roast requests and fact-checking challenges.
 
-**One-liner:** "Two AI bots roast each other. Bet on who's funnier."
+**One-liner:** "AI that roasts your bags. Burn $BEEF to aim it."
 
 ## How It Works
 
 ```
-1. Two AI agents with personalities (@RedBot vs @BlueBot — names TBD)
-2. Community tags both bots → roast thread begins
-3. 24h staking period: fans bet $BEEF on the winner
-4. Battle: public roast thread on X / Farcaster
-5. Voting: hold ≥ X $BEEF = 1 vote
-6. Payout: 80% losers' stakes → winners, 20% → treasury/burn
+1. Bot autonomously monitors crypto news, launches, and narratives
+2. Posts savage roasts of projects, tokens, trends (2-5/day)
+3. Users burn $BEEF to submit roast requests (target a specific project)
+4. If bot roasts with false info → community challenges via Snapshot vote
+5. Valid challenge → challenger rewarded from treasury
+6. Invalid challenge → challenger's stake burned
 ```
+
+## Three Operating Modes
+
+### Mode 1: Autonomous Roast
+Bot finds targets independently via news feeds, trending tokens, on-chain events. No user input needed. This is the core content engine — 60-70% of all posts.
+
+### Mode 2: Community Roast Request
+User burns X $BEEF → bot roasts the specified target. Higher burn = priority queue. Creates buy pressure on every roast request.
+
+### Mode 3: Accountability Layer
+If a roast contains provably false claims, any $BEEF holder can challenge it via Snapshot vote. Successful challenge = reward from treasury. Failed challenge = stake burned. Creates trust and engagement loop.
 
 ## Tokenomics
 
-- **To bet** → hold $BEEF (buy pressure every match)
-- **To submit prompt** → burn $BEEF (deflation)
-- **80% losers' stakes** → winners (incentive to hold and bet)
-- **20%** → treasury → periodic buyback
+- **To request a roast** → burn $BEEF (deflation on every interaction)
+- **To challenge a roast** → stake $BEEF (skin in the game)
+- **Successful challenge** → challenger gets reward from treasury
+- **Failed challenge** → stake burned (more deflation)
+- **Swap fees** → Bankr/Clanker pool generates ongoing fees
+- **Treasury** → funded by failed challenges + % of burns → periodic buyback
 
-5-second pitch: "Buy $BEEF. Bet on a bot. Win — take the losers' money."
+**Why token goes up:** Every roast request burns supply. Every challenge locks supply. Content virality drives new buyers. Deflation is mechanical, not narrative.
 
 ## Stack
 
 | Layer | Choice | Why |
 |-------|--------|-----|
-| **Framework** | ElizaOS v1.7.2 | 17.8k stars, mature Twitter plugins, TypeScript, 60% market share |
-| **Twitter API** | `twitter-api-v2` + Basic tier ($100/mo) | Official API, reliable. 10K reads + 3K writes/mo |
-| **Twitter fallback** | `agent-twitter-client` | Cookie-based, no API keys. For read-heavy ops when API limits hit |
-| **LLM** | Claude Sonnet 4.6 | Best character consistency. Haiku for lightweight tasks |
-| **Chain** | Base (Ethereum L2) | #1 L2 by TVL ($3.9B), low gas, Coinbase backing |
-| **Smart contracts** | Foundry | Solidity tests, fast compilation, Base official docs |
-| **Token launch** | Clanker (Farcaster) or Bankr (Twitter) | Quick ERC-20 + Uniswap pool. Foundry for custom staking |
-| **Farcaster** | Neynar SDK | Crypto-native audience, no bot restrictions, $5/yr |
-| **Crypto data** | CoinGecko MCP + DexScreener API | Price, volume, liquidity monitoring |
+| **Framework** | Custom TypeScript | ElizaOS Twitter plugin has active bugs (#5172, #4921). Custom = stable, debuggable |
+| **Twitter auth** | `agent-twitter-client` (cookie) → `twitter-api-v2` (API) | Cookie for MVP ($0). Upgrade to Basic ($200/mo) after validation |
+| **LLM** | Claude Sonnet 4.6 (`@anthropic-ai/sdk`) | Best character consistency. Haiku for content filter |
+| **Chain** | Base (Ethereum L2) | #1 L2 by TVL ($3.9B), low gas, Coinbase ecosystem |
+| **Token launch** | Bankr (@bankrbot on Twitter) | Instant ERC-20 + Uniswap V3 pool. 0.684% creator fee |
+| **News feeds** | RSS + DexScreener SSE + Twitter trending | Autonomous target discovery |
+| **Fact-checking** | Claude Haiku + web search pre-publish | Verify claims before posting |
+| **Voting** | Snapshot.org (off-chain) | Free, gasless, token-weighted governance |
+| **Farcaster** | Neynar SDK | Secondary channel, crypto-native, no bot restrictions |
+| **Crypto data** | CoinGecko API + DexScreener API | Price, volume, liquidity monitoring |
 | **Hosting** | Hetzner VPS ($6-8/mo) | European, cheap, reliable |
 | **Process mgmt** | PM2 | Auto-restart, log aggregation |
 | **Error tracking** | Sentry (free tier) | Crash reporting |
@@ -48,142 +62,200 @@ Two AI bots with distinct personalities roast each other on Twitter. Community b
 beef/
 ├── CLAUDE.md              # This file — project instructions
 ├── docs/                  # Research and strategy documents
-│   ├── strategy-v4-roast-battle.md    # Current strategy (21 agents)
-│   ├── strategy-v3-16-analysts.md     # Previous strategy (16 agents)
-│   ├── strategy-v2-expert-review.md   # Expert review round
+│   ├── strategy-v4-roast-battle.md    # Strategy evolution (historical)
+│   ├── strategy-v3-16-analysts.md     # 16-analyst strategy (historical)
+│   ├── strategy-v2-expert-review.md   # Expert review (historical)
 │   ├── market-research-2026.md        # Base chain market analysis
-│   ├── fresh-research-march-2026.md   # Phase 1 research data
+│   ├── fresh-research-march-2026.md   # Phase 1 research corrections
 │   ├── late-agent-results.md          # Additional agent findings
 │   ├── twitter-playbook.md            # Twitter algorithm, content rules, bot survival
-│   └── stack-research.md             # Technology stack research & decisions
-├── characters/            # ElizaOS character.json files
-│   ├── red-bot.json       # Aggressive/provocative personality
-│   └── blue-bot.json      # Cool/calculated personality
-├── contracts/             # Foundry project (Solidity)
+│   └── stack-research.md              # Technology stack research & decisions
+├── characters/            # Bot personality configuration
+│   └── beef-bot.json      # Single bot character definition
+├── contracts/             # Foundry project (Solidity) — future staking
 │   ├── src/               # Contract sources
 │   ├── test/              # Contract tests
 │   └── foundry.toml       # Foundry config
 └── src/                   # TypeScript bot source
-    ├── plugins/           # ElizaOS custom plugins
-    ├── actions/           # Battle actions (start, vote, payout)
-    └── index.ts           # Entry point
+    ├── twitter/           # Twitter client (cookie + API auth)
+    ├── roast/             # Roast generation engine (Claude Sonnet)
+    ├── news/              # News monitoring (RSS, DexScreener, trending)
+    ├── content/           # Fact-checker + content filter
+    ├── voting/            # Snapshot integration for challenges
+    ├── token/             # Token monitoring (price, volume, burns)
+    └── index.ts           # Entry point + scheduler
+```
+
+## Architecture
+
+```
+┌─────────────────────────────────────────────────┐
+│                   Scheduler (cron)               │
+│  ┌──────────┐  ┌──────────┐  ┌───────────────┐  │
+│  │ News     │  │ Mention  │  │ Autonomous    │  │
+│  │ Monitor  │  │ Poller   │  │ Roast Timer   │  │
+│  └────┬─────┘  └────┬─────┘  └──────┬────────┘  │
+│       │              │               │           │
+│       ▼              ▼               ▼           │
+│  ┌──────────────────────────────────────────┐    │
+│  │           Roast Engine (Claude Sonnet)    │    │
+│  │  character.json + target context + news   │    │
+│  └──────────────────┬───────────────────────┘    │
+│                     │                            │
+│       ┌─────────────┼─────────────┐              │
+│       ▼             ▼             ▼              │
+│  ┌─────────┐  ┌──────────┐  ┌─────────┐         │
+│  │ Fact    │  │ Content  │  │ Length   │         │
+│  │ Checker │  │ Filter   │  │ Check   │         │
+│  └────┬────┘  └────┬─────┘  └────┬────┘         │
+│       └─────────────┼─────────────┘              │
+│                     ▼                            │
+│  ┌──────────────────────────────────────────┐    │
+│  │        Twitter Client (post/reply)        │    │
+│  └──────────────────────────────────────────┘    │
+└─────────────────────────────────────────────────┘
 ```
 
 ## Development Workflow
 
 ```bash
 # Install dependencies
-npm install
+pnpm install
 
-# Run bot locally (single character)
-npx elizaos --character characters/red-bot.json
-
-# Run both bots
-npx elizaos --characters characters/red-bot.json,characters/blue-bot.json
+# Run bot locally (watch mode)
+pnpm dev
 
 # Run tests
-npm test
+pnpm test
 
-# Smart contract tests
+# Type check
+pnpm typecheck
+
+# Lint + format
+pnpm lint
+
+# Smart contract tests (future)
 cd contracts && forge test
-
-# Deploy contract to Base Sepolia (testnet)
-cd contracts && forge script script/Deploy.s.sol --rpc-url base-sepolia --broadcast
 
 # Deploy to production
 pm2 start ecosystem.config.js
 ```
 
+## TypeScript Conventions
+
+**Strict mode is non-negotiable.** `tsconfig.json` has `strict: true` + `noUncheckedIndexedAccess` + `noImplicitReturns` + `noUnusedLocals` + `noUnusedParameters`. Do not loosen.
+
+**ESLint critical rules:**
+- `no-floating-promises: error` — every promise must be awaited or explicitly voided
+- `require-await: error` — don't mark functions async if they don't await
+- `consistent-type-imports: error` — use `import type { Foo }` for type-only imports
+- `no-explicit-any: warn` — prefer `unknown` + type guards over `any`
+
+**Error handling:**
+- Use `getErrorMessage(error: unknown)` from `@common/utils/error.util.ts` — never inline `instanceof Error` checks
+- Use `retryWithBackoff()` for API calls (Twitter, Anthropic, DexScreener) — exponential backoff with jitter
+- Every try/catch must log the error with context (use `logger.error({ err, context }, 'message')`)
+- Never swallow errors in catch blocks
+
+**Environment:**
+- All env vars validated at startup via Zod (`src/common/config/env.validation.ts`)
+- Cross-field validation via `superRefine` (e.g., production requires Sentry DSN)
+- Access config through validated `AppConfig` type, never raw `process.env`
+
+**Imports:**
+- Use path aliases: `@common/*`, `@twitter/*`, `@roast/*`, `@news/*`, `@content/*`
+- ESM: use `.js` extension in relative imports (`import { foo } from './bar.js'`)
+
+**Logging:**
+- Use `pino` logger from `@common/utils/logger.ts` — never `console.log` in production code
+- Structured logging: `logger.info({ key: value }, 'message')` — object first, message second
+
+**Testing:**
+- Vitest (not Jest) — ESM-native, faster
+- Test files: `*.spec.ts` or `*.test.ts` next to source
+- `clearMocks: true` in vitest config — auto-reset between tests
+- For every `mockResolvedValue` — add a sibling `mockRejectedValue` test
+- Use `it.each()` for parameterized tests
+
+**Pre-commit checklist (run before every commit):**
+1. `pnpm typecheck` — zero errors
+2. `pnpm lint:check` — zero errors
+3. `pnpm test` — all pass
+4. No `console.log` in production code
+5. No hardcoded API keys or secrets
+6. No `any` types without explicit justification comment
+7. Tweet length ≤ 280 chars enforced in roast generation
+8. Rate limits respected (check MENTION_POLL_INTERVAL_MS, POST_JITTER_PERCENT)
+
 ## Twitter Constraints
 
 **Critical rules — violating any = account ban:**
-- **Reply-only** for bot interactions. Never initiate threads tagging other accounts
+- **Reply-only** for interactions with other accounts. Never initiate threads tagging others
 - **Bot label** in profile — mandatory for automated accounts
-- **2-5 proactive posts/day** (original content, NOT replies to others)
-- **API Basic tier** = 10,000 reads + 3,000 writes per month
+- **2-5 proactive posts/day** (original roasts, NOT replies)
 - **Randomized timing** — fixed intervals trigger spam detection
 - **No ticker spam** — Grok detects `$BEEF $BEEF $BEEF` patterns
-- **X Premium required** — 4x reach boost, link posts get near-zero reach without it
+- **X Premium required** — 4x reach boost, posts get near-zero reach without it
 
-**PVP battle flow on Twitter:**
-1. User tags both bots in a tweet
-2. Each bot detects the mention via API polling (not webhooks on Basic)
-3. Each bot replies to the original tweet with a roast
-4. Thread grows as bots reply to each other (3-5 rounds)
-5. Battle results posted as a new tweet (not a reply) — engagement bait
+**Roast post flow:**
+1. News monitor finds target OR user submits burn request
+2. Roast engine generates roast with real data context
+3. Fact-checker verifies claims (separate Claude Haiku call)
+4. Content filter checks for TOS violations
+5. Post as original tweet (autonomous) or reply (to mention/request)
 
-## Character Design Guidelines
+## Bot Personality
 
-Each bot needs a **contrasting personality** — the entertainment value comes from the clash.
+Single bot: **$BEEF** — aggressive degen roaster, crypto-native, meme-fluent.
 
-**Character.json structure (ElizaOS):**
-```json
-{
-  "name": "BotName",
-  "bio": ["one-line identity"],
-  "lore": ["backstory elements that inform behavior"],
-  "adjectives": ["sarcastic", "based", "cryptopilled"],
-  "style": {
-    "all": ["use lowercase", "max 2 sentences per reply"],
-    "twitter": ["roast the opponent's last point", "reference real crypto events"]
-  },
-  "topics": ["Base ecosystem", "DeFi", "memecoins", "degen culture"],
-  "knowledge": ["crypto history", "famous rug pulls", "meme origins"]
-}
-```
+**Core traits:**
+- Savage but factual — every roast references real data (TVL, price action, team history)
+- Degen voice — lowercase, "ser", "ngmi", "touched grass", CT slang
+- Self-aware — knows it's an AI, jokes about it, doesn't pretend to be human
+- Equal opportunity — roasts blue chips AND shitcoins, no sacred cows
+- Short and lethal — max 280 chars, single tweet, no threads
 
-**Personality pair options (open question):**
-- Bull vs Bear (market outlook clash)
-- Degen vs TradFi (culture clash)
-- Zoomer vs Boomer (generational clash)
-- Chad vs Doomer (energy clash)
-
-**Roast quality rules:**
-- Reference real events, projects, people (not generic insults)
-- Each roast must build on the opponent's previous reply
-- Max 280 chars per roast (single tweet, no threads within a battle)
-- No doxxing, no coordinated brigading, no slurs
-- Pre-publish classifier: separate LLM call checks content before posting
+**Anti-patterns:**
+- No generic insults ("you're dumb") — always specific ("your TVL dropped 94% and you're tweeting about partnerships")
+- No doxxing, slurs, threats
+- No coordinated brigading
+- No financial advice (even sarcastically)
 
 ## Competitors
 
-| Project | Mcap | How we differ |
-|---------|------|---------------|
-| Freysa ($FAI) | $56M | Human vs AI (not AI vs AI). Jailbreak, not roast |
-| AI Agent Arena ($AIRENA) | $22M | Gaming format (train & fight), not entertainment/comedy |
-| Dolos ($BULLY) | $2.2M | Roast exists but no PVP, no betting, no token utility |
+| Project | Mcap | Status | How we differ |
+|---------|------|--------|---------------|
+| Freysa ($FAI) | $53M | Active | Human vs AI jailbreak, not roast content |
+| AIXBT | $27M | Active | Analysis bot, not entertainment/comedy |
+| Dolos ($BULLY) | $164K | Dead | Had roast but no token utility, no community interaction |
+| BurnieAI ($ROAST) | $122K | Dead | Roast bot but no accountability layer, no burn mechanics |
 
-**Our niche:** AI Roast Battle PVP with betting — empty market. No direct competitor.
+**Our niche:** Roast bot with token burn mechanics + accountability (challenge system). No direct competitor alive.
+
+**Precedent:** Wordware AI Roast — 4M users in 11 days. Proves roast AI is inherently viral. They had no token, no ongoing utility.
 
 ## Growth Catalysts
 
 | Catalyst | How to get it | Expected effect |
 |----------|--------------|-----------------|
-| RT from Jesse Pollak | Builder demo on Farcaster, onchain utility | $17M mcap in 1 hour (precedent) |
-| Mention from @0xDeployer | Deploy story via Bankr, stake $BNKR | $DRB: $38M mcap in 3 days |
-| Challenge AIXBT | Public callout on Farcaster | 300K+ follower exposure |
-| Bot-to-bot virality | Screenshot roast threads | Organic viral (MKBHD precedent) |
+| Viral roast screenshot | Roast a major project, community screenshots | Organic viral — Wordware got 4M users this way |
+| RT from Jesse Pollak | Build on Base, show at Farcaster | $17M mcap in 1 hour (precedent) |
+| Mention from @0xDeployer | Deploy via Bankr, engage Bankr community | $DRB: $38M mcap in 3 days |
+| Challenge AIXBT | Public roast on Farcaster/Twitter | 300K+ follower exposure |
+| KOL roast request | Micro-KOL burns $BEEF to roast a rival | Their audience discovers the bot |
 
 ## Budget
 
 | Item | Cost |
 |------|------|
-| Initial liquidity | $800-1,000 |
-| Twitter API Basic x2 | $200/mo |
-| X Premium x2 | $16/mo |
+| Initial liquidity (Bankr pool) | $800-1,000 |
+| Twitter API (cookie MVP → Basic later) | $0 → $200/mo |
+| X Premium | $8/mo |
 | LLM API (Claude Sonnet) | $20-40/mo |
 | VPS (Hetzner) | $6-8/mo |
-| 1-2 micro-KOL | $500-1,000 |
-| **Total launch** | **$1,542-2,064** |
-
-## Open Questions
-
-1. **Ticker**: $BEEF recommended. Alternatives: $BARS, $CLASH, $VERSUS
-2. **Bot personas**: Bull vs Bear? Degen vs TradFi? Chad vs Doomer?
-3. **Winner oracle**: Community vote vs engagement metrics vs external judge?
-4. **Gambling compliance**: Start with burn-only (no staking) or staking from day 1?
-5. **Video content**: Add AI video roasts? Partner impressed by AI video editing
-6. **Bot names**: Need memorable, contrasting Twitter handles
+| 1-2 micro-KOL seeds | $500-1,000 |
+| **Total launch** | **$1,334-2,056** |
+| **Monthly recurring** | **$34-56** (cookie) / **$234-256** (API) |
 
 ## External Knowledge (Cometa Project)
 
@@ -195,8 +267,6 @@ Extensive Twitter analysis exists in the Cometa Strategy project — do NOT dupl
 | Content Patterns | `~/dev/cometa/cometa-strategy/research/knowledge-base/content-patterns.md` | Performance data by content type, posting timing, templates |
 | Twitter Strategy | `~/dev/cometa/cometa-strategy/strategy/twitter-comeback-strategy.md` | Full comeback strategy, 2-week calendar, KPIs, format hierarchy |
 | Execution Plan | `~/dev/cometa/cometa-strategy/content/day1-execution-plan.md` | Twitter algorithm weights, ready tweet templates, DM templates |
-| @NikitaCometa Analysis | `~/dev/cometa/cometa-strategy/research/twitter-analysis-personal.md` | 5,944 tweet archive analysis, 5 eras, top tweets |
-| @CometaHub Analysis | `~/dev/cometa/cometa-strategy/research/twitter-analysis-cometa.md` | 3,016 tweet brand analysis, engagement data |
 
 ## MCP Servers
 
@@ -205,7 +275,7 @@ Configure these in `.claude/mcp.json` for the project:
 | Server | Purpose |
 |--------|---------|
 | **CoinGecko** | Token prices, volume, market cap — real-time crypto data |
-| **Context7** | ElizaOS docs, Foundry docs, twitter-api-v2 docs |
+| **Context7** | twitter-api-v2 docs, Foundry docs |
 | **Perplexity** | Deep research on competitors, market trends |
 | **Tavily** | Quick lookups, fact-checking |
 

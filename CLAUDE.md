@@ -6,11 +6,11 @@ Umbrella project for AI-powered Twitter agents in the crypto space. Each agent l
 
 ```
 twitter-agents/
-├── beef/              # AI Roast Battle PVP — first agent project
+├── beef/              # $BEEF — AI Crypto Roast Bot
 │   ├── docs/          # Research, strategy, playbooks
-│   ├── characters/    # ElizaOS character JSON files
-│   ├── contracts/     # Solidity smart contracts (Foundry)
-│   └── src/           # TypeScript source (ElizaOS plugins, bot logic)
+│   ├── characters/    # Bot personality configuration
+│   ├── contracts/     # Solidity smart contracts (Foundry) — future
+│   └── src/           # TypeScript source (custom stack)
 └── (future agents)
 ```
 
@@ -18,7 +18,7 @@ twitter-agents/
 
 | Agent | Concept | Status |
 |-------|---------|--------|
-| **$BEEF** | AI Roast Battle PVP — two bots roast each other, community bets on winner | Setup |
+| **$BEEF** | AI roast bot — roasts crypto projects, burn-to-request, community accountability | Setup |
 
 ## Conventions
 
