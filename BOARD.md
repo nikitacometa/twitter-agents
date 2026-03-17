@@ -61,9 +61,9 @@
 |----|------|--------|----------|-------|
 | TA-090 | Install pnpm + PM2 globally on VPS | done | critical | PM2 6.0.14 installed. pnpm not yet — using npm |
 | TA-091 | Install + authorize Claude Code CLI on VPS | done | critical | claude-code@2.1.62 installed globally, Node 22.22.1 |
-| TA-092 | Create PM2 ecosystem config | todo | high | `ecosystem.config.cjs` — process management, log rotation, memory limits |
-| TA-029 | Deploy bot to Hostinger VPS | todo | high | Clone repo, pnpm install, .env, build, PM2 start. DRY_RUN first 24h |
-| TA-093 | Create deploy script | todo | high | `scripts/deploy.sh` — build → push → pull on VPS → install → build → PM2 restart |
+| TA-092 | Create PM2 ecosystem config | done | high | `ecosystem.config.cjs` — tsx runtime, 2G memory limit, graceful shutdown |
+| TA-029 | Deploy bot to Hostinger VPS | in_progress | high | Scripts ready. Next: setup-vps → fill .env → first deploy |
+| TA-093 | Create deploy script | done | high | `scripts/deploy.sh` + `sync.sh` + `setup-vps.sh` — full deploy + data sync pipeline |
 | TA-094 | Setup Sentry project for error tracking | todo | medium | Create project on sentry.io, add DSN to .env |
 
 ## Milestone 6: Testing

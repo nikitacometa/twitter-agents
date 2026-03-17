@@ -8,6 +8,7 @@ dist/
 .env
 .env.*
 !.env.example
+!.env.production.example
 
 # Logs
 *.log
@@ -36,3 +37,7 @@ contracts/broadcast/
 
 # PM2
 .pm2/
+
+# Prod data snapshots
+data/beef-prod*.db*
+data/human-feedback-*.jsonl

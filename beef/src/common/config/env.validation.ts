@@ -53,36 +53,11 @@ const envSchema = z
     LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace']).default('info'),
   })
   .superRefine((data, ctx) => {
-    const hasApiKeys =
-      data.TWITTER_API_KEY &&
-      data.TWITTER_API_SECRET &&
-      data.TWITTER_ACCESS_TOKEN &&
-      data.TWITTER_ACCESS_SECRET;
-
-    const hasCookieAuth =
-      data.TWITTER_USERNAME && data.TWITTER_PASSWORD && data.TWITTER_EMAIL;
-
-    if (!hasApiKeys && !hasCookieAuth) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message:
-          'Either Twitter API credentials (TWITTER_API_KEY + SECRET + ACCESS_TOKEN + ACCESS_SECRET) or cookie auth (TWITTER_USERNAME + PASSWORD + EMAIL) must be provided',
-        path: ['TWITTER_API_KEY'],
-      });
-    }
-
     if (data.NODE_ENV === 'production') {
-      if (!data.SENTRY_DSN) {
+      if (!data.TELEGRAM_BOT_TOKEN) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
-          message: 'SENTRY_DSN is required in production',
-          path: ['SENTRY_DSN'],
-        });
-      }
-      if (!data.TELEGRAM_BOT_TOKEN || !data.TELEGRAM_CHAT_ID) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          message: 'Telegram alerts (BOT_TOKEN + CHAT_ID) required in production',
+          message: 'TELEGRAM_BOT_TOKEN is required in production',
           path: ['TELEGRAM_BOT_TOKEN'],
         });
       }
@@ -99,5 +74,23 @@ export function validateEnv(): AppConfig {
       .join('\n');
     throw new Error(`Environment validation failed:\n${formatted}`);
   }
+
+  // Warn about optional monitoring vars
+  if (result.data.NODE_ENV === 'production') {
+    const warnings: string[] = [];
+    if (!result.data.SENTRY_DSN) warnings.push('SENTRY_DSN not set — error tracking disabled');
+    if (!result.data.TELEGRAM_CHAT_ID)
+      warnings.push('TELEGRAM_CHAT_ID not set — proactive alerts disabled');
+
+    const hasTwitter =
+      result.data.TWITTER_API_KEY ||
+      result.data.TWITTER_USERNAME;
+    if (!hasTwitter) warnings.push('No Twitter credentials — Twitter features disabled');
+
+    if (warnings.length > 0) {
+      console.warn(`[env] Production warnings:\n${warnings.map((w) => `  ⚠ ${w}`).join('\n')}`);
+    }
+  }
+
   return result.data;
 }
