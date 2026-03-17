@@ -40,7 +40,7 @@ export class RoastEngine {
     this.provider = opts.provider;
     this.logger = opts.logger;
     this.variantCount = opts.variantCount ?? 3;
-    this.timeoutMs = opts.timeoutMs ?? 5 * 60 * 1000;
+    this.timeoutMs = opts.timeoutMs ?? 0;
     this.maxTurns = opts.maxTurns ?? 25;
 
     const charPath = opts.characterPath ?? DEFAULT_CHARACTER_PATH;
@@ -76,7 +76,7 @@ export class RoastEngine {
         prompt: fallbackPrompt,
         requiresResearch: false,
         maxTurns: 5,
-        timeoutMs: 3 * 60 * 1000,
+        timeoutMs: 0,
       });
     }
 

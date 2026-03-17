@@ -25,7 +25,7 @@ const DEFAULT_TOOLS = [
 ].join(',');
 
 const DEFAULT_MAX_TURNS = 25;
-const DEFAULT_TIMEOUT_MS = 5 * 60 * 1000;
+const DEFAULT_TIMEOUT_MS = 0; // 0 = no timeout; measuring real durations first
 const HEALTH_CHECK_TIMEOUT_MS = 10_000;
 const SLOT_POLL_MS = 1_000;
 
