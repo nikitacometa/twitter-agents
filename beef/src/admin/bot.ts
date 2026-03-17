@@ -78,19 +78,31 @@ export function createBot(opts: {
   bot.command('help', async (ctx) => {
     await ctx.reply(
       [
-        '<b>Commands:</b>',
-        '/roast &lt;target&gt; — generate 3 roast variants via LLM, rate them',
-        '/stats — show feedback statistics',
-        '/status — bot + provider health',
+        '<b>🥩 $BEEF Roast Evaluator — Help</b>',
         '',
-        '<b>How it works:</b>',
-        '1. Send /roast &lt;target&gt; or paste a roast text',
-        '2. Rate each variant: 🔥 FIRE / ✅ POST / 🔄 ITERATE / ❌ REJECT',
-        '3. Check /stats to see what patterns work',
+        '<b>Generate roasts:</b>',
+        '<code>/roast hyperliquid</code> — Hyperliquid',
+        '<code>/roast pump.fun</code> — Pump.fun',
+        '<code>/roast opensea</code> — OpenSea',
+        '<code>/roast virtuals protocol</code> — Virtuals',
+        '<code>/roast worldcoin</code> — Worldcoin',
+        '',
+        '<b>Manual evaluation:</b>',
+        'Paste any roast text (50-280 chars) → rate it with buttons',
+        '',
+        '<b>Rating scale:</b>',
+        '🔥 FIRE — instant post, no edits',
+        '✅ POST — good enough to post',
+        '🔄 ITERATE — has potential, needs rework',
+        '❌ REJECT — doesn\'t work',
+        '',
+        '<b>Other commands:</b>',
+        '<code>/stats</code> — feedback statistics',
+        '<code>/status</code> — bot health + provider info',
         '',
         isGroupChat(ctx)
-          ? '<i>In groups: paste text as a reply to my message to evaluate.</i>'
-          : '<i>In private chat: just paste any text to evaluate it.</i>',
+          ? '<i>In groups: paste text as a reply to my message.</i>'
+          : '<i>In DM: just paste any text to evaluate.</i>',
       ].join('\n'),
       { parse_mode: 'HTML' },
     );
