@@ -178,10 +178,35 @@ function extractJsonFromOutput(raw: string): string {
     }
   }
 
-  // Fallback: find the first JSON object in the output
-  const match = /\{[\s\S]*\}/.exec(trimmed);
-  if (match) {
-    return match[0];
+  // Fallback: find the first balanced JSON object in the output
+  const startIdx = trimmed.indexOf('{');
+  if (startIdx !== -1) {
+    let depth = 0;
+    let inString = false;
+    let escape = false;
+    for (let i = startIdx; i < trimmed.length; i++) {
+      const ch = trimmed[i]!;
+      if (escape) {
+        escape = false;
+        continue;
+      }
+      if (ch === '\\' && inString) {
+        escape = true;
+        continue;
+      }
+      if (ch === '"') {
+        inString = !inString;
+        continue;
+      }
+      if (inString) continue;
+      if (ch === '{') depth++;
+      else if (ch === '}') {
+        depth--;
+        if (depth === 0) {
+          return trimmed.slice(startIdx, i + 1);
+        }
+      }
+    }
   }
 
   throw new Error('No JSON found in Claude Code output');

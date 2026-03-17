@@ -17,10 +17,10 @@
 | TA-015 | Define bot personality — forensic accounting AI, deprecated auditor | done | critical | Character design: origin story, 7 traits, emotional range, self-mythology, 25 examples. See `docs/character-design.md` |
 | TA-016 | Create character config (JSON + Zod validation) | done | critical | `characters/beef-bot.json` v1.0.0 — full systemPrompt, 25 examples, personality, voice rules, eval framework refs |
 | TA-048 | Craft-roast prompt template | done | critical | 3 variants (Rubric/Persona/Adversarial) + research/reply/iteration prompts + A/B framework. See `docs/craft-roast-prompt-design.md` |
-| TA-020 | Roast engine (orchestrates agent) | todo | critical | `roast/roast-engine.ts` — loadCharacter → buildPrompt → provider.run() → parse → filter → rank → best |
-| TA-023 | Content filter (regex, no LLM) | todo | critical | `content/content-filter.ts` — TOS, banned words, ≤280 chars, no ticker spam, no financial advice |
-| TA-059 | Fix extractJsonFromOutput greedy regex bug | todo | high | `agent/claude-code.provider.ts` — greedy `\{[\s\S]*\}` fails with multiple JSON objects |
-| TA-035 | Character loader + validator | todo | high | `roast/character.loader.ts` — JSON with Zod validation |
+| TA-020 | Roast engine (orchestrates agent) | done | critical | `roast/roast-engine.ts` — loadCharacter → buildPrompt → provider.run() → contentFilter → rank → best. Telegram rewired to use engine |
+| TA-023 | Content filter (regex, no LLM) | done | critical | `content/content-filter.ts` — TOS, banned words, ≤280 chars, no ticker spam, no financial advice, no @mention start. 14 tests |
+| TA-059 | Fix extractJsonFromOutput greedy regex bug | done | high | `agent/claude-code.provider.ts` — replaced greedy regex with balanced brace parser |
+| TA-035 | Character loader + validator | done | high | `roast/character.loader.ts` — Zod schema, loads beef-bot.json, 6 tests |
 
 ## Milestone 2: Twitter Integration
 
