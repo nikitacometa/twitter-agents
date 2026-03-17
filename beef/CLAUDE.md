@@ -42,11 +42,11 @@ If a roast contains provably false claims, any $BEEF holder can challenge it via
 | Layer | Choice | Why |
 |-------|--------|-----|
 | **Framework** | Custom TypeScript | ElizaOS Twitter plugin has active bugs (#5172, #4921). Custom = stable, debuggable |
-| **Twitter auth** | `twitter-api-v2` (API Basic tier) | $200/mo, 3K writes/mo, no cookie auth risk |
+| **Twitter auth** | Cookie auth (primary) + Official API (backup) | `agent-twitter-client` cookie auth = $0. Official API from friend as fallback. Dual-mode client |
 | **LLM** | Claude Code Agent (CLI subprocess) | Claude Max = unlimited tokens. Agent has Perplexity MCP, WebSearch, multi-step reasoning |
 | **Research** | Perplexity MCP (via Claude Code Agent) | Deep research: controversies, team history, live data |
 | **Chain** | Base (Ethereum L2) | #1 L2 by TVL ($3.9B), low gas, Coinbase ecosystem |
-| **Token launch** | Bankr (@bankrbot on Twitter) | Instant ERC-20 + Uniswap V3 pool. 0.684% creator fee |
+| **Token launch** | Bankr (@bankrbot on Twitter) | Instant ERC-20 + Uniswap V3 pool. 0.684% creator fee. BOT launches (not founder — sniper bots skip multi-launchers) |
 | **News feeds** | RSS + DexScreener + Agent research | Agent uses Perplexity for target discovery |
 | **Fact-checking** | Claude Code Agent + WebSearch | Agent verifies claims via web search, not separate LLM call |
 | **Voting** | Snapshot.org (off-chain) | Free, gasless, token-weighted governance |
@@ -79,7 +79,7 @@ beef/
 │   └── foundry.toml       # Foundry config
 └── src/                   # TypeScript bot source
     ├── agent/             # ★ Claude Code Agent layer (subprocess runner + prompts)
-    ├── twitter/           # Twitter client (API auth) + rate limiter
+    ├── twitter/           # Twitter client (cookie auth via agent-twitter-client) + rate limiter
     ├── roast/             # Roast engine (orchestrates agent calls)
     ├── news/              # News monitoring (RSS, DexScreener)
     ├── content/           # Content filter (regex, no LLM)
@@ -108,7 +108,7 @@ Node.js Orchestrator (PM2, always running)
   │   ├── curl → live prices (CoinGecko, DexScreener)
   │   └── Read → local knowledge base, past roasts
   ├── Content Filter (regex, no LLM) → safety net
-  ├── Twitter Client (post, reply, poll)
+  ├── Twitter Client (agent-twitter-client, cookie auth, post + reply + poll)
   ├── Telegram Admin Bot (11 commands)
   ├── Health Monitor + Metrics
   └── SQLite (10 tables + 2 FTS5 virtual tables)
@@ -195,6 +195,14 @@ pm2 start ecosystem.config.js
 - **No ticker spam** — Grok detects `$BEEF $BEEF $BEEF` patterns
 - **X Premium required** — 4x reach boost, posts get near-zero reach without it
 
+**Browser automation (agent-twitter-client) rules:**
+- **Cookie reuse** — login once, save cookies, never re-login (repeated login = security alerts)
+- **2FA mandatory** — `TWITTER_2FA_SECRET` in .env (TOTP secret from authenticator)
+- **No datacenter IPs** — run locally or use residential/mobile proxy. AWS/GCP/Hetzner = instant flag
+- **One account = one IP** — never rotate proxies for a logged-in session
+- **Mention polling** — max once per 2-3 minutes (`TWITTER_POLL_INTERVAL=120`)
+- **Fallback** — if cookie auth gets flagged, switch to Official API from friend
+
 **Roast post flow:**
 1. News monitor finds target OR user submits burn request
 2. Roast engine generates roast with real data context
@@ -246,15 +254,16 @@ Single bot: **$BEEF** — aggressive degen roaster, crypto-native, meme-fluent.
 
 | Item | Cost |
 |------|------|
-| Initial liquidity (Bankr pool) | $800-1,000 |
-| Twitter API Basic tier | $200/mo |
+| Initial liquidity (Bankr pool) | $800-2,500 |
 | X Premium | $8/mo |
+| Twitter auth | $0 (cookie auth primary, API from friend backup) |
 | Claude API (Claude Max) | $0 (included in subscription) |
 | Perplexity MCP | $0 (included in subscription) |
 | VPS (Hostinger) | $0 (existing shared server) |
+| Farcaster account + signer | $7 one-time |
 | 1-2 micro-KOL seeds | $500-1,000 |
-| **Total launch** | **$1,308-2,008** |
-| **Monthly recurring** | **$208/mo** |
+| **Total launch** | **$1,307-3,507** |
+| **Monthly recurring** | **$8/mo** |
 
 ## External Knowledge (Cometa Project)
 
