@@ -136,9 +136,13 @@ export class ClaudeCodeProvider implements LLMProvider {
         (error, stdout, stderr) => {
           this.childProcesses.delete(child);
           if (error) {
+            const err = error as NodeJS.ErrnoException & { killed?: boolean; signal?: string };
+            const reason = err.killed
+              ? `killed by ${err.signal ?? 'timeout'} after ${String(timeout)}ms`
+              : `exit code ${String(err.code ?? 'unknown')}`;
             reject(
               new Error(
-                `claude process failed: ${getErrorMessage(error)}${stderr ? `\nstderr: ${stderr}` : ''}`,
+                `claude process failed (${reason})${stderr ? `\nstderr: ${stderr}` : ''}`,
               ),
             );
           } else {
@@ -158,34 +162,69 @@ export class ClaudeCodeProvider implements LLMProvider {
 }
 
 /**
- * Claude Code --output-format json wraps the result in a JSON array of content blocks.
- * Extract the text content from the last assistant message.
+ * Claude Code --output-format json wraps the result in different formats depending on version:
+ * - v2.1+: {"type":"result","result":"<text>","..."}
+ * - older: [{"type":"text","text":"<text>"}]
+ * Extract the actual LLM response text from whichever wrapper is used.
  */
 function extractJsonFromOutput(raw: string): string {
   const trimmed = raw.trim();
 
-  // Already a JSON object — return as-is
-  if (trimmed.startsWith('{')) {
-    return trimmed;
-  }
+  // Unwrap Claude CLI result/content-block wrappers to get the inner text
+  const inner = unwrapCliOutput(trimmed);
 
-  // Claude Code --output-format json returns an array of content blocks
-  if (trimmed.startsWith('[')) {
-    const blocks = JSON.parse(trimmed) as Array<{ type: string; text?: string }>;
-    const textBlock = blocks.findLast((b) => b.type === 'text' && b.text);
-    if (textBlock?.text) {
-      return textBlock.text;
+  // If inner text is already valid JSON, return it
+  if (inner.startsWith('{') || inner.startsWith('[')) {
+    try {
+      JSON.parse(inner);
+      return inner;
+    } catch {
+      // Not valid JSON as-is — extract from text below
     }
   }
 
-  // Fallback: find the first balanced JSON object in the output
-  const startIdx = trimmed.indexOf('{');
+  // Find the first balanced JSON object in the text
+  return extractFirstJsonObject(inner);
+}
+
+function unwrapCliOutput(text: string): string {
+  // v2.1+ result wrapper: {"type":"result","result":"..."}
+  if (text.startsWith('{')) {
+    try {
+      const wrapper = JSON.parse(text) as Record<string, unknown>;
+      if (wrapper['type'] === 'result' && typeof wrapper['result'] === 'string') {
+        return wrapper['result'];
+      }
+    } catch {
+      // Not a valid JSON wrapper
+    }
+    return text;
+  }
+
+  // Older format: array of content blocks
+  if (text.startsWith('[')) {
+    try {
+      const blocks = JSON.parse(text) as Array<{ type: string; text?: string }>;
+      const textBlock = blocks.findLast((b) => b.type === 'text' && b.text);
+      if (textBlock?.text) {
+        return textBlock.text;
+      }
+    } catch {
+      // Not a valid content block array
+    }
+  }
+
+  return text;
+}
+
+function extractFirstJsonObject(text: string): string {
+  const startIdx = text.indexOf('{');
   if (startIdx !== -1) {
     let depth = 0;
     let inString = false;
     let escape = false;
-    for (let i = startIdx; i < trimmed.length; i++) {
-      const ch = trimmed[i]!;
+    for (let i = startIdx; i < text.length; i++) {
+      const ch = text[i]!;
       if (escape) {
         escape = false;
         continue;
@@ -203,7 +242,7 @@ function extractJsonFromOutput(raw: string): string {
       else if (ch === '}') {
         depth--;
         if (depth === 0) {
-          return trimmed.slice(startIdx, i + 1);
+          return text.slice(startIdx, i + 1);
         }
       }
     }
