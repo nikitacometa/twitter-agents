@@ -507,7 +507,6 @@ Clanker (Bankr backend) автоматически лочит LP до 2100 → �
 ```
 Day 0 (prep):
 ├── Bot Twitter account (@0xBeef или альтернатива) + X Premium ($8)
-├── Bot Farcaster account + Neynar signer ($7)
 ├── Character definition + voice (mferGPT-inspired, data-backed)
 ├── Logo/avatar (Midjourney)
 ├── Twitter auth: cookie auth (agent-twitter-client) primary + API от друга backup
@@ -516,8 +515,6 @@ Day 0 (prep):
 Day 1 (build):
 ├── MVP code: character → prompt → roast engine → content filter
 ├── Twitter client (cookie auth via agent-twitter-client)
-├── Farcaster client (Neynar SDK)
-├── Post dispatcher (Twitter + Farcaster parallel)
 ├── Bootstrap (setInterval + jitter)
 └── Roast scorecard template (HTML + Puppeteer) — если время есть
 ```
@@ -531,8 +528,7 @@ Day 1-2:
 ├── DRY_RUN: 10-15 test roasts locally, prompt tuning
 ├── Deploy to VPS (DRY_RUN mode first)
 ├── First 3-5 live roasts (moderation mode)
-├── OpenAI Roast Campaign: day 1 → trending topic
-└── Cross-post to Farcaster
+└── OpenAI Roast Campaign: day 1 → trending topic
 
 Day 2-3:
 ├── 5-10 live roasts total (organic + campaign)
@@ -560,7 +556,6 @@ Day 4-5: LAUNCH
 │   burn $BEEF to aim it.'"
 ├── Кофаундер RT'ит launch tweet (кросс-аудитория)
 ├── Launch thread: what $BEEF is + best roasts + roadmap
-├── Farcaster: announce in /crypto /base
 ├── KOL micro-push ($500-1000) + pump advertisers ($30/RT)
 ├── First burn-to-roast demo (own funds)
 └── Monitor volume: target $300K+/day → $2K+/week fees
@@ -606,8 +601,7 @@ Day 7-14:
 |------|------|----------------|
 | Initial liquidity (Bankr) | $800-2,500 | Same |
 | KOL seeds (1-2 micro) | $500-1,000 | Same |
-| Farcaster account + signer | $7 | Same |
-| **Total** | **$1,307-3,507** | Same |
+| **Total** | **$1,300-3,500** | Same |
 
 ### Monthly Recurring
 
@@ -633,7 +627,7 @@ At 0.684% creator fee: **$8/mo ÷ 0.00684 = $1,170 monthly trading volume needed
 | No utility → no promotion | CRITICAL | ERC-8004 integration = real utility | **NEW** |
 | "Another token from same guy" stigma | HIGH | Bot launches its own token, not founder | **NEW** |
 | Token flop (<$50K mcap) | HIGH | Continue content, mcap ≠ bot value | Same |
-| Twitter ban | HIGH | Official API + Farcaster insurance | **IMPROVED** (API > cookie) |
+| Twitter ban | HIGH | Cookie auth primary + Official API backup | **IMPROVED** (dual-mode) |
 | ERC-8004 narrative cools | MEDIUM | Roast quality is primary, ERC-8004 is layer | NEW |
 | $200/mo burn rate pre-revenue | MEDIUM | Break-even at $1K/day volume | **IMPROVED** (clear math) |
 | Over-engineering delays | MEDIUM | Phase-gated development | Same |

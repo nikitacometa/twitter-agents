@@ -50,7 +50,6 @@ If a roast contains provably false claims, any $BEEF holder can challenge it via
 | **News feeds** | RSS + DexScreener + Agent research | Agent uses Perplexity for target discovery |
 | **Fact-checking** | Claude Code Agent + WebSearch | Agent verifies claims via web search, not separate LLM call |
 | **Voting** | Snapshot.org (off-chain) | Free, gasless, token-weighted governance |
-| **Farcaster** | Neynar SDK | Secondary channel, crypto-native, no bot restrictions |
 | **Crypto data** | CoinGecko + DexScreener + DefiLlama (via agent curl) | Agent fetches live data during research |
 | **Hosting** | Hostinger VPS (existing) | 2 vCPU, 8GB RAM, Claude Code CLI pre-installed |
 | **Process mgmt** | PM2 | Auto-restart, log aggregation |
@@ -245,9 +244,9 @@ Single bot: **$BEEF** — aggressive degen roaster, crypto-native, meme-fluent.
 | Catalyst | How to get it | Expected effect |
 |----------|--------------|-----------------|
 | Viral roast screenshot | Roast a major project, community screenshots | Organic viral — Wordware got 4M users this way |
-| RT from Jesse Pollak | Build on Base, show at Farcaster | $17M mcap in 1 hour (precedent) |
+| RT from Jesse Pollak | Build on Base, ERC-8004 utility | $17M mcap in 1 hour (precedent) |
 | Mention from @0xDeployer | Deploy via Bankr, engage Bankr community | $DRB: $38M mcap in 3 days |
-| Challenge AIXBT | Public roast on Farcaster/Twitter | 300K+ follower exposure |
+| Challenge AIXBT | Public roast on Twitter | 300K+ follower exposure |
 | KOL roast request | Micro-KOL burns $BEEF to roast a rival | Their audience discovers the bot |
 
 ## Budget
@@ -260,9 +259,8 @@ Single bot: **$BEEF** — aggressive degen roaster, crypto-native, meme-fluent.
 | Claude API (Claude Max) | $0 (included in subscription) |
 | Perplexity MCP | $0 (included in subscription) |
 | VPS (Hostinger) | $0 (existing shared server) |
-| Farcaster account + signer | $7 one-time |
 | 1-2 micro-KOL seeds | $500-1,000 |
-| **Total launch** | **$1,307-3,507** |
+| **Total launch** | **$1,300-3,500** |
 | **Monthly recurring** | **$8/mo** |
 
 ## External Knowledge (Cometa Project)

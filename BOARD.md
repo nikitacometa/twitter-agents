@@ -22,16 +22,14 @@
 | ID | Task | Status | Priority | Notes |
 |----|------|--------|----------|-------|
 | TA-017 | Choose Twitter handle for the bot | todo | critical | Check: @BeefRoastBot, @BeefRoasts, @beef_agent, @0xBEEF |
-| TA-061 | Create bot accounts + credentials (Twitter, Farcaster, Neynar) | todo | critical | Twitter account + X Premium ($8) + 2FA, Farcaster + Neynar signer ($7), avatar/logo |
+| TA-061 | Create bot accounts + credentials (Twitter) | todo | critical | Twitter account + X Premium ($8) + 2FA, avatar/logo |
 | TA-063 | Setup Twitter auth: cookie auth primary + API from friend backup | todo | critical | Day 0. agent-twitter-client (cookie), API от друга как fallback |
 | TA-016 | Create character config (system prompt + examples) | todo | critical | Depends on TA-015. JSON with Zod validation. mferGPT-inspired voice |
 | TA-048 | Agent prompt template — craft-roast only | todo | critical | `agent/prompts/craft-roast.ts` — generate 10 variants → pick best |
 | TA-020 | Roast engine (orchestrates agent) | todo | critical | prompt → agent → parse → rank → return best draft |
 | TA-023 | Content filter (regex, no LLM) | todo | critical | TOS, banned words, length ≤280 — blocks first tweet |
 | TA-019 | Twitter client + rate limiter | todo | critical | agent-twitter-client (cookie auth) primary + twitter-api-v2 fallback. postTweet + getMentions |
-| TA-057 | Farcaster client (Neynar SDK cross-post) | todo | critical | `farcaster/farcaster.client.ts` — postCast, insurance at ban |
 | TA-071 | Telegram admin bot with fine-tuning loop | todo | critical | Target → 3 variants → pick best → post → bot learns. RLHF-style |
-| TA-058 | Post dispatcher (Twitter + Farcaster parallel) | todo | high | Single publish point, Promise.allSettled both channels |
 | TA-064 | Roast scorecard HTML template + Puppeteer generator | todo | high | Dark theme, fire accents, dynamic data. Image per roast for virality |
 | TA-072 | GIF generation for roasts | todo | high | "Кивки — это имба." Giphy API or custom ffmpeg. Animated roast cards |
 | TA-035 | Character loader + validator | todo | high | `roast/character.loader.ts` — JSON with Zod validation |
@@ -51,7 +49,7 @@
 
 | ID | Task | Status | Priority | Notes |
 |----|------|--------|----------|-------|
-| TA-025 | Token launch via Bankr | todo | critical | Day 3-5 (March 20-22). BOT launches (not co-founder — sniper bots skip multi-launchers). Bot must have 5-10 live posts |
+| TA-025 | Token launch via Bankr | todo | critical | Day 3-5 (March 20-22). BOT launches (not co-founder). Bot must have 5-10 live posts |
 | TA-062 | Prepare token launch assets (thread, cast, KOL coordination) | todo | critical | Day 2-3. Pre-write launch content |
 | TA-078 | Coordinate pump advertisers ($30/repost) | todo | high | Cheap promotion via crypto Twitter reposters |
 | TA-070 | First burn-to-roast demo (own funds) | todo | high | Immediately after token launch |
