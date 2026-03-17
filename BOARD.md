@@ -105,7 +105,7 @@
 
 | ID | Task | Status | Priority | Notes |
 |----|------|--------|----------|-------|
-| TA-056 | Blind test 20 roasts with real crypto people | in_progress | critical | Generating test batch via eval framework. 5 sent to Telegram. Need 5/20 = 🔥 for GO |
+| TA-056 | Blind test 20 roasts with real crypto people | in_progress | critical | 20 roasts generated, persona panel eval done: 4 FIRE / 6 POST / 0 REJECT. Top: #7 Virtuals (0.82), #15 Base (0.82), #8 HL (0.81), #16 Base (0.80). Need human validation — send top 5 to Telegram |
 | TA-098 | Multidimensional Evaluation Framework | done | critical | 3-layer pipeline: heuristics → LLM-as-Judge → persona panel. See `docs/evaluation-framework.md` |
 | TA-099 | CT audience personas for evaluation | done | high | 6 detailed personas with demographics, humor profiles, engagement triggers. See `docs/research-ct-audience-personas.md` |
 | TA-100 | Research: CT roast culture + evaluation frameworks | done | high | `docs/research-ct-roast-culture.md` + `docs/research-evaluation-frameworks.md` |
