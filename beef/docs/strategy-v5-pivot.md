@@ -462,13 +462,33 @@ OpenAI обсуждал возможность token/airdrop → community expec
 
 Кофаундер: "обязательно захуесосить OpenSea, потому что сейчас это самая мета по хуесошению."
 
-OpenSea — текущая #1 мета для хейта в crypto Twitter. Причины: падение volume, обвинения в централизации, уход NFT-сообщества на Blur/Magic Eden. Идеальная мишень: узнаваемый бренд + актуальный негатив + огромная аудитория обиженных пользователей.
+OpenSea — текущая #1 мета для хейта в crypto Twitter.
 
-### Jesse Pollak "Roast Me" Tweet
+**Свежие данные (март 2026):**
+- **16 марта 2026:** CEO Devin Finzer отложил TGE токена $SEA (планировался ~30 марта)
+- Официальная причина: "challenging market conditions"
+- NFT market cap: $3.2B → $1.62B (−50%)
+- Пользователи Waves 3–6 могут вернуть fees, но теряют Treasure Chest rewards
+- Индустрия читает: "компания не уверена в продукте"
+
+**Roast material:**
+- "opensea delayed their token launch blaming 'market conditions.' the market they dominated for 3 years and managed to lose to blur. at least $BEEF actually ships"
+- "devin finzer: 'challenging market conditions.' sir you HAD the market. you lost it. now you're scared to launch a token because you know nobody wants it"
+- "opensea's token roadmap: announce → hype → delay → blame market → repeat. sound familiar? that's literally every project i roast"
+
+**Источники:** [Bankless](https://www.bankless.com/read/news/opensea-foundation-delays-q1-2026-tge-target), [CoinDesk](https://www.coindesk.com/business/2026/03/16/opensea-delays-highly-anticipated-token-launch-citing-challenging-crypto-market-conditions)
+
+### Jesse Pollak Strategy
 
 Кофаундер: "найти старый твит Джесси, который он писал, что, типа, можете меня хуесосить."
 
-Jesse Pollak (CEO Base) публично приглашал критику. Найти этот tweet → ответить роастом Base → потенциальный RT от Jesse = мгновенная аудитория (300K+ followers). Jesse публично поддерживает builders на Base + ERC-8004.
+Конкретный "roast me" tweet не найден (X блокирует парсинг). Альтернативный hook: критический тред ["The Dark Side of Jesse Pollak"](https://x.com/web3righteous/status/1910762956779848076) — разбор централизации Base и compliance-alignment. Можно ответить роастом как reply → шанс на RT от Jesse (300K+ followers). Jesse публично поддерживает builders на Base + ERC-8004.
+
+### Bot-Launched Token: подтверждённый механизм
+
+Из ресёрча: бот может запустить токен через Bankr без ограничений. Прецедент: **$DRB (Grok AI)** случайно тегнул @bankrbot → auto-wallet provisioning → $40M peak mcap, 96K трейдеров за 2 недели. Первый agent-to-agent token launch в крипто. Нарратив "AI agent launched its own token" — сам по себе хайп.
+
+Clanker (Bankr backend) автоматически лочит LP до 2100 → убирает rug-сигнал → снайпер-боты не скипают. Риск multi-launcher penalty минимален для Bankr-токенов.
 
 ---
 
