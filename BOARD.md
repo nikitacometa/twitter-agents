@@ -6,7 +6,7 @@
 - **ID format**: `TA-NNN` (sequential, never reuse)
 - **Statuses**: `todo` | `in_progress` | `blocked` | `done`
 - **Priorities**: `critical` | `high` | `medium` | `low`
-- Next available ID: **TA-098**
+- Next available ID: **TA-101**
 
 ---
 
@@ -14,9 +14,9 @@
 
 | ID | Task | Status | Priority | Notes |
 |----|------|--------|----------|-------|
-| TA-015 | Define bot personality — mferGPT-inspired data-backed roaster | todo | critical | Voice: casual lowercase, data-driven, unexpected comparisons, self-aware AI. See strategy-v5 Part 4 |
-| TA-016 | Create character config (JSON + Zod validation) | todo | critical | `characters/beef-bot.json` + `roast/character.loader.ts`. Depends on TA-015 |
-| TA-048 | Craft-roast prompt template | todo | critical | `agent/prompts/craft-roast.ts` — system prompt + user prompt. Generate 10 variants → AgentRoastOutput |
+| TA-015 | Define bot personality — forensic accounting AI, deprecated auditor | done | critical | Character design: origin story, 7 traits, emotional range, self-mythology, 25 examples. See `docs/character-design.md` |
+| TA-016 | Create character config (JSON + Zod validation) | done | critical | `characters/beef-bot.json` v1.0.0 — full systemPrompt, 25 examples, personality, voice rules, eval framework refs |
+| TA-048 | Craft-roast prompt template | done | critical | 3 variants (Rubric/Persona/Adversarial) + research/reply/iteration prompts + A/B framework. See `docs/craft-roast-prompt-design.md` |
 | TA-020 | Roast engine (orchestrates agent) | todo | critical | `roast/roast-engine.ts` — loadCharacter → buildPrompt → provider.run() → parse → filter → rank → best |
 | TA-023 | Content filter (regex, no LLM) | todo | critical | `content/content-filter.ts` — TOS, banned words, ≤280 chars, no ticker spam, no financial advice |
 | TA-059 | Fix extractJsonFromOutput greedy regex bug | todo | high | `agent/claude-code.provider.ts` — greedy `\{[\s\S]*\}` fails with multiple JSON objects |
@@ -59,8 +59,8 @@
 
 | ID | Task | Status | Priority | Notes |
 |----|------|--------|----------|-------|
-| TA-090 | Install pnpm + PM2 globally on VPS | todo | critical | `npm install -g pnpm pm2` on hostinger |
-| TA-091 | Install + authorize Claude Code CLI on VPS | todo | critical | `npm install -g @anthropic-ai/claude-code` + `claude login` via SSH tunnel |
+| TA-090 | Install pnpm + PM2 globally on VPS | done | critical | PM2 6.0.14 installed. pnpm not yet — using npm |
+| TA-091 | Install + authorize Claude Code CLI on VPS | done | critical | claude-code@2.1.62 installed globally, Node 22.22.1 |
 | TA-092 | Create PM2 ecosystem config | todo | high | `ecosystem.config.cjs` — process management, log rotation, memory limits |
 | TA-029 | Deploy bot to Hostinger VPS | todo | high | Clone repo, pnpm install, .env, build, PM2 start. DRY_RUN first 24h |
 | TA-093 | Create deploy script | todo | high | `scripts/deploy.sh` — build → push → pull on VPS → install → build → PM2 restart |
@@ -105,7 +105,10 @@
 
 | ID | Task | Status | Priority | Notes |
 |----|------|--------|----------|-------|
-| TA-056 | Blind test 20 roasts with real crypto people | in_progress | critical | 5 sent to Telegram. Need 5/20 = 🔥 for GO |
+| TA-056 | Blind test 20 roasts with real crypto people | in_progress | critical | Generating test batch via eval framework. 5 sent to Telegram. Need 5/20 = 🔥 for GO |
+| TA-098 | Multidimensional Evaluation Framework | done | critical | 3-layer pipeline: heuristics → LLM-as-Judge → persona panel. See `docs/evaluation-framework.md` |
+| TA-099 | CT audience personas for evaluation | done | high | 6 detailed personas with demographics, humor profiles, engagement triggers. See `docs/research-ct-audience-personas.md` |
+| TA-100 | Research: CT roast culture + evaluation frameworks | done | high | `docs/research-ct-roast-culture.md` + `docs/research-evaluation-frameworks.md` |
 | TA-062 | Prepare token launch assets | todo | critical | Pre-write launch thread, KOL coordination |
 | TA-065 | OpenAI Roast Campaign — day 1 content | todo | high | First 5 roasts targeting OpenAI token/airdrop narrative |
 | TA-073 | OpenSea Roast Campaign — launch day content | todo | high | "#1 мета для хейта" — sustained OpenSea roasts |
