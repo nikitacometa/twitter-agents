@@ -76,7 +76,7 @@ export class RoastEngine {
         prompt: fallbackPrompt,
         requiresResearch: false,
         maxTurns: 5,
-        timeoutMs: 60_000,
+        timeoutMs: 3 * 60 * 1000,
       });
     }
 
