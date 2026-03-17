@@ -33,7 +33,7 @@ try {
 }
 
 // --- Telegram Bot ---
-if (config.TELEGRAM_BOT_TOKEN && config.TELEGRAM_ADMIN_IDS.length > 0) {
+if (config.TELEGRAM_BOT_TOKEN) {
   const bot = createBot({
     token: config.TELEGRAM_BOT_TOKEN,
     adminIds: config.TELEGRAM_ADMIN_IDS,
@@ -63,6 +63,6 @@ if (config.TELEGRAM_BOT_TOKEN && config.TELEGRAM_ADMIN_IDS.length > 0) {
   process.on('SIGINT', () => void shutdown());
   process.on('SIGTERM', () => void shutdown());
 } else {
-  logger.warn('TELEGRAM_BOT_TOKEN or TELEGRAM_ADMIN_IDS not set — Telegram bot disabled');
-  logger.info('Bot initialized without Telegram. Set TELEGRAM_BOT_TOKEN and TELEGRAM_ADMIN_IDS in .env');
+  logger.warn('TELEGRAM_BOT_TOKEN not set — Telegram bot disabled');
+  logger.info('Set TELEGRAM_BOT_TOKEN in .env to enable Telegram bot');
 }

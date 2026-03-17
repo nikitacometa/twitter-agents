@@ -1,10 +1,10 @@
 import { Bot } from 'grammy';
+import type { Context } from 'grammy';
 import type { Logger } from 'pino';
 import type { ProviderManager } from '@agent/provider-manager.js';
 import type { HumanVerdict } from '@common/types/index.js';
 import { getErrorMessage } from '@common/utils/error.util.js';
 import type { FeedbackRepository } from '@storage/repositories/feedback.repository.js';
-import { createAdminGuard } from './guard.middleware.js';
 import { ratingKeyboard } from './keyboards.js';
 import { SessionStore } from './session-store.js';
 import { generateRoasts } from './roast-generator.js';
@@ -18,6 +18,10 @@ import {
 
 const VALID_VERDICTS = new Set<HumanVerdict>(['fire', 'post', 'iterate', 'reject']);
 
+function isGroupChat(ctx: Context): boolean {
+  return ctx.chat?.type === 'group' || ctx.chat?.type === 'supergroup';
+}
+
 export function createBot(opts: {
   token: string;
   adminIds: number[];
@@ -29,8 +33,21 @@ export function createBot(opts: {
   const bot = new Bot(token);
   const sessions = new SessionStore();
 
-  // --- Middleware ---
-  bot.use(createAdminGuard(adminIds, logger));
+  // --- Admin guard (optional — if no IDs configured, allow all) ---
+  if (adminIds.length > 0) {
+    bot.use(async (ctx, next) => {
+      const userId = ctx.from?.id;
+      if (!userId || !adminIds.includes(userId)) {
+        logger.warn({ userId, username: ctx.from?.username }, 'Unauthorized access attempt');
+        // In groups, silently ignore. In private chats, respond.
+        if (!isGroupChat(ctx)) {
+          await ctx.reply('⛔ Access denied.');
+        }
+        return;
+      }
+      await next();
+    });
+  }
 
   // --- Error handler ---
   bot.catch((err) => {
@@ -40,6 +57,9 @@ export function createBot(opts: {
   // --- Commands ---
 
   bot.command('start', async (ctx) => {
+    const groupNote = isGroupChat(ctx)
+      ? '\n\nIn group chat: paste text as a <b>reply to my message</b> to evaluate it.'
+      : '\nOr just <b>paste any text</b> to evaluate it as a roast.';
     await ctx.reply(
       [
         '<b>🥩 $BEEF Roast Evaluator</b>',
@@ -48,8 +68,7 @@ export function createBot(opts: {
         '/stats — feedback statistics',
         '/status — bot health',
         '/help — this message',
-        '',
-        'Or just <b>paste any text</b> to evaluate it as a roast.',
+        groupNote,
       ].join('\n'),
       { parse_mode: 'HTML' },
     );
@@ -67,6 +86,10 @@ export function createBot(opts: {
         '1. Send /roast &lt;target&gt; or paste a roast text',
         '2. Rate each variant: 🔥 FIRE / ✅ POST / 🔄 ITERATE / ❌ REJECT',
         '3. Check /stats to see what patterns work',
+        '',
+        isGroupChat(ctx)
+          ? '<i>In groups: paste text as a reply to my message to evaluate.</i>'
+          : '<i>In private chat: just paste any text to evaluate it.</i>',
       ].join('\n'),
       { parse_mode: 'HTML' },
     );
@@ -154,13 +177,15 @@ export function createBot(opts: {
       ? `Provider: <b>${provider.mode}</b>`
       : 'Provider: <b>not configured</b>';
     const stats = feedbackRepo.getStats();
+    const adminStr = adminIds.length > 0 ? adminIds.map(String).join(', ') : 'open access';
     await ctx.reply(
       [
         '<b>🤖 Bot Status</b>',
         '',
         providerStatus,
         `Total ratings: <b>${String(stats.total)}</b>`,
-        `Admins: ${adminIds.map(String).join(', ')}`,
+        `Access: ${adminStr}`,
+        `Chat type: ${ctx.chat.type}`,
       ].join('\n'),
       { parse_mode: 'HTML' },
     );
@@ -279,12 +304,22 @@ export function createBot(opts: {
   });
 
   // --- Text messages: manual evaluation ---
+  // In private chats: any text becomes a roast to evaluate
+  // In groups: only text that's a reply to the bot's message
 
   bot.on('message:text', async (ctx) => {
     const text = ctx.message.text.trim();
 
     // Skip if it looks like a command
     if (text.startsWith('/')) return;
+
+    // In group chats: only respond if message is a reply to the bot
+    if (isGroupChat(ctx)) {
+      const replyTo = ctx.message.reply_to_message;
+      if (!replyTo || replyTo.from?.id !== bot.botInfo.id) {
+        return; // Silently ignore non-reply messages in groups
+      }
+    }
 
     // Skip very short messages
     if (text.length < 20) {

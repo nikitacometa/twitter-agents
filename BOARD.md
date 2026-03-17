@@ -33,15 +33,15 @@
 | TA-083 | Rate limiter | todo | critical | `twitter/rate-limiter.ts` — token bucket, separate limits for posts vs reads, daily count tracking |
 | TA-084 | Cookie session manager | todo | critical | `twitter/cookie-manager.ts` — login once → save cookies → reuse. TOTP from TWITTER_2FA_SECRET |
 | TA-085 | Purchase ISP residential proxy (Decodo) | todo | critical | SOCKS5, static IP, ~$3-5/mo. Config: `PROXY_URL=socks5://...` in .env |
-| TA-086 | Update env.validation.ts with new vars | todo | high | Add: PROXY_URL, TWITTER_2FA_SECRET, TWITTER_COOKIES_PATH, TELEGRAM_ADMIN_IDS, POST_JITTER_PERCENT |
+| TA-086 | Update env.validation.ts with new vars | in_progress | high | Done: TELEGRAM_ADMIN_IDS. Remaining: PROXY_URL, TWITTER_2FA_SECRET, TWITTER_COOKIES_PATH, POST_JITTER_PERCENT |
 
 ## Milestone 3: Telegram Command Center
 
 | ID | Task | Status | Priority | Notes |
 |----|------|--------|----------|-------|
-| TA-087 | Add grammY + plugins to dependencies | todo | critical | `pnpm add grammy @grammyjs/conversations @grammyjs/storage-file` |
-| TA-071 | Telegram admin bot — core + RLHF flow | todo | critical | `src/admin/` — bot.ts, guards.ts, session.ts, conversations/roast-flow.ts. Target → 3 variants → pick → post |
-| TA-088 | Telegram management commands | todo | high | /status, /pause, /resume, /queue, /stats, /config, /emergency |
+| TA-087 | Add grammY + plugins to dependencies | done | critical | `grammy 1.41.1` installed. Conversations plugin deferred — not needed for MVP |
+| TA-071 | Telegram admin bot — core + RLHF flow | done | critical | `src/admin/` — bot.ts, guard, session-store, keyboards, formatters, roast-generator. /roast, /stats, /status + text eval + rating buttons |
+| TA-088 | Telegram management commands | in_progress | high | /status + /stats done. Remaining: /pause, /resume, /queue, /config, /emergency |
 | TA-089 | Telegram notifications system | todo | high | Push alerts: errors, rate limits, high engagement, challenges, daily digest |
 | TA-044 | Telegram bot extended features | todo | medium | /approve (moderation mode), multi-admin support, inline keyboards |
 
