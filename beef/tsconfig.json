@@ -30,7 +30,8 @@
       "@content/*": ["./src/content/*"],
       "@storage/*": ["./src/storage/*"],
       "@queue/*": ["./src/queue/*"],
-      "@scheduler/*": ["./src/scheduler/*"]
+      "@scheduler/*": ["./src/scheduler/*"],
+      "@admin/*": ["./src/admin/*"]
     },
     "baseUrl": "."
   },

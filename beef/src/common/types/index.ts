@@ -146,6 +146,10 @@ export interface TwitterUser {
   notes: string | null;
 }
 
+// --- Human feedback ---
+
+export type HumanVerdict = 'fire' | 'post' | 'iterate' | 'reject';
+
 // --- Config ---
 
 export interface RuntimeConfig {

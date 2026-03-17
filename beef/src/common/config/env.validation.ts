@@ -36,6 +36,17 @@ const envSchema = z
     SENTRY_DSN: z.string().optional(),
     TELEGRAM_BOT_TOKEN: z.string().optional(),
     TELEGRAM_CHAT_ID: z.string().optional(),
+    TELEGRAM_ADMIN_IDS: z
+      .string()
+      .optional()
+      .transform((v) =>
+        v
+          ? v
+              .split(',')
+              .map((id) => parseInt(id.trim(), 10))
+              .filter((id) => !isNaN(id))
+          : [],
+      ),
 
     // Environment
     NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
