@@ -25,16 +25,17 @@ function isGroupChat(ctx: Context): boolean {
 export function createBot(opts: {
   token: string;
   adminIds: number[];
+  openAccess: boolean;
   feedbackRepo: FeedbackRepository;
   provider: ProviderManager | null;
   logger: Logger;
 }): Bot {
-  const { token, adminIds, feedbackRepo, provider, logger } = opts;
+  const { token, adminIds, openAccess, feedbackRepo, provider, logger } = opts;
   const bot = new Bot(token);
   const sessions = new SessionStore();
 
-  // --- Admin guard (optional — if no IDs configured, allow all) ---
-  if (adminIds.length > 0) {
+  // --- Admin guard (skip if openAccess or no IDs configured) ---
+  if (!openAccess && adminIds.length > 0) {
     bot.use(async (ctx, next) => {
       const userId = ctx.from?.id;
       if (!userId || !adminIds.includes(userId)) {
@@ -177,7 +178,7 @@ export function createBot(opts: {
       ? `Provider: <b>${provider.mode}</b>`
       : 'Provider: <b>not configured</b>';
     const stats = feedbackRepo.getStats();
-    const adminStr = adminIds.length > 0 ? adminIds.map(String).join(', ') : 'open access';
+    const adminStr = openAccess ? 'open access' : adminIds.length > 0 ? adminIds.map(String).join(', ') : 'no admins configured (open)';
     await ctx.reply(
       [
         '<b>🤖 Bot Status</b>',

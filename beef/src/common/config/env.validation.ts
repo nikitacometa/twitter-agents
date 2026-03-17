@@ -47,6 +47,10 @@ const envSchema = z
               .filter((id) => !isNaN(id))
           : [],
       ),
+    TELEGRAM_OPEN_ACCESS: z
+      .enum(['true', 'false'])
+      .default('false')
+      .transform((v) => v === 'true'),
 
     // Environment
     NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),

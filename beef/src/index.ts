@@ -37,6 +37,7 @@ if (config.TELEGRAM_BOT_TOKEN) {
   const bot = createBot({
     token: config.TELEGRAM_BOT_TOKEN,
     adminIds: config.TELEGRAM_ADMIN_IDS,
+    openAccess: config.TELEGRAM_OPEN_ACCESS,
     feedbackRepo,
     provider,
     logger,
@@ -45,7 +46,7 @@ if (config.TELEGRAM_BOT_TOKEN) {
   void bot.start({
     onStart: () => {
       logger.info(
-        { admins: config.TELEGRAM_ADMIN_IDS },
+        { admins: config.TELEGRAM_ADMIN_IDS, openAccess: config.TELEGRAM_OPEN_ACCESS },
         'Telegram bot started',
       );
     },
