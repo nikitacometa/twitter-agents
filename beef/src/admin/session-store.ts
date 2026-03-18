@@ -3,9 +3,17 @@ import type { RoastSession, SessionVariant } from './types.js';
 import type { HumanVerdict } from '@common/types/index.js';
 
 const SESSION_TTL_MS = 60 * 60 * 1000; // 1 hour
+const EDIT_TTL_MS = 5 * 60 * 1000; // 5 minutes
+
+interface PendingEdit {
+  sessionId: string;
+  variantIdx: number;
+  createdAt: number;
+}
 
 export class SessionStore {
   private readonly sessions = new Map<string, RoastSession>();
+  private readonly pendingEdits = new Map<number, PendingEdit>();
 
   createSession(
     targetName: string,
@@ -47,6 +55,24 @@ export class SessionStore {
 
   getRating(sessionId: string, evaluatorId: number, variantIdx: number): HumanVerdict | undefined {
     return this.sessions.get(sessionId)?.ratings.get(evaluatorId)?.get(variantIdx);
+  }
+
+  setPendingEdit(evaluatorId: number, sessionId: string, variantIdx: number): void {
+    this.pendingEdits.set(evaluatorId, { sessionId, variantIdx, createdAt: Date.now() });
+  }
+
+  getPendingEdit(evaluatorId: number): PendingEdit | undefined {
+    const edit = this.pendingEdits.get(evaluatorId);
+    if (!edit) return undefined;
+    if (Date.now() - edit.createdAt > EDIT_TTL_MS) {
+      this.pendingEdits.delete(evaluatorId);
+      return undefined;
+    }
+    return edit;
+  }
+
+  clearPendingEdit(evaluatorId: number): void {
+    this.pendingEdits.delete(evaluatorId);
   }
 
   delete(id: string): void {

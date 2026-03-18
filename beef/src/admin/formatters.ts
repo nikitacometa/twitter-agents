@@ -9,11 +9,13 @@ const VERDICT_EMOJI: Record<HumanVerdict, string> = {
 };
 
 const VERDICT_LABEL: Record<HumanVerdict, string> = {
-  fire: 'FIRE',
-  post: 'POST',
-  iterate: 'ITERATE',
-  reject: 'REJECT',
+  fire: 'GOLD',
+  post: 'GOOD',
+  iterate: 'REWORK',
+  reject: 'BAD',
 };
+
+export const RATING_LEGEND = '🔥 gold standard · ✅ postable · ❌ bad · ✏️ your edit';
 
 export function escapeHtml(text: string): string {
   return text

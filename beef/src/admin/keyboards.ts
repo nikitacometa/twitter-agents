@@ -2,11 +2,11 @@ import { InlineKeyboard } from 'grammy';
 
 export function ratingKeyboard(sessionId: string, variantIdx: number): InlineKeyboard {
   return new InlineKeyboard()
-    .text('🔥 FIRE', `rate:${sessionId}:${String(variantIdx)}:fire`)
-    .text('✅ POST', `rate:${sessionId}:${String(variantIdx)}:post`)
+    .text('🔥 GOLD', `rate:${sessionId}:${String(variantIdx)}:fire`)
+    .text('✅ GOOD', `rate:${sessionId}:${String(variantIdx)}:post`)
+    .text('❌ BAD', `rate:${sessionId}:${String(variantIdx)}:reject`)
     .row()
-    .text('🔄 ITERATE', `rate:${sessionId}:${String(variantIdx)}:iterate`)
-    .text('❌ REJECT', `rate:${sessionId}:${String(variantIdx)}:reject`);
+    .text('✏️ EDIT', `edit:${sessionId}:${String(variantIdx)}`);
 }
 
 export function confirmKeyboard(sessionId: string, variantIdx: number): InlineKeyboard {

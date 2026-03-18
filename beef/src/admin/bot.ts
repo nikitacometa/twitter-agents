@@ -14,6 +14,7 @@ import {
   formatSessionSummary,
   formatStatsMessage,
   formatVariantMessage,
+  RATING_LEGEND,
 } from './formatters.js';
 
 const VALID_VERDICTS = new Set<HumanVerdict>(['fire', 'post', 'iterate', 'reject']);
@@ -91,10 +92,10 @@ export function createBot(opts: {
         'Paste any roast text (50-280 chars) → rate it with buttons',
         '',
         '<b>Rating scale:</b>',
-        '🔥 FIRE — instant post, no edits',
-        '✅ POST — good enough to post',
-        '🔄 ITERATE — has potential, needs rework',
-        '❌ REJECT — doesn\'t work',
+        '🔥 GOLD — best quality, used as training example',
+        '✅ GOOD — good enough to post',
+        '❌ BAD — not good enough',
+        '✏️ EDIT — write your own version (saved as gold)',
         '',
         '<b>Other commands:</b>',
         '<code>/stats</code> — feedback statistics',
@@ -163,7 +164,7 @@ export function createBot(opts: {
       await ctx.api.editMessageText(
         ctx.chat.id,
         statusMsg.message_id,
-        `✅ Generated ${String(output.variants.length)} variants for <b>${escapeHtml(target)}</b>${researchNote}`,
+        `✅ Generated ${String(output.variants.length)} variants for <b>${escapeHtml(target)}</b>${researchNote}\n\n<i>${RATING_LEGEND}</i>`,
         { parse_mode: 'HTML' },
       );
 
@@ -317,15 +318,83 @@ export function createBot(opts: {
         }
       }
 
-      await ctx.answerCallbackQuery({
-        text: `Rated: ${verdict.toUpperCase()}`,
-      });
+      try {
+        await ctx.answerCallbackQuery({
+          text: `Rated: ${verdict.toUpperCase()}`,
+        });
+      } catch {
+        // Callback query expired — silently ignore
+      }
 
       // Check if all variants rated by this evaluator → send summary
       const evaluatorRatings = session.ratings.get(evaluatorId);
       if (evaluatorRatings && evaluatorRatings.size === session.variants.length) {
-        await ctx.reply(formatSessionSummary(session), { parse_mode: 'HTML' });
+        const summary = formatSessionSummary(session);
+
+        // Build learning update
+        const stats = feedbackRepo.getStats();
+        const goldCount = stats.byVerdict['fire'] ?? 0;
+        const goldForTarget = feedbackRepo.getFireExamplesForTarget(session.targetName, 100).length;
+
+        const fireAngles: string[] = [];
+        for (const [, eRatings] of session.ratings) {
+          for (const [idx, v] of eRatings) {
+            if (v === 'fire') {
+              const va = session.variants[idx];
+              if (va) fireAngles.push(va.angle);
+            }
+          }
+        }
+
+        const learningLines = [
+          '',
+          '<b>📚 Training impact:</b>',
+          `Gold examples: <b>${String(goldCount)}</b> total (${String(goldForTarget)} for ${escapeHtml(session.targetName)})`,
+        ];
+        if (fireAngles.length > 0) {
+          learningLines.push(`New gold: ${fireAngles.map((a) => escapeHtml(a)).join(', ')}`);
+        }
+
+        await ctx.reply(summary + learningLines.join('\n'), { parse_mode: 'HTML' });
       }
+
+      return;
+    }
+
+    // --- Callback: EDIT button ---
+    if (data.startsWith('edit:')) {
+      const parts = data.split(':');
+      if (parts.length !== 3) {
+        try { await ctx.answerCallbackQuery({ text: 'Invalid edit data' }); } catch { /* expired */ }
+        return;
+      }
+      const sessionId = parts[1]!;
+      const variantIdx = parseInt(parts[2]!, 10);
+
+      const session = sessions.get(sessionId);
+      if (!session) {
+        try { await ctx.answerCallbackQuery({ text: 'Session expired' }); } catch { /* expired */ }
+        return;
+      }
+
+      if (isNaN(variantIdx) || variantIdx < 0 || variantIdx >= session.variants.length) {
+        try { await ctx.answerCallbackQuery({ text: 'Invalid variant' }); } catch { /* expired */ }
+        return;
+      }
+
+      const evaluatorId = ctx.from.id;
+      sessions.setPendingEdit(evaluatorId, sessionId, variantIdx);
+
+      try {
+        await ctx.answerCallbackQuery({ text: 'Send your version as a text message' });
+      } catch { /* expired */ }
+
+      const variant = session.variants[variantIdx];
+      const originalPreview = variant ? variant.text.slice(0, 100) : '';
+      await ctx.reply(
+        `✏️ <b>Edit mode</b>\n\nOriginal: <code>${escapeHtml(originalPreview)}${variant && variant.text.length > 100 ? '...' : ''}</code>\n\nSend your improved version (50-280 chars):`,
+        { parse_mode: 'HTML' },
+      );
 
       return;
     }
@@ -349,6 +418,92 @@ export function createBot(opts: {
       if (!replyTo || replyTo.from?.id !== bot.botInfo.id) {
         return; // Silently ignore non-reply messages in groups
       }
+    }
+
+    // --- Handle pending edits ---
+    const pendingEdit = sessions.getPendingEdit(ctx.from.id);
+    if (pendingEdit) {
+      sessions.clearPendingEdit(ctx.from.id);
+
+      if (text.length < 50 || text.length > 280) {
+        await ctx.reply('Edit must be 50-280 characters. Try again with /roast or click ✏️ EDIT again.');
+        return;
+      }
+
+      const session = sessions.get(pendingEdit.sessionId);
+      if (!session) {
+        await ctx.reply('Session expired. Generate a new roast with /roast.');
+        return;
+      }
+
+      const variant = session.variants[pendingEdit.variantIdx];
+      if (!variant) {
+        await ctx.reply('Variant not found.');
+        return;
+      }
+
+      const evaluatorId = ctx.from.id;
+      const evaluatorName = ctx.from.username ?? ctx.from.first_name;
+
+      // Save user's version as a fire example
+      feedbackRepo.insert({
+        sessionId: pendingEdit.sessionId,
+        variantIndex: pendingEdit.variantIdx,
+        roastText: text,
+        targetName: session.targetName,
+        angle: variant.angle,
+        llmSelfScore: variant.score ? Math.round(variant.score) : undefined,
+        evaluatorTelegramId: evaluatorId,
+        evaluatorName,
+        verdict: 'fire',
+        notes: `user_edit|original:${variant.text.slice(0, 100)}`,
+      });
+
+      // Update session rating
+      sessions.addRating(pendingEdit.sessionId, evaluatorId, pendingEdit.variantIdx, 'fire');
+
+      // Update variant message to show edit rating
+      if (variant.messageId && ctx.chat) {
+        const originalText = session.source === 'manual'
+          ? formatManualEvalMessage(variant.text)
+          : formatVariantMessage(
+              variant.text,
+              pendingEdit.variantIdx,
+              variant.angle,
+              variant.score,
+              session.variants.length,
+            );
+        try {
+          await ctx.api.editMessageText(
+            ctx.chat.id,
+            variant.messageId,
+            originalText + `\n\n<b>Ratings:</b> ✏️ ${escapeHtml(evaluatorName)}`,
+            { parse_mode: 'HTML' },
+          );
+        } catch {
+          // Message not modified — ignore
+        }
+      }
+
+      const goldCount = (feedbackRepo.getStats().byVerdict['fire'] ?? 0);
+      await ctx.reply(
+        [
+          `✅ <b>Edit saved as gold example</b>`,
+          '',
+          `<code>${escapeHtml(text)}</code>`,
+          '',
+          `<i>📚 Total gold examples: ${String(goldCount)}</i>`,
+        ].join('\n'),
+        { parse_mode: 'HTML' },
+      );
+
+      // Check if all variants rated → send summary
+      const evaluatorRatings = session.ratings.get(evaluatorId);
+      if (evaluatorRatings && evaluatorRatings.size === session.variants.length) {
+        await ctx.reply(formatSessionSummary(session), { parse_mode: 'HTML' });
+      }
+
+      return;
     }
 
     // Skip very short messages
