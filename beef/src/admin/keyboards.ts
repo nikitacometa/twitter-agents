@@ -9,6 +9,11 @@ export function ratingKeyboard(sessionId: string, variantIdx: number): InlineKey
     .text('✏️ EDIT', `edit:${sessionId}:${String(variantIdx)}`);
 }
 
+export function sessionDoneKeyboard(sessionId: string): InlineKeyboard {
+  return new InlineKeyboard()
+    .text('✅ Done — show summary', `done:${sessionId}`);
+}
+
 export function confirmKeyboard(sessionId: string, variantIdx: number): InlineKeyboard {
   return new InlineKeyboard()
     .text('✅ Queue for posting', `queue:${sessionId}:${String(variantIdx)}`)

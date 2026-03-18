@@ -7,8 +7,9 @@ import { getErrorMessage } from '@common/utils/error.util.js';
 import type { FeedbackRepository } from '@storage/repositories/feedback.repository.js';
 import type { QueueManager } from '@queue/queue-manager.js';
 import type { ConfigRepository } from '@storage/repositories/config.repository.js';
-import { ratingKeyboard } from './keyboards.js';
+import { ratingKeyboard, sessionDoneKeyboard } from './keyboards.js';
 import { SessionStore } from './session-store.js';
+import type { RoastSession } from './types.js';
 import { generateRoasts } from './roast-generator.js';
 import {
   escapeHtml,
@@ -134,71 +135,90 @@ export function createBot(opts: {
       parse_mode: 'HTML',
     });
 
-    const startTime = Date.now();
-    const progressInterval = setInterval(() => {
-      const elapsed = Math.round((Date.now() - startTime) / 1000);
-      ctx.api
-        .editMessageText(
-          ctx.chat.id,
+    const chatId = ctx.chat.id;
+    const api = ctx.api;
+
+    // Fire-and-forget: don't block grammY's update loop during generation
+    void (async () => {
+      const startTime = Date.now();
+      const progressInterval = setInterval(() => {
+        const elapsed = Math.round((Date.now() - startTime) / 1000);
+        api
+          .editMessageText(
+            chatId,
+            statusMsg.message_id,
+            `🔍 Researching <b>${escapeHtml(target)}</b>... <i>(${String(elapsed)}s)</i>`,
+            { parse_mode: 'HTML' },
+          )
+          .catch(() => {});
+      }, 10_000);
+
+      try {
+        const output = await generateRoasts(target, provider, logger, feedbackRepo);
+
+        // Create session
+        const session = sessions.createSession(
+          target,
+          'generate',
+          output.variants.map((v) => ({
+            text: v.text,
+            angle: v.angle,
+            score: v.score,
+          })),
+          chatId,
+        );
+
+        clearInterval(progressInterval);
+
+        // Update status message
+        const researchNote = output.researchNotes
+          ? `\n\n<i>📝 ${escapeHtml(output.researchNotes.slice(0, 200))}</i>`
+          : '';
+        await api.editMessageText(
+          chatId,
           statusMsg.message_id,
-          `🔍 Researching <b>${escapeHtml(target)}</b>... <i>(${String(elapsed)}s)</i>`,
+          `✅ Generated ${String(output.variants.length)} variants for <b>${escapeHtml(target)}</b>${researchNote}\n\n<i>${RATING_LEGEND}</i>`,
           { parse_mode: 'HTML' },
-        )
-        .catch(() => {});
-    }, 10_000);
+        );
 
-    try {
-      const output = await generateRoasts(target, provider, logger, feedbackRepo);
+        // Send each variant with rating buttons
+        for (let i = 0; i < session.variants.length; i++) {
+          const variant = session.variants[i];
+          if (!variant) continue;
+          const msg = await api.sendMessage(
+            chatId,
+            formatVariantMessage(variant.text, i, variant.angle, variant.score, session.variants.length),
+            {
+              parse_mode: 'HTML',
+              reply_markup: ratingKeyboard(session.id, i),
+            },
+          );
+          variant.messageId = msg.message_id;
+        }
 
-      // Create session
-      const session = sessions.createSession(
-        target,
-        'generate',
-        output.variants.map((v) => ({
-          text: v.text,
-          angle: v.angle,
-          score: v.score,
-        })),
-        ctx.chat.id,
-      );
-
-      clearInterval(progressInterval);
-
-      // Update status message
-      const researchNote = output.researchNotes
-        ? `\n\n<i>📝 ${escapeHtml(output.researchNotes.slice(0, 200))}</i>`
-        : '';
-      await ctx.api.editMessageText(
-        ctx.chat.id,
-        statusMsg.message_id,
-        `✅ Generated ${String(output.variants.length)} variants for <b>${escapeHtml(target)}</b>${researchNote}\n\n<i>${RATING_LEGEND}</i>`,
-        { parse_mode: 'HTML' },
-      );
-
-      // Send each variant with rating buttons
-      for (let i = 0; i < session.variants.length; i++) {
-        const variant = session.variants[i];
-        if (!variant) continue;
-        const msg = await ctx.reply(
-          formatVariantMessage(variant.text, i, variant.angle, variant.score, session.variants.length),
+        // Session control message with Done button
+        await api.sendMessage(
+          chatId,
+          '<i>Rate the variants above, then press Done for a summary.</i>',
           {
             parse_mode: 'HTML',
-            reply_markup: ratingKeyboard(session.id, i),
+            reply_markup: sessionDoneKeyboard(session.id),
           },
         );
-        variant.messageId = msg.message_id;
+      } catch (error) {
+        clearInterval(progressInterval);
+        const elapsed = Math.round((Date.now() - startTime) / 1000);
+        logger.error({ err: error, target, elapsedSec: elapsed }, 'Roast generation failed');
+        await api
+          .editMessageText(
+            chatId,
+            statusMsg.message_id,
+            `❌ Generation failed after ${String(elapsed)}s: ${escapeHtml(getErrorMessage(error).slice(0, 200))}`,
+            { parse_mode: 'HTML' },
+          )
+          .catch(() => {});
       }
-    } catch (error) {
-      clearInterval(progressInterval);
-      const elapsed = Math.round((Date.now() - startTime) / 1000);
-      logger.error({ err: error, target, elapsedSec: elapsed }, 'Roast generation failed');
-      await ctx.api.editMessageText(
-        ctx.chat.id,
-        statusMsg.message_id,
-        `❌ Generation failed after ${String(elapsed)}s: ${escapeHtml(getErrorMessage(error).slice(0, 200))}`,
-        { parse_mode: 'HTML' },
-      );
-    }
+    })();
   });
 
   bot.command('stats', async (ctx) => {
@@ -300,7 +320,7 @@ export function createBot(opts: {
     if (data.startsWith('rate:')) {
       const parts = data.split(':');
       if (parts.length !== 4) {
-        await ctx.answerCallbackQuery({ text: 'Invalid callback data' });
+        try { await ctx.answerCallbackQuery({ text: 'Invalid callback data' }); } catch { /* expired */ }
         return;
       }
       const sessionId = parts[1]!;
@@ -308,26 +328,25 @@ export function createBot(opts: {
       const verdict = parts[3] as HumanVerdict;
 
       if (!VALID_VERDICTS.has(verdict) || isNaN(variantIdx)) {
-        await ctx.answerCallbackQuery({ text: 'Invalid rating' });
+        try { await ctx.answerCallbackQuery({ text: 'Invalid rating' }); } catch { /* expired */ }
         return;
       }
 
       const session = sessions.get(sessionId);
       if (!session) {
-        await ctx.answerCallbackQuery({ text: 'Session expired' });
+        try { await ctx.answerCallbackQuery({ text: 'Session expired' }); } catch { /* expired */ }
         return;
       }
 
       const evaluatorId = ctx.from.id;
       const evaluatorName = ctx.from.username ?? ctx.from.first_name;
 
-      // Check for re-rating
+      // Answer callback query first (must happen within 30s of button click)
       const existingRating = sessions.getRating(sessionId, evaluatorId, variantIdx);
-      if (existingRating) {
-        await ctx.answerCallbackQuery({
-          text: `Already rated ${existingRating.toUpperCase()}. Updating to ${verdict.toUpperCase()}.`,
-        });
-      }
+      const ackText = existingRating
+        ? `Updated: ${verdict.toUpperCase()}`
+        : `Rated: ${verdict.toUpperCase()}`;
+      try { await ctx.answerCallbackQuery({ text: ackText }); } catch { /* expired */ }
 
       // Store in session
       sessions.addRating(sessionId, evaluatorId, variantIdx, verdict);
@@ -348,28 +367,12 @@ export function createBot(opts: {
         });
       }
 
-      // Update button text to show who rated what
-      const ratingLabels: string[] = [];
-      for (const [eid, evaluatorRatings] of session.ratings) {
-        const v = evaluatorRatings.get(variantIdx);
-        if (v) {
-          const name = eid === evaluatorId ? evaluatorName : String(eid);
-          const emoji = v === 'fire' ? '🔥' : v === 'post' ? '✅' : v === 'iterate' ? '🔄' : '❌';
-          ratingLabels.push(`${emoji} ${name}`);
-        }
-      }
-
-      // Edit message to show ratings but keep buttons for other evaluators
+      // Update message to show ratings
       if (variant?.messageId && ctx.chat) {
+        const ratingLabels = buildRatingLabels(session, variantIdx, evaluatorId, evaluatorName);
         const originalText = session.source === 'manual'
           ? formatManualEvalMessage(variant.text)
-          : formatVariantMessage(
-              variant.text,
-              variantIdx,
-              variant.angle,
-              variant.score,
-              session.variants.length,
-            );
+          : formatVariantMessage(variant.text, variantIdx, variant.angle, variant.score, session.variants.length);
         const ratingsLine = `\n\n<b>Ratings:</b> ${ratingLabels.join(' · ')}`;
 
         try {
@@ -377,54 +380,15 @@ export function createBot(opts: {
             ctx.chat.id,
             variant.messageId,
             originalText + ratingsLine,
-            {
-              parse_mode: 'HTML',
-              reply_markup: ratingKeyboard(sessionId, variantIdx),
-            },
+            { parse_mode: 'HTML', reply_markup: ratingKeyboard(sessionId, variantIdx) },
           );
-        } catch {
-          // Message might not have changed — ignore
-        }
+        } catch { /* message not modified */ }
       }
 
-      try {
-        await ctx.answerCallbackQuery({
-          text: `Rated: ${verdict.toUpperCase()}`,
-        });
-      } catch {
-        // Callback query expired — silently ignore
-      }
-
-      // Check if all variants rated by this evaluator → send summary
+      // Auto-summary if all variants rated
       const evaluatorRatings = session.ratings.get(evaluatorId);
       if (evaluatorRatings && evaluatorRatings.size === session.variants.length) {
-        const summary = formatSessionSummary(session);
-
-        // Build learning update
-        const stats = feedbackRepo.getStats();
-        const goldCount = stats.byVerdict['fire'] ?? 0;
-        const goldForTarget = feedbackRepo.getFireExamplesForTarget(session.targetName, 100).length;
-
-        const fireAngles: string[] = [];
-        for (const [, eRatings] of session.ratings) {
-          for (const [idx, v] of eRatings) {
-            if (v === 'fire') {
-              const va = session.variants[idx];
-              if (va) fireAngles.push(va.angle);
-            }
-          }
-        }
-
-        const learningLines = [
-          '',
-          '<b>📚 Training impact:</b>',
-          `Gold examples: <b>${String(goldCount)}</b> total (${String(goldForTarget)} for ${escapeHtml(session.targetName)})`,
-        ];
-        if (fireAngles.length > 0) {
-          learningLines.push(`New gold: ${fireAngles.map((a) => escapeHtml(a)).join(', ')}`);
-        }
-
-        await ctx.reply(summary + learningLines.join('\n'), { parse_mode: 'HTML' });
+        await sendSessionReport(ctx, session, feedbackRepo);
       }
 
       return;
@@ -451,12 +415,8 @@ export function createBot(opts: {
         return;
       }
 
-      const evaluatorId = ctx.from.id;
-      sessions.setPendingEdit(evaluatorId, sessionId, variantIdx);
-
-      try {
-        await ctx.answerCallbackQuery({ text: 'Send your version as a text message' });
-      } catch { /* expired */ }
+      sessions.setPendingEdit(ctx.from.id, sessionId, variantIdx);
+      try { await ctx.answerCallbackQuery({ text: 'Send your version as a text message' }); } catch { /* expired */ }
 
       const variant = session.variants[variantIdx];
       const originalPreview = variant ? variant.text.slice(0, 100) : '';
@@ -468,7 +428,35 @@ export function createBot(opts: {
       return;
     }
 
-    await ctx.answerCallbackQuery({ text: 'Unknown action' });
+    // --- Callback: Done button ---
+    if (data.startsWith('done:')) {
+      const sessionId = data.slice(5);
+      const session = sessions.get(sessionId);
+      if (!session) {
+        try { await ctx.answerCallbackQuery({ text: 'Session expired' }); } catch { /* expired */ }
+        return;
+      }
+
+      try { await ctx.answerCallbackQuery({ text: 'Session finished' }); } catch { /* expired */ }
+
+      // Remove the Done button from the control message
+      if (ctx.chat && ctx.callbackQuery.message) {
+        try {
+          await ctx.api.editMessageText(
+            ctx.chat.id,
+            ctx.callbackQuery.message.message_id,
+            '<i>Session completed.</i>',
+            { parse_mode: 'HTML' },
+          );
+        } catch { /* message not modified */ }
+      }
+
+      await sendSessionReport(ctx, session, feedbackRepo);
+      sessions.delete(sessionId);
+      return;
+    }
+
+    try { await ctx.answerCallbackQuery({ text: 'Unknown action' }); } catch { /* expired */ }
   });
 
   // --- Text messages: manual evaluation ---
@@ -601,4 +589,60 @@ export function createBot(opts: {
   });
 
   return bot;
+}
+
+function buildRatingLabels(
+  session: RoastSession,
+  variantIdx: number,
+  currentEvaluatorId: number,
+  currentEvaluatorName: string,
+): string[] {
+  const labels: string[] = [];
+  for (const [eid, evaluatorRatings] of session.ratings) {
+    const v = evaluatorRatings.get(variantIdx);
+    if (v) {
+      const name = eid === currentEvaluatorId ? currentEvaluatorName : String(eid);
+      const emoji = v === 'fire' ? '🔥' : v === 'post' ? '✅' : v === 'iterate' ? '🔄' : '❌';
+      labels.push(`${emoji} ${name}`);
+    }
+  }
+  return labels;
+}
+
+async function sendSessionReport(
+  ctx: Context,
+  session: RoastSession,
+  feedbackRepo: FeedbackRepository,
+): Promise<void> {
+  const summary = formatSessionSummary(session);
+
+  const stats = feedbackRepo.getStats();
+  const goldCount = stats.byVerdict['fire'] ?? 0;
+  const goldForTarget = feedbackRepo.getFireExamplesForTarget(session.targetName, 100).length;
+
+  const fireAngles: string[] = [];
+  for (const [, eRatings] of session.ratings) {
+    for (const [idx, v] of eRatings) {
+      if (v === 'fire') {
+        const va = session.variants[idx];
+        if (va) fireAngles.push(va.angle);
+      }
+    }
+  }
+
+  const ratedCount = new Set(
+    [...session.ratings.values()].flatMap((m) => [...m.keys()]),
+  ).size;
+
+  const learningLines = [
+    '',
+    `<b>📚 Training impact:</b>`,
+    `Rated: <b>${String(ratedCount)}/${String(session.variants.length)}</b> variants`,
+    `Gold examples: <b>${String(goldCount)}</b> total (${String(goldForTarget)} for ${escapeHtml(session.targetName)})`,
+  ];
+  if (fireAngles.length > 0) {
+    learningLines.push(`New gold: ${fireAngles.map((a) => escapeHtml(a)).join(', ')}`);
+  }
+
+  await ctx.reply(summary + learningLines.join('\n'), { parse_mode: 'HTML' });
 }
