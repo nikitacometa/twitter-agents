@@ -1,4 +1,4 @@
-import { Scraper, SearchMode } from '@the-convocation/twitter-scraper';
+import { Scraper } from '@the-convocation/twitter-scraper';
 import { cycleTLSFetch, cycleTLSExit } from '@the-convocation/twitter-scraper/cycletls';
 import type { Logger } from 'pino';
 import type { TweetMetrics } from '@common/types/index.js';
@@ -128,10 +128,10 @@ export class ScraperTwitterClient implements ITwitterClient {
    * Write operations log as DRY_RUN regardless of config.
    * For actual posting, switch to TWITTER_CLIENT_MODE=api with Official API keys.
    */
-  async postTweet(text: string): Promise<PostResult | null> {
+  postTweet(text: string): Promise<PostResult | null> {
     if (text.length > 280) {
       this.logger.error({ charCount: text.length }, 'Tweet exceeds 280 chars — rejected');
-      return null;
+      return Promise.resolve(null);
     }
 
     // Scraper library is read-only — always dry run for writes
@@ -139,20 +139,20 @@ export class ScraperTwitterClient implements ITwitterClient {
       { text, charCount: text.length, dryRun: this.dryRun },
       '[SCRAPER DRY RUN] Would post tweet (scraper is read-only — use API mode for posting)',
     );
-    return { tweetId: `dry_${Date.now()}` };
+    return Promise.resolve({ tweetId: `dry_${Date.now()}` });
   }
 
-  async replyToTweet(text: string, replyToId: string): Promise<PostResult | null> {
+  replyToTweet(text: string, replyToId: string): Promise<PostResult | null> {
     if (text.length > 280) {
       this.logger.error({ charCount: text.length }, 'Reply exceeds 280 chars — rejected');
-      return null;
+      return Promise.resolve(null);
     }
 
     this.logger.info(
       { text, replyToId, charCount: text.length, dryRun: this.dryRun },
       '[SCRAPER DRY RUN] Would reply (scraper is read-only — use API mode for posting)',
     );
-    return { tweetId: `dry_reply_${Date.now()}` };
+    return Promise.resolve({ tweetId: `dry_reply_${Date.now()}` });
   }
 
   async getMentions(sinceId?: string): Promise<MentionData[]> {
@@ -162,32 +162,110 @@ export class ScraperTwitterClient implements ITwitterClient {
     }
 
     try {
-      const query = `@${this.botUsername}`;
-      const results: MentionData[] = [];
-
-      for await (const tweet of this.scraper.searchTweets(query, 50, SearchMode.Latest)) {
-        if (!tweet.id || !tweet.text) continue;
-
-        // Skip own tweets
-        if (tweet.username?.toLowerCase() === this.botUsername.toLowerCase()) continue;
-
-        // Apply sinceId filter (BigInt comparison)
-        if (sinceId && BigInt(tweet.id) <= BigInt(sinceId)) continue;
-
-        results.push({
-          tweetId: tweet.id,
-          authorId: tweet.userId ?? 'unknown',
-          authorName: tweet.username ?? 'unknown',
-          text: tweet.text,
-        });
-      }
-
-      this.logger.info({ count: results.length, sinceId, query }, 'Mentions fetched (scraper)');
+      const results = await this.fetchMentionsViaNotifications(sinceId);
+      this.logger.info({ count: results.length, sinceId }, 'Mentions fetched (notifications endpoint)');
       return results;
     } catch (error) {
       this.logger.error({ err: error }, 'Failed to fetch mentions (scraper)');
       return [];
     }
+  }
+
+  /**
+   * Fetch mentions using Twitter's notifications/mentions.json endpoint.
+   * More reliable than SearchTimeline (which rotates GraphQL query IDs).
+   */
+  private async fetchMentionsViaNotifications(sinceId?: string): Promise<MentionData[]> {
+    const cookies = await this.scraper.getCookies();
+    const ct0Cookie = cookies.find((c: { key: string }) => c.key === 'ct0') as
+      | { key: string; value: string }
+      | undefined;
+    const cookieStr = cookies
+      .map((c: { key: string; value: string }) => `${c.key}=${c.value}`)
+      .join('; ');
+
+    const params = new URLSearchParams({
+      include_profile_interstitial_type: '1',
+      include_blocking: '1',
+      include_blocked_by: '1',
+      include_followed_by: '1',
+      include_want_retweets: '1',
+      include_mute_edge: '1',
+      include_can_dm: '1',
+      include_can_media_tag: '1',
+      include_ext_is_blue_verified: '1',
+      include_ext_verified_type: '1',
+      skip_status: '1',
+      cards_platform: 'Web-12',
+      include_cards: '1',
+      include_ext_alt_text: 'true',
+      include_quote_count: 'true',
+      include_reply_count: '1',
+      tweet_mode: 'extended',
+      include_ext_views: 'true',
+      include_entities: 'true',
+      include_user_entities: 'true',
+      send_error_codes: 'true',
+      simple_quoted_tweet: 'true',
+      count: '40',
+      ext: 'mediaStats,highlightedLabel,voiceInfo,superFollowMetadata,unmentionInfo,editControl',
+    });
+
+    const bearerToken =
+      'AAAAAAAAAAAAAAAAAAAAANRILgAAAAAAnNwIzUejRCOuH5E6I8xnZz4puTs%3D1Zv7ttfk8LF81IUq16cHjhLTvJu4FA33AGWWjCpTnA';
+
+    const resp = await fetch(
+      `https://x.com/i/api/2/notifications/mentions.json?${params.toString()}`,
+      {
+        headers: {
+          authorization: `Bearer ${bearerToken}`,
+          cookie: cookieStr,
+          'x-csrf-token': ct0Cookie?.value ?? '',
+          'x-twitter-auth-type': 'OAuth2Session',
+          'x-twitter-active-user': 'yes',
+          'x-twitter-client-language': 'en',
+          'user-agent':
+            'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+          accept: '*/*',
+          referer: 'https://x.com/notifications/mentions',
+        },
+      },
+    );
+
+    if (!resp.ok) {
+      throw new Error(`notifications/mentions returned ${resp.status}`);
+    }
+
+    const data = (await resp.json()) as {
+      globalObjects?: {
+        tweets?: Record<string, { id_str: string; user_id_str: string; full_text?: string }>;
+        users?: Record<string, { id_str: string; screen_name: string }>;
+      };
+    };
+
+    const tweets = data.globalObjects?.tweets ?? {};
+    const users = data.globalObjects?.users ?? {};
+    const results: MentionData[] = [];
+
+    for (const [tweetId, tweet] of Object.entries(tweets)) {
+      // Skip own tweets
+      const user = users[tweet.user_id_str];
+      if (user?.screen_name?.toLowerCase() === this.botUsername.toLowerCase()) continue;
+
+      // Apply sinceId filter
+      if (sinceId && BigInt(tweetId) <= BigInt(sinceId)) continue;
+
+      if (!tweet.full_text) continue;
+
+      results.push({
+        tweetId,
+        authorId: tweet.user_id_str,
+        authorName: user?.screen_name ?? 'unknown',
+        text: tweet.full_text,
+      });
+    }
+
+    return results;
   }
 
   async getTweetMetrics(tweetIds: string[]): Promise<Map<string, TweetMetrics>> {

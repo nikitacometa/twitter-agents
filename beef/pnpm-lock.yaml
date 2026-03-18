@@ -4,6 +4,11 @@ settings:
   autoInstallPeers: true
   excludeLinksFromLockfile: false
 
+patchedDependencies:
+  '@the-convocation/twitter-scraper':
+    hash: aikf7lezzmgiava4f6qksh7wja
+    path: patches/@the-convocation__twitter-scraper.patch
+
 importers:
 
   .:
@@ -13,7 +18,7 @@ importers:
         version: 0.39.0
       '@the-convocation/twitter-scraper':
         specifier: ^0.22.1
-        version: 0.22.1(cycletls@2.0.5)
+        version: 0.22.1(patch_hash=aikf7lezzmgiava4f6qksh7wja)(cycletls@2.0.5)
       better-sqlite3:
         specifier: ^12.8.0
         version: 12.8.0
@@ -2277,7 +2282,7 @@ snapshots:
 
   '@sinclair/typebox@0.32.35': {}
 
-  '@the-convocation/twitter-scraper@0.22.1(cycletls@2.0.5)':
+  '@the-convocation/twitter-scraper@0.22.1(patch_hash=aikf7lezzmgiava4f6qksh7wja)(cycletls@2.0.5)':
     dependencies:
       '@sinclair/typebox': 0.32.35
       cross-fetch: 4.1.0
