@@ -18,6 +18,7 @@ git push origin main
 echo "[3/4] Deploying on VPS..."
 ssh "$VPS_HOST" bash -s "$REMOTE_DIR" <<'REMOTE'
 set -euo pipefail
+export PATH="$HOME/.local/share/pnpm:$PATH"
 REMOTE_DIR="$1"
 cd "$REMOTE_DIR/.."
 
