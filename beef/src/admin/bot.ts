@@ -127,7 +127,7 @@ export function createBot(opts: {
     });
 
     try {
-      const output = await generateRoasts(target, provider, logger);
+      const output = await generateRoasts(target, provider, logger, feedbackRepo);
 
       // Create session
       const session = sessions.createSession(

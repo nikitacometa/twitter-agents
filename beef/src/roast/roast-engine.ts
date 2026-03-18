@@ -76,7 +76,7 @@ export class RoastEngine {
         { taskId, err: error },
         'Research-mode generation failed, trying no-research fallback',
       );
-      const fallbackPrompt = buildNoResearchPrompt(targetName, this.character, this.variantCount);
+      const fallbackPrompt = buildNoResearchPrompt(targetName, this.character, this.variantCount, memory);
       result = await this.provider.run<AgentRoastOutput>(taskId, {
         prompt: fallbackPrompt,
         profile: 'roast-quick',

@@ -1,5 +1,6 @@
 import type { CharacterConfig, CharacterExample } from './character.loader.js';
 import { getRandomExamples } from './character.loader.js';
+import type { CreativeMemory } from '@common/types/index.js';
 
 const ANGLES = [
   'DATA_BOMB', 'TIMELINE', 'COMPARISON', 'FAKE_COMPLIMENT',
@@ -26,12 +27,49 @@ function formatResearchInstructions(character: CharacterConfig): string {
   return `REQUIRED DATA:\n${required}\n\nPREFERRED DATA:\n${preferred}`;
 }
 
+function buildExamples(
+  character: CharacterConfig,
+  memory?: CreativeMemory,
+): string {
+  const dynamicExamples = memory?.fireExamples ?? [];
+  const dynamicCount = Math.min(dynamicExamples.length, 2);
+  const staticCount = 5 - dynamicCount;
+
+  const staticExamples = getRandomExamples(character, staticCount);
+  const allExamples: CharacterExample[] = [
+    ...dynamicExamples.slice(0, dynamicCount).map((ex) => ({
+      text: ex.text,
+      target: ex.target,
+      angle: ex.angle,
+      charCount: ex.text.length,
+    })),
+    ...staticExamples,
+  ];
+
+  // Shuffle so dynamic examples aren't always first
+  allExamples.sort(() => Math.random() - 0.5);
+  return formatExamples(allExamples);
+}
+
+function buildContextLine(targetName: string, memory?: CreativeMemory): string {
+  const history = memory?.targetHistory;
+  if (!history || history.roastCount < 3) return '';
+
+  const angleSummary = history.angles
+    .map((a) => `${a.angle} (${String(a.count)}x)`)
+    .join(', ');
+
+  return `\n## CONTEXT\nYou've roasted "${targetName}" ${String(history.roastCount)} times before. Angles used: ${angleSummary}.\n`;
+}
+
 export function buildRoastPrompt(
   targetName: string,
   character: CharacterConfig,
   variantCount: number = 3,
+  memory?: CreativeMemory,
 ): string {
-  const examples = getRandomExamples(character, 5);
+  const examples = buildExamples(character, memory);
+  const contextLine = buildContextLine(targetName, memory);
   const angles = pickAngles(variantCount);
   const angleList = angles.map((a) => `  - ${a}`).join('\n');
 
@@ -41,8 +79,8 @@ export function buildRoastPrompt(
 ${character.originStory}
 
 ## FEW-SHOT EXAMPLES (match this quality and voice)
-${formatExamples(examples)}
-
+${examples}
+${contextLine}
 ## TASK: Research and roast "${targetName}"
 
 ### STEP 1 — RESEARCH
@@ -79,8 +117,9 @@ export function buildNoResearchPrompt(
   targetName: string,
   character: CharacterConfig,
   variantCount: number = 3,
+  memory?: CreativeMemory,
 ): string {
-  const examples = getRandomExamples(character, 5);
+  const examples = buildExamples(character, memory);
   const angles = pickAngles(variantCount);
   const angleList = angles.map((a) => `  - ${a}`).join('\n');
 
@@ -90,7 +129,7 @@ export function buildNoResearchPrompt(
 ${character.originStory}
 
 ## FEW-SHOT EXAMPLES (match this quality and voice)
-${formatExamples(examples)}
+${examples}
 
 ## TASK: Roast "${targetName}" using your existing knowledge
 

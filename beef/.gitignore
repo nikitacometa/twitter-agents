@@ -38,6 +38,8 @@ contracts/broadcast/
 # PM2
 .pm2/
 
-# Prod data snapshots
-data/beef-prod*.db*
+# Data (SQLite databases, exports)
+data/*.db
+data/*.db-shm
+data/*.db-wal
 data/human-feedback-*.jsonl

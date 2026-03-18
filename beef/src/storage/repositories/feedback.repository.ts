@@ -1,5 +1,5 @@
 import type Database from 'better-sqlite3';
-import type { HumanVerdict } from '@common/types/index.js';
+import type { HumanVerdict, FireExample, AngleUsage } from '@common/types/index.js';
 
 export interface InsertFeedback {
   sessionId: string;
@@ -55,6 +55,10 @@ export class FeedbackRepository {
   private readonly totalCountStmt: Database.Statement;
   private readonly recentStmt: Database.Statement;
   private readonly bySessionStmt: Database.Statement;
+  private readonly fireExamplesStmt: Database.Statement;
+  private readonly fireExamplesForTargetStmt: Database.Statement;
+  private readonly targetSessionCountStmt: Database.Statement;
+  private readonly targetAngleHistoryStmt: Database.Statement;
 
   constructor(db: Database.Database) {
     this.insertStmt = db.prepare(`
@@ -99,6 +103,40 @@ export class FeedbackRepository {
     this.bySessionStmt = db.prepare(
       'SELECT * FROM human_feedback WHERE session_id = ? ORDER BY variant_index, evaluator_telegram_id',
     );
+
+    this.fireExamplesStmt = db.prepare(`
+      SELECT roast_text, angle, target_name, MAX(created_at) as latest
+      FROM human_feedback
+      WHERE verdict = 'fire' AND angle IS NOT NULL AND angle != 'manual'
+      GROUP BY roast_text, angle, target_name
+      ORDER BY latest DESC
+      LIMIT ?
+    `);
+
+    this.fireExamplesForTargetStmt = db.prepare(`
+      SELECT roast_text, angle, MAX(created_at) as latest
+      FROM human_feedback
+      WHERE verdict = 'fire' AND target_name = ? COLLATE NOCASE AND angle IS NOT NULL AND angle != 'manual'
+      GROUP BY roast_text, angle
+      ORDER BY latest DESC
+      LIMIT ?
+    `);
+
+    this.targetSessionCountStmt = db.prepare(`
+      SELECT COUNT(DISTINCT session_id) as count
+      FROM human_feedback
+      WHERE target_name = ? COLLATE NOCASE AND angle != 'manual'
+    `);
+
+    this.targetAngleHistoryStmt = db.prepare(`
+      SELECT angle, COUNT(*) as count FROM (
+        SELECT DISTINCT session_id, variant_index, angle
+        FROM human_feedback
+        WHERE target_name = ? COLLATE NOCASE AND angle IS NOT NULL AND angle != 'manual'
+      )
+      GROUP BY angle
+      ORDER BY count DESC
+    `);
   }
 
   insert(feedback: InsertFeedback): number {
@@ -163,6 +201,34 @@ export class FeedbackRepository {
 
   getRecent(limit: number): HumanFeedback[] {
     return (this.recentStmt.all(limit) as FeedbackRow[]).map(mapRow);
+  }
+
+  getFireExamples(limit: number): FireExample[] {
+    return (
+      this.fireExamplesStmt.all(limit) as Array<{
+        roast_text: string;
+        angle: string;
+        target_name: string;
+      }>
+    ).map((row) => ({ text: row.roast_text, angle: row.angle, target: row.target_name }));
+  }
+
+  getFireExamplesForTarget(targetName: string, limit: number): FireExample[] {
+    return (
+      this.fireExamplesForTargetStmt.all(targetName, limit) as Array<{
+        roast_text: string;
+        angle: string;
+      }>
+    ).map((row) => ({ text: row.roast_text, angle: row.angle, target: targetName }));
+  }
+
+  getTargetSessionCount(targetName: string): number {
+    const row = this.targetSessionCountStmt.get(targetName) as { count: number };
+    return row.count;
+  }
+
+  getTargetAngleHistory(targetName: string): AngleUsage[] {
+    return this.targetAngleHistoryStmt.all(targetName) as AngleUsage[];
   }
 }
 

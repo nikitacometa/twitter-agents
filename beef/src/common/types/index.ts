@@ -150,6 +150,27 @@ export interface TwitterUser {
 
 export type HumanVerdict = 'fire' | 'post' | 'iterate' | 'reject';
 
+// --- Creative memory (dynamic few-shot + target history) ---
+
+export interface FireExample {
+  text: string;
+  angle: string;
+  target: string;
+}
+
+export interface AngleUsage {
+  angle: string;
+  count: number;
+}
+
+export interface CreativeMemory {
+  fireExamples: FireExample[];
+  targetHistory?: {
+    roastCount: number;
+    angles: AngleUsage[];
+  };
+}
+
 // --- Config ---
 
 export interface RuntimeConfig {
