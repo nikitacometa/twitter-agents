@@ -28,9 +28,10 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.39.0",
-    "agent-twitter-client": "^0.0.18",
+    "@the-convocation/twitter-scraper": "^0.22.1",
     "better-sqlite3": "^12.8.0",
     "cron": "^3.3.0",
+    "cycletls": "^2.0.5",
     "dotenv": "^16.4.0",
     "grammy": "^1.41.1",
     "pino": "^9.6.0",

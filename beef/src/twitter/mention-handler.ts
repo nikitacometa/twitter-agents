@@ -1,5 +1,5 @@
 import type { Logger } from 'pino';
-import type { TwitterClient } from './twitter-client.js';
+import type { ITwitterClient } from './twitter-client.interface.js';
 import type { MentionRepository } from '@storage/repositories/mention.repository.js';
 import type { UserRepository } from '@storage/repositories/user.repository.js';
 import type { ConfigRepository } from '@storage/repositories/config.repository.js';
@@ -10,7 +10,7 @@ const ROAST_KEYWORDS = ['roast', 'beef', 'cook', 'destroy', 'grill', 'flame', 'b
 const CHALLENGE_KEYWORDS = ['challenge', 'cap', 'false', 'wrong', 'lie', 'fake', 'proof'];
 
 export class MentionHandler {
-  private readonly twitter: TwitterClient;
+  private readonly twitter: ITwitterClient;
   private readonly mentionRepo: MentionRepository;
   private readonly userRepo: UserRepository;
   private readonly configRepo: ConfigRepository;
@@ -18,7 +18,7 @@ export class MentionHandler {
   private readonly logger: Logger;
 
   constructor(opts: {
-    twitter: TwitterClient;
+    twitter: ITwitterClient;
     mentionRepo: MentionRepository;
     userRepo: UserRepository;
     configRepo: ConfigRepository;

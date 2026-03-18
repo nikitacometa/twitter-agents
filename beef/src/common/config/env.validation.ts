@@ -8,10 +8,14 @@ const envSchema = z
     TWITTER_ACCESS_TOKEN: z.string().optional(),
     TWITTER_ACCESS_SECRET: z.string().optional(),
 
-    // Twitter cookie auth (fallback)
+    // Twitter client mode
+    TWITTER_CLIENT_MODE: z.enum(['api', 'scraper']).default('api'),
+
+    // Twitter scraper credentials (cookie auth via agent-twitter-client)
     TWITTER_USERNAME: z.string().optional(),
     TWITTER_PASSWORD: z.string().optional(),
-    TWITTER_EMAIL: z.string().optional(),
+    TWITTER_PHONE: z.string().optional(),
+    TWITTER_2FA_SECRET: z.string().optional(),
 
     // Anthropic SDK — fallback only (primary = Claude Code CLI via Claude Max)
     ANTHROPIC_API_KEY: z.string().optional(),

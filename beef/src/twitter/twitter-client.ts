@@ -1,6 +1,7 @@
 import { TwitterApi } from 'twitter-api-v2';
 import type { Logger } from 'pino';
 import type { TweetMetrics } from '@common/types/index.js';
+import type { ITwitterClient, PostResult, MentionData } from './twitter-client.interface.js';
 import { retryWithBackoff } from '@common/utils/error.util.js';
 
 export interface TwitterCredentials {
@@ -10,11 +11,9 @@ export interface TwitterCredentials {
   accessSecret: string;
 }
 
-export interface PostResult {
-  tweetId: string;
-}
+export { type PostResult } from './twitter-client.interface.js';
 
-export class TwitterClient {
+export class TwitterClient implements ITwitterClient {
   private readonly client: TwitterApi | null;
   private readonly dryRun: boolean;
   private readonly logger: Logger;
@@ -97,12 +96,7 @@ export class TwitterClient {
     );
   }
 
-  async getMentions(sinceId?: string): Promise<Array<{
-    tweetId: string;
-    authorId: string;
-    authorName: string;
-    text: string;
-  }>> {
+  async getMentions(sinceId?: string): Promise<MentionData[]> {
     if (!this.client) {
       this.logger.debug('getMentions skipped — no client');
       return [];
@@ -126,12 +120,7 @@ export class TwitterClient {
         }
       }
 
-      const results: Array<{
-        tweetId: string;
-        authorId: string;
-        authorName: string;
-        text: string;
-      }> = [];
+      const results: MentionData[] = [];
 
       for (const tweet of mentions.data?.data ?? []) {
         results.push({

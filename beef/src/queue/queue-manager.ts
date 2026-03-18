@@ -4,7 +4,7 @@ import type { RoastRepository } from '@storage/repositories/roast.repository.js'
 import type { ConfigRepository } from '@storage/repositories/config.repository.js';
 import type { FeedbackRepository } from '@storage/repositories/feedback.repository.js';
 import type { ProviderManager } from '@agent/provider-manager.js';
-import type { TwitterClient } from '@twitter/twitter-client.js';
+import type { ITwitterClient } from '@twitter/twitter-client.interface.js';
 import { generateRoasts } from '@admin/roast-generator.js';
 import { getErrorMessage } from '@common/utils/error.util.js';
 import { isQuietHour } from '@scheduler/scheduler.js';
@@ -15,7 +15,7 @@ export class QueueManager {
   private readonly configRepo: ConfigRepository;
   private readonly feedbackRepo: FeedbackRepository;
   private readonly provider: ProviderManager;
-  private readonly twitter: TwitterClient;
+  private readonly twitter: ITwitterClient;
   private readonly logger: Logger;
   private readonly dailyLimit: number;
 
@@ -25,7 +25,7 @@ export class QueueManager {
     configRepo: ConfigRepository;
     feedbackRepo: FeedbackRepository;
     provider: ProviderManager;
-    twitter: TwitterClient;
+    twitter: ITwitterClient;
     logger: Logger;
     dailyLimit: number;
   }) {

@@ -1,16 +1,16 @@
 import type { Logger } from 'pino';
-import type { TwitterClient } from '@twitter/twitter-client.js';
+import type { ITwitterClient } from '@twitter/twitter-client.interface.js';
 import type { RoastRepository } from '@storage/repositories/roast.repository.js';
 import type Database from 'better-sqlite3';
 
 export class EngagementTracker {
-  private readonly twitter: TwitterClient;
+  private readonly twitter: ITwitterClient;
   private readonly roastRepo: RoastRepository;
   private readonly insertSnapshotStmt: Database.Statement;
   private readonly logger: Logger;
 
   constructor(opts: {
-    twitter: TwitterClient;
+    twitter: ITwitterClient;
     roastRepo: RoastRepository;
     db: Database.Database;
     logger: Logger;
