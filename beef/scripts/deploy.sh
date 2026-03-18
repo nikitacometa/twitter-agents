@@ -18,14 +18,13 @@ git push origin main
 echo "[3/4] Deploying on VPS..."
 ssh "$VPS_HOST" bash -s "$REMOTE_DIR" <<'REMOTE'
 set -euo pipefail
-export PATH="/home/deploy/.local/share/pnpm:$PATH"
 REMOTE_DIR="$1"
 cd "$REMOTE_DIR/.."
 
 git pull --ff-only
 
 cd "$REMOTE_DIR"
-pnpm install --frozen-lockfile
+corepack pnpm install --frozen-lockfile
 
 # Reload or start
 if pm2 describe beef-bot > /dev/null 2>&1; then
