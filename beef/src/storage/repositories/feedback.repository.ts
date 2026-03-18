@@ -1,5 +1,5 @@
 import type Database from 'better-sqlite3';
-import type { HumanVerdict, FireExample, AngleUsage } from '@common/types/index.js';
+import type { HumanVerdict, FireExample, AngleUsage, RejectExample } from '@common/types/index.js';
 
 export interface InsertFeedback {
   sessionId: string;
@@ -60,6 +60,10 @@ export class FeedbackRepository {
   private readonly targetSessionCountStmt: Database.Statement;
   private readonly targetAngleHistoryStmt: Database.Statement;
   private readonly anglePerformanceStmt: Database.Statement;
+  private readonly rejectExamplesStmt: Database.Statement;
+  private readonly fireCharStatsStmt: Database.Statement;
+  private readonly rejectCharStatsStmt: Database.Statement;
+  private readonly sessionMetricsStmt: Database.Statement;
 
   constructor(db: Database.Database) {
     this.insertStmt = db.prepare(`
@@ -149,6 +153,41 @@ export class FeedbackRepository {
       WHERE angle IS NOT NULL AND angle != 'manual'
       GROUP BY angle
       ORDER BY total DESC
+    `);
+
+    this.rejectExamplesStmt = db.prepare(`
+      SELECT roast_text, angle, target_name, MAX(created_at) as latest
+      FROM human_feedback
+      WHERE verdict = 'reject' AND angle IS NOT NULL AND angle != 'manual'
+      GROUP BY roast_text, angle, target_name
+      ORDER BY latest DESC
+      LIMIT ?
+    `);
+
+    this.fireCharStatsStmt = db.prepare(`
+      SELECT AVG(LENGTH(roast_text)) as avg_len
+      FROM human_feedback
+      WHERE verdict = 'fire' AND angle IS NOT NULL AND angle != 'manual'
+    `);
+
+    this.rejectCharStatsStmt = db.prepare(`
+      SELECT AVG(LENGTH(roast_text)) as avg_len
+      FROM human_feedback
+      WHERE verdict = 'reject' AND angle IS NOT NULL AND angle != 'manual'
+    `);
+
+    this.sessionMetricsStmt = db.prepare(`
+      SELECT
+        DATE(created_at) as date,
+        COUNT(*) as total,
+        SUM(CASE WHEN verdict = 'fire' THEN 1 ELSE 0 END) as fire_count,
+        ROUND(CAST(SUM(CASE WHEN verdict = 'fire' THEN 1 ELSE 0 END) AS REAL) / COUNT(*), 3) as fire_rate,
+        ROUND(AVG(CASE WHEN llm_self_score IS NOT NULL THEN llm_self_score END), 2) as avg_llm_score
+      FROM human_feedback
+      WHERE angle IS NOT NULL AND angle != 'manual'
+      GROUP BY DATE(created_at)
+      ORDER BY date DESC
+      LIMIT ?
     `);
   }
 
@@ -257,6 +296,50 @@ export class FeedbackRepository {
       total: row.total,
       fireCount: row.fire_count,
       rejectCount: row.reject_count,
+    }));
+  }
+
+  getRejectExamples(limit: number): RejectExample[] {
+    return (
+      this.rejectExamplesStmt.all(limit) as Array<{
+        roast_text: string;
+        angle: string;
+        target_name: string;
+      }>
+    ).map((row) => ({ text: row.roast_text, angle: row.angle, target: row.target_name }));
+  }
+
+  getFireCharStats(): number | null {
+    const row = this.fireCharStatsStmt.get() as { avg_len: number | null } | undefined;
+    return row?.avg_len ?? null;
+  }
+
+  getRejectCharStats(): number | null {
+    const row = this.rejectCharStatsStmt.get() as { avg_len: number | null } | undefined;
+    return row?.avg_len ?? null;
+  }
+
+  getSessionMetrics(lastN: number): Array<{
+    date: string;
+    total: number;
+    fireCount: number;
+    fireRate: number;
+    avgLlmScore: number | null;
+  }> {
+    return (
+      this.sessionMetricsStmt.all(lastN) as Array<{
+        date: string;
+        total: number;
+        fire_count: number;
+        fire_rate: number;
+        avg_llm_score: number | null;
+      }>
+    ).map((row) => ({
+      date: row.date,
+      total: row.total,
+      fireCount: row.fire_count,
+      fireRate: row.fire_rate,
+      avgLlmScore: row.avg_llm_score,
     }));
   }
 }

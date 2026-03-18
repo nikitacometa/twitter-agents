@@ -163,12 +163,26 @@ export interface AngleUsage {
   count: number;
 }
 
+export interface RejectExample {
+  text: string;
+  angle: string;
+  target: string;
+}
+
+export interface AngleWeight {
+  angle: string;
+  weight: number;
+}
+
 export interface CreativeMemory {
   fireExamples: FireExample[];
   targetHistory?: {
     roastCount: number;
     angles: AngleUsage[];
   };
+  rejectExamples?: RejectExample[];
+  styleSupplement?: string;
+  angleWeights?: AngleWeight[];
 }
 
 // --- Config ---

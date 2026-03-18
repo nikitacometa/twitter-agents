@@ -1,6 +1,12 @@
 import type Database from 'better-sqlite3';
 import type { RuntimeConfig } from '@common/types/index.js';
 
+export interface StyleSupplement {
+  text: string;
+  computedAt: string;
+  sampleSize: number;
+}
+
 export class ConfigRepository {
   private readonly getStmt: Database.Statement;
   private readonly setStmt: Database.Statement;
@@ -37,5 +43,19 @@ export class ConfigRepository {
 
   setMentionSinceId(sinceId: string): void {
     this.set('mention_since_id', sinceId);
+  }
+
+  getStyleSupplement(): StyleSupplement | null {
+    const raw = this.get('style_supplement');
+    if (!raw) return null;
+    try {
+      return JSON.parse(raw) as StyleSupplement;
+    } catch {
+      return null;
+    }
+  }
+
+  setStyleSupplement(supplement: StyleSupplement): void {
+    this.set('style_supplement', JSON.stringify(supplement));
   }
 }

@@ -153,7 +153,7 @@ export function createBot(opts: {
       }, 10_000);
 
       try {
-        const output = await generateRoasts(target, provider!, logger, feedbackRepo, profile, variantCount);
+        const output = await generateRoasts(target, provider!, logger, feedbackRepo, profile, variantCount, configRepo);
 
         // Create session
         const session = sessions.createSession(

@@ -2,7 +2,8 @@ import type { Logger } from 'pino';
 import type { ProviderManager } from '@agent/provider-manager.js';
 import type { AgentRoastOutput, TaskProfile } from '@agent/agent.types.js';
 import type { FeedbackRepository } from '@storage/repositories/feedback.repository.js';
-import type { CreativeMemory } from '@common/types/index.js';
+import type { ConfigRepository } from '@storage/repositories/config.repository.js';
+import type { AngleWeight, CreativeMemory } from '@common/types/index.js';
 import { RoastEngine } from '@roast/roast-engine.js';
 
 let cachedEngine: RoastEngine | null = null;
@@ -17,6 +18,7 @@ function getEngine(provider: ProviderManager, logger: Logger): RoastEngine {
 function buildCreativeMemory(
   targetName: string,
   feedbackRepo: FeedbackRepository,
+  configRepo?: ConfigRepository,
 ): CreativeMemory {
   // 1. Try to get a fire example from this specific target
   const targetFire = feedbackRepo.getFireExamplesForTarget(targetName, 1);
@@ -36,7 +38,29 @@ function buildCreativeMemory(
       ? { roastCount, angles: feedbackRepo.getTargetAngleHistory(targetName) }
       : undefined;
 
-  return { fireExamples, targetHistory };
+  // 4. Reject examples for anti-pattern injection (need ≥5 total rejects)
+  const allRejects = feedbackRepo.getRejectExamples(5);
+  const rejectExamples = allRejects.length >= 5 ? allRejects.slice(0, 3) : undefined;
+
+  // 5. Angle weights from performance data
+  const anglePerf = feedbackRepo.getAnglePerformance();
+  const angleWeights: AngleWeight[] = anglePerf
+    .filter((a) => a.total >= 3)
+    .map((a) => ({
+      angle: a.angle,
+      weight: Math.max(0.3, Math.min(2.0, a.fireCount / a.total)),
+    }));
+
+  // 6. Style supplement from config (computed by /analyze)
+  const styleSupplement = configRepo?.getStyleSupplement()?.text;
+
+  return {
+    fireExamples,
+    targetHistory,
+    rejectExamples,
+    angleWeights: angleWeights.length > 0 ? angleWeights : undefined,
+    styleSupplement,
+  };
 }
 
 export async function generateRoasts(
@@ -46,14 +70,22 @@ export async function generateRoasts(
   feedbackRepo?: FeedbackRepository,
   profile?: TaskProfile,
   variantCount?: number,
+  configRepo?: ConfigRepository,
 ): Promise<AgentRoastOutput> {
   const engine = getEngine(provider, logger);
 
-  const memory = feedbackRepo ? buildCreativeMemory(targetName, feedbackRepo) : undefined;
+  const memory = feedbackRepo ? buildCreativeMemory(targetName, feedbackRepo, configRepo) : undefined;
 
-  if (memory && memory.fireExamples.length > 0) {
+  if (memory && (memory.fireExamples.length > 0 || memory.angleWeights || memory.rejectExamples)) {
     logger.info(
-      { target: targetName, fireExamples: memory.fireExamples.length, hasHistory: !!memory.targetHistory },
+      {
+        target: targetName,
+        fireExamples: memory.fireExamples.length,
+        hasHistory: !!memory.targetHistory,
+        rejectExamples: memory.rejectExamples?.length ?? 0,
+        angleWeights: memory.angleWeights?.length ?? 0,
+        hasStyleSupplement: !!memory.styleSupplement,
+      },
       'Creative memory loaded',
     );
   }

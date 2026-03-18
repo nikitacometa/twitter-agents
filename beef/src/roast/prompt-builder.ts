@@ -1,6 +1,6 @@
 import type { CharacterConfig, CharacterExample } from './character.loader.js';
 import { getRandomExamples } from './character.loader.js';
-import type { CreativeMemory } from '@common/types/index.js';
+import type { AngleWeight, CreativeMemory, RejectExample } from '@common/types/index.js';
 
 const ANGLES = [
   'DATA_BOMB', 'TIMELINE', 'COMPARISON', 'FAKE_COMPLIMENT',
@@ -9,9 +9,40 @@ const ANGLES = [
 
 export type RoastAngle = (typeof ANGLES)[number];
 
-function pickAngles(count: number): RoastAngle[] {
-  const shuffled = [...ANGLES].sort(() => Math.random() - 0.5);
-  return shuffled.slice(0, count);
+/**
+ * Weighted random selection without replacement (Efraimidis-Spirakis algorithm).
+ * Each item gets key = random() ^ (1/weight), take top-N by key descending.
+ * Falls back to pure random when no weights provided.
+ */
+function pickAngles(count: number, weights?: AngleWeight[]): RoastAngle[] {
+  const weightMap = new Map<string, number>();
+  if (weights) {
+    for (const w of weights) {
+      weightMap.set(w.angle, w.weight);
+    }
+  }
+
+  const keyed = ANGLES.map((angle) => {
+    const weight = weightMap.get(angle) ?? 1.0;
+    const key = Math.random() ** (1 / weight);
+    return { angle, key };
+  });
+
+  keyed.sort((a, b) => b.key - a.key);
+  return keyed.slice(0, count).map((k) => k.angle);
+}
+
+function buildAntiPatternSection(rejects: RejectExample[]): string {
+  if (rejects.length < 3) return '';
+
+  const examples = rejects.slice(0, 3);
+  const lines = examples.map(
+    (r) => `  - [${r.angle}] "${r.text}" (target: ${r.target})`,
+  );
+
+  return `\n## ANTI-PATTERNS (these specific texts were rated BAD — avoid similar patterns)
+${lines.join('\n')}
+`;
 }
 
 function formatExamples(examples: CharacterExample[]): string {
@@ -70,8 +101,12 @@ export function buildRoastPrompt(
 ): string {
   const examples = buildExamples(character, memory);
   const contextLine = buildContextLine(targetName, memory);
-  const angles = pickAngles(variantCount);
+  const angles = pickAngles(variantCount, memory?.angleWeights);
   const angleList = angles.map((a) => `  - ${a}`).join('\n');
+  const antiPatterns = buildAntiPatternSection(memory?.rejectExamples ?? []);
+  const styleLine = memory?.styleSupplement
+    ? `\n## LEARNED STYLE OBSERVATIONS\n${memory.styleSupplement}\n`
+    : '';
 
   return `${character.systemPrompt}
 
@@ -80,7 +115,7 @@ ${character.originStory}
 
 ## FEW-SHOT EXAMPLES (match this quality and voice)
 ${examples}
-${contextLine}
+${antiPatterns}${styleLine}${contextLine}
 ## TASK: Research and roast "${targetName}"
 
 ### STEP 1 — RESEARCH
@@ -120,8 +155,12 @@ export function buildNoResearchPrompt(
   memory?: CreativeMemory,
 ): string {
   const examples = buildExamples(character, memory);
-  const angles = pickAngles(variantCount);
+  const angles = pickAngles(variantCount, memory?.angleWeights);
   const angleList = angles.map((a) => `  - ${a}`).join('\n');
+  const antiPatterns = buildAntiPatternSection(memory?.rejectExamples ?? []);
+  const styleLine = memory?.styleSupplement
+    ? `\n## LEARNED STYLE OBSERVATIONS\n${memory.styleSupplement}\n`
+    : '';
 
   return `${character.systemPrompt}
 
@@ -130,7 +169,7 @@ ${character.originStory}
 
 ## FEW-SHOT EXAMPLES (match this quality and voice)
 ${examples}
-
+${antiPatterns}${styleLine}
 ## TASK: Roast "${targetName}" using your existing knowledge
 
 Generate ${String(variantCount)} roast variants WITHOUT web research. Use general knowledge only.
