@@ -30,6 +30,7 @@ export class QueueRepository {
   private readonly failStmt: Database.Statement;
   private readonly pendingCountStmt: Database.Statement;
   private readonly topStmt: Database.Statement;
+  private readonly resetProcessingStmt: Database.Statement;
 
   constructor(db: Database.Database) {
     this.insertStmt = db.prepare(`
@@ -71,6 +72,11 @@ export class QueueRepository {
       ORDER BY priority DESC, created_at ASC
       LIMIT ?
     `);
+
+    this.resetProcessingStmt = db.prepare(`
+      UPDATE queue SET status = 'pending', updated_at = datetime('now')
+      WHERE status = 'processing'
+    `);
   }
 
   enqueue(item: NewQueueItem): number {
@@ -108,6 +114,15 @@ export class QueueRepository {
 
   getTop(limit: number): QueueItem[] {
     return (this.topStmt.all(limit) as QueueRow[]).map(mapRow);
+  }
+
+  /**
+   * Reset items stuck in 'processing' back to 'pending'.
+   * Call at startup to recover from crashes.
+   */
+  resetProcessing(): number {
+    const result = this.resetProcessingStmt.run();
+    return result.changes;
   }
 }
 

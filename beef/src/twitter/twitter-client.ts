@@ -105,9 +105,9 @@ export class TwitterClient implements ITwitterClient {
     try {
       const me = await this.client.v2.me();
       const params: Record<string, string> = {
-        'tweet.fields': 'author_id,created_at',
+        'tweet.fields': 'author_id,created_at,referenced_tweets',
         'user.fields': 'username',
-        expansions: 'author_id',
+        expansions: 'author_id,referenced_tweets.id,referenced_tweets.id.author_id',
       };
       if (sinceId) params['since_id'] = sinceId;
 
@@ -120,15 +120,40 @@ export class TwitterClient implements ITwitterClient {
         }
       }
 
+      // Index referenced tweets for parent tweet lookup
+      const refTweets = new Map<string, { text: string; author_id?: string }>();
+      if (mentions.includes?.tweets) {
+        for (const t of mentions.includes.tweets) {
+          refTweets.set(t.id, { text: t.text, author_id: t.author_id });
+        }
+      }
+
       const results: MentionData[] = [];
 
       for (const tweet of mentions.data?.data ?? []) {
-        results.push({
+        const mention: MentionData = {
           tweetId: tweet.id,
           authorId: tweet.author_id ?? 'unknown',
           authorName: users.get(tweet.author_id ?? '') ?? 'unknown',
           text: tweet.text,
-        });
+        };
+
+        // Check for replied_to reference
+        const repliedTo = tweet.referenced_tweets?.find(
+          (ref: { type: string; id: string }) => ref.type === 'replied_to',
+        );
+        if (repliedTo) {
+          mention.inReplyToTweetId = repliedTo.id;
+          const parent = refTweets.get(repliedTo.id);
+          if (parent) {
+            mention.parentTweetText = parent.text;
+            if (parent.author_id) {
+              mention.parentAuthorName = users.get(parent.author_id);
+            }
+          }
+        }
+
+        results.push(mention);
       }
 
       this.logger.info({ count: results.length, sinceId }, 'Mentions fetched');

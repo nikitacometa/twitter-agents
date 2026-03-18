@@ -42,6 +42,12 @@ const userRepo = new UserRepository(db);
 const exampleRepo = new ExternalExampleRepository(db);
 const patternRepo = new RoastPatternRepository(db);
 
+// --- Recover stuck queue items from previous crash ---
+const resetCount = queueRepo.resetProcessing();
+if (resetCount > 0) {
+  logger.warn({ resetCount }, 'Reset stuck processing queue items back to pending');
+}
+
 // --- LLM Providers (optional — bot works without them for manual eval) ---
 let provider: ProviderManager | null = null;
 try {
@@ -220,6 +226,7 @@ const shutdown = async () => {
     await provider.waitForIdle(185_000);
     provider.shutdown();
   }
+  if (twitter.shutdown) await twitter.shutdown();
   db.close();
   process.exit(0);
 };

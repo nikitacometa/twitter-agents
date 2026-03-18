@@ -41,12 +41,21 @@ export class AnthropicSDKProvider implements LLMProvider {
         messages: [{ role: 'user', content: task.prompt }],
       });
 
-      const text = response.content
+      const rawText = response.content
         .filter((block): block is Anthropic.TextBlock => block.type === 'text')
         .map((block) => block.text)
         .join('');
 
-      const data = JSON.parse(text) as T;
+      // Strip markdown code fences (```json ... ``` or ``` ... ```)
+      const text = rawText.replace(/^```(?:json)?\s*\n?/i, '').replace(/\n?```\s*$/i, '').trim();
+
+      let data: T;
+      try {
+        data = JSON.parse(text) as T;
+      } catch {
+        this.logger.error({ taskId, rawText: rawText.slice(0, 500) }, 'Failed to parse LLM JSON response');
+        throw new Error(`[${taskId}] Invalid JSON from Anthropic SDK: ${text.slice(0, 100)}`);
+      }
       const durationMs = Date.now() - start;
 
       this.logger.info(

@@ -9,6 +9,12 @@ export interface MentionData {
   authorId: string;
   authorName: string;
   text: string;
+  /** The tweet this mention is replying to (if any). */
+  inReplyToTweetId?: string;
+  /** Full text of the parent tweet (when available from API response). */
+  parentTweetText?: string;
+  /** Author username of the parent tweet. */
+  parentAuthorName?: string;
 }
 
 export interface ITwitterClient {
@@ -17,4 +23,5 @@ export interface ITwitterClient {
   replyToTweet(text: string, replyToId: string): Promise<PostResult | null>;
   getMentions(sinceId?: string): Promise<MentionData[]>;
   getTweetMetrics(tweetIds: string[]): Promise<Map<string, TweetMetrics>>;
+  shutdown?(): Promise<void>;
 }

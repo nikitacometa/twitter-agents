@@ -43,3 +43,4 @@ data/*.db
 data/*.db-shm
 data/*.db-wal
 data/human-feedback-*.jsonl
+data/twitter-cookies.json

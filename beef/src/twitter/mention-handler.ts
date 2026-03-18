@@ -5,6 +5,7 @@ import type { UserRepository } from '@storage/repositories/user.repository.js';
 import type { ConfigRepository } from '@storage/repositories/config.repository.js';
 import type { QueueRepository } from '@storage/repositories/queue.repository.js';
 import type { MentionRequestType } from '@common/types/index.js';
+import type { MentionData } from './twitter-client.interface.js';
 
 const ROAST_KEYWORDS = ['roast', 'beef', 'cook', 'destroy', 'grill', 'flame', 'burn'];
 const CHALLENGE_KEYWORDS = ['challenge', 'cap', 'false', 'wrong', 'lie', 'fake', 'proof'];
@@ -89,7 +90,13 @@ export class MentionHandler {
             { tweetId: m.tweetId, target, author: m.authorName },
             'Roast request queued from mention',
           );
+        } else if (m.inReplyToTweetId && m.parentTweetText) {
+          // "roast" keyword but no explicit target, under a tweet → roast parent tweet
+          this.enqueueParentTweetRoast(m);
         }
+      } else if (isBareOrSimpleMention(m.text) && m.inReplyToTweetId && m.parentTweetText) {
+        // Bare mention under a tweet → roast that tweet
+        this.enqueueParentTweetRoast(m);
       }
 
       processed++;
@@ -101,6 +108,22 @@ export class MentionHandler {
 
     this.logger.info({ processed, total: mentions.length }, 'Mentions processed');
     return processed;
+  }
+
+  private enqueueParentTweetRoast(m: MentionData): void {
+    const parentAuthor = m.parentAuthorName ?? 'anon';
+    const tweetSnippet = m.parentTweetText!.slice(0, 120);
+    this.queueRepo.enqueue({
+      targetName: `tweet by @${parentAuthor}: "${tweetSnippet}"`,
+      targetType: 'project',
+      source: 'mention',
+      priority: 3,
+      context: `reply_to:${m.tweetId}|by:@${m.authorName}|parent:${m.inReplyToTweetId!}`,
+    });
+    this.logger.info(
+      { tweetId: m.tweetId, parentTweetId: m.inReplyToTweetId, parentAuthor, author: m.authorName },
+      'Parent tweet roast queued from mention',
+    );
   }
 }
 
@@ -116,6 +139,21 @@ function classifyMention(text: string): MentionRequestType {
   }
 
   return 'reply';
+}
+
+/**
+ * Detect "bare" mentions — just @handle with no meaningful text.
+ * Examples: "@BeefRoastBot", "@BeefRoastBot 🔥", "@BeefRoastBot pls"
+ */
+function isBareOrSimpleMention(text: string): boolean {
+  // Strip all @mentions, emojis (common Unicode ranges), and whitespace
+  const stripped = text
+    .replace(/@\w+/g, '')
+    .replace(/[\u{1F300}-\u{1F9FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}]/gu, '')
+    .trim();
+
+  // Nothing left, or very short filler words (< 10 chars: "pls", "do it", "go", etc.)
+  return stripped.length < 10;
 }
 
 function extractTarget(text: string): string | null {

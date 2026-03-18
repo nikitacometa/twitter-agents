@@ -238,7 +238,12 @@ export class ScraperTwitterClient implements ITwitterClient {
 
     const data = (await resp.json()) as {
       globalObjects?: {
-        tweets?: Record<string, { id_str: string; user_id_str: string; full_text?: string }>;
+        tweets?: Record<string, {
+          id_str: string;
+          user_id_str: string;
+          full_text?: string;
+          in_reply_to_status_id_str?: string;
+        }>;
         users?: Record<string, { id_str: string; screen_name: string }>;
       };
     };
@@ -257,12 +262,28 @@ export class ScraperTwitterClient implements ITwitterClient {
 
       if (!tweet.full_text) continue;
 
-      results.push({
+      const mention: MentionData = {
         tweetId,
         authorId: tweet.user_id_str,
         authorName: user?.screen_name ?? 'unknown',
         text: tweet.full_text,
-      });
+      };
+
+      // Enrich with parent tweet data if this is a reply
+      const parentId = tweet.in_reply_to_status_id_str;
+      if (parentId) {
+        mention.inReplyToTweetId = parentId;
+        const parentTweet = tweets[parentId];
+        if (parentTweet?.full_text) {
+          mention.parentTweetText = parentTweet.full_text;
+          const parentUser = users[parentTweet.user_id_str];
+          if (parentUser) {
+            mention.parentAuthorName = parentUser.screen_name;
+          }
+        }
+      }
+
+      results.push(mention);
     }
 
     return results;
