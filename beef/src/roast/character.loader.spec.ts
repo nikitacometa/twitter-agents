@@ -10,11 +10,11 @@ describe('loadCharacter', () => {
   it('loads and validates beef-bot.json', () => {
     const char = loadCharacter(CHARACTER_PATH);
     expect(char.meta.name).toBe('$BEEF');
-    expect(char.version).toBe('1.0.0');
+    expect(char.version).toBe('1.1.0');
     expect(char.systemPrompt.length).toBeGreaterThan(100);
     expect(char.personality.traits.length).toBeGreaterThanOrEqual(1);
     expect(char.voice.slang.length).toBeGreaterThan(0);
-    expect(char.style.sentenceStructures.length).toBe(8);
+    expect(char.style.sentenceStructures.length).toBe(13);
     expect(char.style.forbiddenPatterns.length).toBeGreaterThan(0);
   });
 
