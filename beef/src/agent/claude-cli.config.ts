@@ -46,6 +46,7 @@ const WEB_TOOLS = ['WebSearch', 'WebFetch', 'Bash(curl *)'];
 // | discovery        | sonnet | medium | Web+curl        | 10    | 120s    | Target finding — structured, not creative |
 // | verify           | sonnet | medium | Web             | 5     | 60s     | Fact-check — straightforward lookup       |
 // | audit            | sonnet | low    | none            | 1     | 30s     | Analytics — no research needed            |
+// | example-parse    | sonnet | high   | Read            | 3     | 120s    | Parse + analyze roast examples (images)   |
 
 const DEFAULT_PRESETS: Record<TaskProfile, TaskPreset> = {
   'roast-research': {
@@ -101,6 +102,13 @@ const DEFAULT_PRESETS: Record<TaskProfile, TaskPreset> = {
     tools: [],
     maxTurns: 1,
     timeoutMs: 30_000,
+  },
+  'example-parse': {
+    model: 'sonnet',
+    effort: 'high',
+    tools: ['Read'],
+    maxTurns: 3,
+    timeoutMs: 120_000,
   },
 };
 

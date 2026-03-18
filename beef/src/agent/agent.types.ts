@@ -7,7 +7,8 @@ export type TaskProfile =
   | 'reply'
   | 'discovery'
   | 'verify'
-  | 'audit';
+  | 'audit'
+  | 'example-parse';
 
 export interface AgentTask {
   prompt: string;

@@ -434,7 +434,7 @@ export function createBot(opts: {
 
   // --- External example learning flow ---
   if (exampleRepo && patternRepo) {
-    registerExampleFlow(bot, { exampleRepo, patternRepo, provider, logger });
+    registerExampleFlow(bot, { botToken: token, exampleRepo, patternRepo, provider, logger });
   }
 
   // --- Callback: rating buttons ---

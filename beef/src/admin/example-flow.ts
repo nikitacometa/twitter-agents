@@ -1,130 +1,347 @@
+import { writeFileSync, mkdirSync, rmSync } from 'node:fs';
+import { join } from 'node:path';
+import { tmpdir } from 'node:os';
 import type { Bot, Context } from 'grammy';
-import { InlineKeyboard } from 'grammy';
 import type { Logger } from 'pino';
 import type { ProviderManager } from '@agent/provider-manager.js';
-import type { ExternalExampleType } from '@common/types/index.js';
 import type { ExternalExampleRepository, InsertExternalExample } from '@storage/repositories/external-example.repository.js';
 import type { RoastPatternRepository } from '@storage/repositories/roast-pattern.repository.js';
-import { fetchTweetByUrl, isTweetUrl } from '@learning/tweet-fetcher.js';
-import { analyzeExample } from '@learning/example-analyzer.js';
+import { isTweetUrl, fetchTweetByUrl } from '@learning/tweet-fetcher.js';
+import type { FetchedTweet } from '@learning/tweet-fetcher.js';
+import { parseAndAnalyzeExample } from '@learning/example-analyzer.js';
+import type { ExampleParseResult } from '@learning/example-analyzer.js';
 import { getErrorMessage } from '@common/utils/error.util.js';
 import { escapeHtml } from './formatters.js';
 
-// --- Flow state machine ---
+// Users who sent /example and are waiting to send content
+const awaitingInput = new Set<number>();
+const AWAIT_TTL_MS = 5 * 60 * 1000;
+const awaitingTimers = new Map<number, ReturnType<typeof setTimeout>>();
 
-type FlowStep =
-  | 'awaiting_type'
-  | 'awaiting_original'
-  | 'awaiting_roast'
-  | 'awaiting_score'
-  | 'awaiting_notes'
-  | 'analyzing';
-
-interface ExampleFlowState {
-  step: FlowStep;
-  type?: ExternalExampleType;
-  originalText?: string;
-  originalAuthor?: string;
-  originalUrl?: string;
-  roastText?: string;
-  roastAuthor?: string;
-  roastUrl?: string;
-  context?: string;
-  score?: number;
-  chatId: number;
-  createdAt: number;
+function startAwaiting(userId: number): void {
+  clearAwaiting(userId);
+  awaitingInput.add(userId);
+  const timer = setTimeout(() => {
+    awaitingInput.delete(userId);
+    awaitingTimers.delete(userId);
+  }, AWAIT_TTL_MS);
+  awaitingTimers.set(userId, timer);
 }
 
-const FLOW_TTL_MS = 10 * 60 * 1000; // 10 minutes
-
-// Active flows keyed by Telegram user ID
-const flows = new Map<number, ExampleFlowState>();
-
-function getFlow(userId: number): ExampleFlowState | undefined {
-  const flow = flows.get(userId);
-  if (!flow) return undefined;
-  if (Date.now() - flow.createdAt > FLOW_TTL_MS) {
-    flows.delete(userId);
-    return undefined;
+function clearAwaiting(userId: number): void {
+  awaitingInput.delete(userId);
+  const timer = awaitingTimers.get(userId);
+  if (timer) {
+    clearTimeout(timer);
+    awaitingTimers.delete(userId);
   }
-  return flow;
 }
 
-function clearFlow(userId: number): void {
-  flows.delete(userId);
+function isAwaiting(userId: number): boolean {
+  return awaitingInput.has(userId);
 }
 
-// --- Keyboards ---
+// --- Tweet URL extraction from text ---
 
-function typeKeyboard(): InlineKeyboard {
-  return new InlineKeyboard()
-    .text('📝 Post + Roast', 'extype:post_roast')
-    .row()
-    .text('👤 Person + Roasts', 'extype:person_roast')
-    .row()
-    .text('📰 News + Roast', 'extype:news_roast')
-    .row()
-    .text('❌ Cancel', 'extype:cancel');
+const TWEET_URL_RE = /https?:\/\/(?:(?:www\.)?(?:twitter|x)\.com)\/\w+\/status\/\d+/g;
+
+function extractTweetUrls(text: string): string[] {
+  return [...text.matchAll(TWEET_URL_RE)].map((m) => m[0]);
 }
 
-function scoreKeyboard(): InlineKeyboard {
-  return new InlineKeyboard()
-    .text('⭐ 1', 'exscore:1')
-    .text('⭐ 2', 'exscore:2')
-    .text('⭐ 3', 'exscore:3')
-    .text('⭐ 4', 'exscore:4')
-    .text('⭐ 5', 'exscore:5');
+// --- Photo download ---
+
+async function downloadTelegramPhoto(
+  ctx: Context,
+  botToken: string,
+  logger: Logger,
+): Promise<string | null> {
+  const photos = ctx.message?.photo;
+  if (!photos || photos.length === 0) return null;
+
+  // Get largest photo (last in array)
+  const largest = photos[photos.length - 1];
+  if (!largest) return null;
+
+  try {
+    const file = await ctx.api.getFile(largest.file_id);
+    if (!file.file_path) {
+      logger.warn('Telegram getFile returned no file_path');
+      return null;
+    }
+
+    const url = `https://api.telegram.org/file/bot${botToken}/${file.file_path}`;
+    const response = await fetch(url, { signal: AbortSignal.timeout(15_000) });
+
+    if (!response.ok) {
+      logger.warn({ status: response.status }, 'Failed to download photo from Telegram');
+      return null;
+    }
+
+    const buffer = Buffer.from(await response.arrayBuffer());
+    const ext = file.file_path.endsWith('.png') ? 'png' : 'jpg';
+    const dir = join(tmpdir(), 'beef-examples');
+    mkdirSync(dir, { recursive: true });
+    const filePath = join(dir, `example-${Date.now()}.${ext}`);
+    writeFileSync(filePath, buffer);
+
+    logger.debug({ filePath, sizeKb: Math.round(buffer.length / 1024) }, 'Photo downloaded');
+    return filePath;
+  } catch (error) {
+    logger.error({ err: getErrorMessage(error) }, 'Failed to download Telegram photo');
+    return null;
+  }
 }
 
-// --- Type labels ---
+function cleanupTempFile(path: string | null, logger: Logger): void {
+  if (!path) return;
+  try {
+    rmSync(path, { force: true });
+  } catch (error) {
+    logger.debug({ err: getErrorMessage(error), path }, 'Failed to cleanup temp file');
+  }
+}
 
-const TYPE_LABELS: Record<ExternalExampleType, string> = {
-  post_roast: '📝 Post + Roast',
-  person_roast: '👤 Person + Roasts',
-  news_roast: '📰 News + Roast',
-};
+// --- Resolve tweet URLs ---
 
-const ORIGINAL_PROMPTS: Record<ExternalExampleType, string> = {
-  post_roast: 'Send the <b>original post</b> (URL or text):',
-  person_roast: 'Describe the <b>person/project</b> (name + brief context):',
-  news_roast: 'Send the <b>news</b> (URL, headline, or description):',
-};
+async function resolveTweetUrls(
+  urls: string[],
+  logger: Logger,
+): Promise<FetchedTweet[]> {
+  const results: FetchedTweet[] = [];
+  for (const url of urls.slice(0, 5)) {
+    const tweet = await fetchTweetByUrl(url, logger);
+    if (tweet) results.push(tweet);
+  }
+  return results;
+}
 
-const ROAST_PROMPTS: Record<ExternalExampleType, string> = {
-  post_roast: 'Now send the <b>roast reply</b> (URL or text):',
-  person_roast: 'Now send the <b>roast example</b> about this person (URL or text):',
-  news_roast: 'Now send the <b>roast</b> about this news (URL or text):',
-};
+// --- Format analysis result for Telegram ---
+
+function formatResult(
+  exampleId: number,
+  result: ExampleParseResult,
+  total: number,
+): string {
+  const { parsed, analysis } = result;
+  const typeLabels = {
+    post_roast: '📝 Post + Roast',
+    person_roast: '👤 Person + Roast',
+    news_roast: '📰 News + Roast',
+  };
+
+  const lines = [
+    `<b>✅ Example #${String(exampleId)} saved</b>`,
+    '',
+    `<b>Type:</b> ${typeLabels[parsed.type]}`,
+    `<b>Score:</b> ${'⭐'.repeat(parsed.score)}`,
+    '',
+    `<b>Original:</b> ${escapeHtml(parsed.originalText.slice(0, 120))}${parsed.originalText.length > 120 ? '...' : ''}`,
+    parsed.originalAuthor ? `<b>By:</b> ${escapeHtml(parsed.originalAuthor)}` : '',
+    '',
+    `<b>Roast:</b>`,
+    `<code>${escapeHtml(parsed.roastText)}</code>`,
+    parsed.roastAuthor ? `<b>By:</b> ${escapeHtml(parsed.roastAuthor)}` : '',
+    '',
+    '<b>--- Analysis ---</b>',
+    `<b>Technique:</b> ${escapeHtml(analysis.technique)}`,
+    analysis.secondaryTechniques.length > 0
+      ? `<b>Secondary:</b> ${analysis.secondaryTechniques.map(escapeHtml).join(', ')}`
+      : '',
+    `<b>Structure:</b> ${escapeHtml(analysis.structure)}`,
+    `<b>Angle:</b> ${escapeHtml(analysis.beefAngleMapping)}`,
+    `<b>Specificity:</b> ${String(Math.round(analysis.specificityScore * 100))}%`,
+    `<b>Tone:</b> ${escapeHtml(analysis.tone)}`,
+    '',
+    `<b>Why it works:</b> ${escapeHtml(analysis.whatMakesItWork)}`,
+    '',
+    `<b>Pattern:</b>`,
+    `<code>${escapeHtml(analysis.reusablePattern)}</code>`,
+    '',
+    `<b>Adaptation:</b> ${escapeHtml(analysis.adaptationHint)}`,
+    '',
+    `📚 Library: ${String(total)} total`,
+  ];
+
+  return lines.filter(Boolean).join('\n');
+}
+
+// --- Main processing ---
+
+async function processExampleInput(
+  ctx: Context,
+  botToken: string,
+  exampleRepo: ExternalExampleRepository,
+  patternRepo: RoastPatternRepository,
+  provider: ProviderManager | null,
+  logger: Logger,
+): Promise<void> {
+  if (!provider) {
+    await ctx.reply('⚠️ LLM provider not available — cannot process examples.');
+    return;
+  }
+
+  const text = ctx.message?.text ?? ctx.message?.caption ?? undefined;
+  const hasPhoto = !!ctx.message?.photo && ctx.message.photo.length > 0;
+
+  if (!text && !hasPhoto) {
+    await ctx.reply('Send text, a screenshot, tweet URLs, or any combination.');
+    return;
+  }
+
+  // Status message
+  const statusMsg = await ctx.reply('🔍 Analyzing...');
+
+  let imagePath: string | null = null;
+  let resolvedTweets: FetchedTweet[] = [];
+
+  try {
+    // Download photo if present
+    if (hasPhoto) {
+      imagePath = await downloadTelegramPhoto(ctx, botToken, logger);
+      if (imagePath) {
+        await ctx.api.editMessageText(
+          ctx.chat!.id,
+          statusMsg.message_id,
+          '🔍 Image downloaded, analyzing...',
+        );
+      }
+    }
+
+    // Resolve tweet URLs from text
+    if (text) {
+      const urls = extractTweetUrls(text);
+      if (urls.length > 0) {
+        await ctx.api.editMessageText(
+          ctx.chat!.id,
+          statusMsg.message_id,
+          `🔍 Fetching ${String(urls.length)} tweet${urls.length > 1 ? 's' : ''}...`,
+        );
+        resolvedTweets = await resolveTweetUrls(urls, logger);
+      }
+    }
+
+    // Update status
+    await ctx.api.editMessageText(
+      ctx.chat!.id,
+      statusMsg.message_id,
+      `🔍 ${imagePath ? 'Reading image + ' : ''}Parsing and analyzing...`,
+    ).catch(() => { /* message not modified */ });
+
+    // Run LLM
+    const result = await parseAndAnalyzeExample(
+      { text, imagePath: imagePath ?? undefined, resolvedTweets },
+      provider,
+      logger,
+    );
+
+    if (!result) {
+      await ctx.api.editMessageText(
+        ctx.chat!.id,
+        statusMsg.message_id,
+        '❌ Could not parse this input. Try sending:\n• A screenshot of the roast\n• Tweet URL(s)\n• Text of the original + the roast',
+      );
+      return;
+    }
+
+    // Save to DB
+    const insert: InsertExternalExample = {
+      type: result.parsed.type,
+      originalText: result.parsed.originalText,
+      originalAuthor: result.parsed.originalAuthor ?? undefined,
+      roastText: result.parsed.roastText,
+      roastAuthor: result.parsed.roastAuthor ?? undefined,
+      context: result.parsed.context ?? undefined,
+      submitterTelegramId: ctx.from!.id,
+      submitterScore: result.parsed.score,
+    };
+
+    const exampleId = exampleRepo.insert(insert);
+
+    // Save analysis
+    exampleRepo.updateAnalysis(
+      exampleId,
+      result.analysis,
+      result.analysis.reusablePattern,
+      result.analysis.beefAngleMapping,
+      result.analysis.specificityScore,
+    );
+
+    // Upsert pattern
+    patternRepo.upsert({
+      patternType: 'technique',
+      description: result.analysis.reusablePattern,
+      sourceExampleIds: [exampleId],
+      effectiveness: result.parsed.score,
+    });
+
+    const total = exampleRepo.getCount();
+
+    // Replace status with result
+    await ctx.api.editMessageText(
+      ctx.chat!.id,
+      statusMsg.message_id,
+      formatResult(exampleId, result, total),
+      { parse_mode: 'HTML' },
+    );
+  } catch (error) {
+    logger.error({ err: getErrorMessage(error) }, 'Example processing failed');
+    await ctx.api.editMessageText(
+      ctx.chat!.id,
+      statusMsg.message_id,
+      `❌ Error: ${escapeHtml(getErrorMessage(error).slice(0, 200))}`,
+      { parse_mode: 'HTML' },
+    ).catch(() => { /* message not modified */ });
+  } finally {
+    cleanupTempFile(imagePath, logger);
+  }
+}
 
 // --- Register commands and handlers ---
 
 export function registerExampleFlow(
   bot: Bot,
   opts: {
+    botToken: string;
     exampleRepo: ExternalExampleRepository;
     patternRepo: RoastPatternRepository;
     provider: ProviderManager | null;
     logger: Logger;
   },
 ): void {
-  const { exampleRepo, patternRepo, provider, logger } = opts;
+  const { botToken, exampleRepo, patternRepo, provider, logger } = opts;
 
-  // /example command
+  // /example command — start or immediate process
   bot.command('example', async (ctx) => {
     const userId = ctx.from?.id;
     if (!userId) return;
 
-    // Cancel any existing flow
-    clearFlow(userId);
+    const inlineText = ctx.match?.trim();
 
-    await ctx.reply(
-      [
-        '<b>📚 Add roast example</b>',
-        '',
-        'What type of example?',
-      ].join('\n'),
-      { parse_mode: 'HTML', reply_markup: typeKeyboard() },
-    );
+    if (inlineText) {
+      // /example <text> — process immediately
+      await processExampleInput(
+        ctx, botToken, exampleRepo, patternRepo, provider, logger,
+      );
+    } else {
+      // /example with no args — wait for next message
+      startAwaiting(userId);
+      await ctx.reply(
+        [
+          '<b>📚 Send a roast example</b>',
+          '',
+          'Anything goes — I\'ll figure it out:',
+          '• Screenshot of a tweet/reply',
+          '• Tweet URL(s)',
+          '• Text of the roast',
+          '• Photo + caption',
+          '• Any combination',
+          '',
+          '<i>Send /cancel to abort</i>',
+        ].join('\n'),
+        { parse_mode: 'HTML' },
+      );
+    }
   });
 
   // /examples command — show stats
@@ -134,9 +351,15 @@ export function registerExampleFlow(
     const patternCount = patternRepo.getCount();
 
     if (total === 0) {
-      await ctx.reply('No examples yet. Use /example to add your first one!');
+      await ctx.reply('No examples yet. Use /example to add the first one!');
       return;
     }
+
+    const typeLabels: Record<string, string> = {
+      post_roast: '📝 Post + Roast',
+      person_roast: '👤 Person + Roast',
+      news_roast: '📰 News + Roast',
+    };
 
     const lines = [
       '<b>📚 External Examples Library</b>',
@@ -144,7 +367,7 @@ export function registerExampleFlow(
       `Total: <b>${String(total)}</b> examples`,
     ];
 
-    for (const [type, label] of Object.entries(TYPE_LABELS)) {
+    for (const [type, label] of Object.entries(typeLabels)) {
       const count = byType[type] ?? 0;
       if (count > 0) {
         lines.push(`  ${label}: ${String(count)}`);
@@ -153,7 +376,6 @@ export function registerExampleFlow(
 
     lines.push(`\nExtracted patterns: <b>${String(patternCount)}</b>`);
 
-    // Show recent top examples
     const top = exampleRepo.getTop(4, 3);
     if (top.length > 0) {
       lines.push('\n<b>Top examples:</b>');
@@ -166,326 +388,28 @@ export function registerExampleFlow(
     await ctx.reply(lines.join('\n'), { parse_mode: 'HTML' });
   });
 
-  // --- Callback: type selection ---
-
-  bot.on('callback_query:data', async (ctx, next) => {
-    const data = ctx.callbackQuery.data;
-
-    if (data.startsWith('extype:')) {
-      const userId = ctx.from.id;
-      const value = data.slice(7);
-
-      if (value === 'cancel') {
-        clearFlow(userId);
-        try { await ctx.answerCallbackQuery({ text: 'Cancelled' }); } catch { /* expired */ }
-        if (ctx.callbackQuery.message && ctx.chat) {
-          try {
-            await ctx.api.editMessageText(
-              ctx.chat.id,
-              ctx.callbackQuery.message.message_id,
-              '<i>Cancelled.</i>',
-              { parse_mode: 'HTML' },
-            );
-          } catch { /* message not modified */ }
-        }
-        return;
-      }
-
-      const type = value as ExternalExampleType;
-      if (!TYPE_LABELS[type]) {
-        try { await ctx.answerCallbackQuery({ text: 'Invalid type' }); } catch { /* expired */ }
-        return;
-      }
-
-      flows.set(userId, {
-        step: 'awaiting_original',
-        type,
-        chatId: ctx.chat?.id ?? 0,
-        createdAt: Date.now(),
-      });
-
-      try { await ctx.answerCallbackQuery({ text: TYPE_LABELS[type] }); } catch { /* expired */ }
-
-      // Update the original message
-      if (ctx.callbackQuery.message && ctx.chat) {
-        try {
-          await ctx.api.editMessageText(
-            ctx.chat.id,
-            ctx.callbackQuery.message.message_id,
-            `<b>📚 ${TYPE_LABELS[type]}</b>\n\n${ORIGINAL_PROMPTS[type]}`,
-            { parse_mode: 'HTML' },
-          );
-        } catch { /* message not modified */ }
-      }
-      return;
-    }
-
-    // --- Callback: score selection ---
-    if (data.startsWith('exscore:')) {
-      const userId = ctx.from.id;
-      const flow = getFlow(userId);
-      if (!flow || flow.step !== 'awaiting_score') {
-        try { await ctx.answerCallbackQuery({ text: 'No active flow' }); } catch { /* expired */ }
-        return;
-      }
-
-      const score = parseInt(data.slice(8), 10);
-      if (score < 1 || score > 5 || isNaN(score)) {
-        try { await ctx.answerCallbackQuery({ text: 'Invalid score' }); } catch { /* expired */ }
-        return;
-      }
-
-      flow.score = score;
-      flow.step = 'awaiting_notes';
-
-      try { await ctx.answerCallbackQuery({ text: `Score: ${String(score)}/5` }); } catch { /* expired */ }
-
-      // Update message
-      if (ctx.callbackQuery.message && ctx.chat) {
-        try {
-          await ctx.api.editMessageText(
-            ctx.chat.id,
-            ctx.callbackQuery.message.message_id,
-            `Rating: ${'⭐'.repeat(score)}`,
-            { parse_mode: 'HTML' },
-          );
-        } catch { /* message not modified */ }
-      }
-
-      await ctx.reply(
-        'What makes this roast good? (optional — send /skip to skip)',
-      );
-      return;
-    }
-
-    // Not our callback — pass to next handler
-    await next();
-  });
-
-  // --- Text handler for flow steps ---
-
-  bot.on('message:text', async (ctx, next) => {
+  // Handle next message from users awaiting input (text or photo)
+  bot.on(['message:text', 'message:photo'], async (ctx, next) => {
     const userId = ctx.from?.id;
-    if (!userId) return next();
+    if (!userId || !isAwaiting(userId)) return next();
 
-    const flow = getFlow(userId);
-    if (!flow) return next();
+    const text = ctx.message.text ?? ctx.message.caption ?? '';
 
-    const text = ctx.message.text.trim();
-
-    // /skip for notes step
-    if (text === '/skip' && flow.step === 'awaiting_notes') {
-      await processAndSave(ctx, flow, undefined, exampleRepo, patternRepo, provider, logger);
-      clearFlow(userId);
+    // /cancel
+    if (text.trim() === '/cancel') {
+      clearAwaiting(userId);
+      await ctx.reply('<i>Cancelled.</i>', { parse_mode: 'HTML' });
       return;
     }
 
-    // /cancel at any point
-    if (text === '/cancel') {
-      clearFlow(userId);
-      await ctx.reply('<i>Example flow cancelled.</i>', { parse_mode: 'HTML' });
-      return;
+    // Skip other commands
+    if (text.startsWith('/') && !isTweetUrl(text)) {
+      return next();
     }
 
-    switch (flow.step) {
-      case 'awaiting_original': {
-        // Try to fetch from URL
-        if (isTweetUrl(text)) {
-          const statusMsg = await ctx.reply('🔍 Fetching tweet...');
-          const tweet = await fetchTweetByUrl(text, logger);
-          if (tweet) {
-            flow.originalText = tweet.text;
-            flow.originalAuthor = tweet.authorName;
-            flow.originalUrl = tweet.tweetUrl;
-            await ctx.api.editMessageText(
-              ctx.chat.id,
-              statusMsg.message_id,
-              `✅ <b>${escapeHtml(tweet.authorName)}</b>:\n<code>${escapeHtml(tweet.text)}</code>`,
-              { parse_mode: 'HTML' },
-            );
-          } else {
-            await ctx.api.editMessageText(
-              ctx.chat.id,
-              statusMsg.message_id,
-              '⚠️ Could not fetch tweet. Send the text manually:',
-            );
-            return; // Stay on same step
-          }
-        } else {
-          flow.originalText = text;
-        }
-
-        flow.step = 'awaiting_roast';
-        await ctx.reply(ROAST_PROMPTS[flow.type!], { parse_mode: 'HTML' });
-        return;
-      }
-
-      case 'awaiting_roast': {
-        // Try to fetch from URL
-        if (isTweetUrl(text)) {
-          const statusMsg = await ctx.reply('🔍 Fetching tweet...');
-          const tweet = await fetchTweetByUrl(text, logger);
-          if (tweet) {
-            flow.roastText = tweet.text;
-            flow.roastAuthor = tweet.authorName;
-            flow.roastUrl = tweet.tweetUrl;
-            await ctx.api.editMessageText(
-              ctx.chat.id,
-              statusMsg.message_id,
-              `✅ <b>${escapeHtml(tweet.authorName)}</b>:\n<code>${escapeHtml(tweet.text)}</code>`,
-              { parse_mode: 'HTML' },
-            );
-          } else {
-            await ctx.api.editMessageText(
-              ctx.chat.id,
-              statusMsg.message_id,
-              '⚠️ Could not fetch tweet. Send the text manually:',
-            );
-            return;
-          }
-        } else {
-          flow.roastText = text;
-        }
-
-        flow.step = 'awaiting_score';
-        await ctx.reply('How good is this roast?', { reply_markup: scoreKeyboard() });
-        return;
-      }
-
-      case 'awaiting_notes': {
-        await processAndSave(ctx, flow, text, exampleRepo, patternRepo, provider, logger);
-        clearFlow(userId);
-        return;
-      }
-
-      default:
-        return next();
-    }
+    clearAwaiting(userId);
+    await processExampleInput(
+      ctx, botToken, exampleRepo, patternRepo, provider, logger,
+    );
   });
-}
-
-// --- Save and analyze ---
-
-async function processAndSave(
-  ctx: Context,
-  flow: ExampleFlowState,
-  notes: string | undefined,
-  exampleRepo: ExternalExampleRepository,
-  patternRepo: RoastPatternRepository,
-  provider: ProviderManager | null,
-  logger: Logger,
-): Promise<void> {
-  if (!flow.type || !flow.originalText || !flow.roastText || !flow.score) {
-    await ctx.reply('❌ Incomplete data — please start over with /example');
-    return;
-  }
-
-  // Save to DB
-  const insert: InsertExternalExample = {
-    type: flow.type,
-    originalText: flow.originalText,
-    originalAuthor: flow.originalAuthor,
-    originalUrl: flow.originalUrl,
-    roastText: flow.roastText,
-    roastAuthor: flow.roastAuthor,
-    roastUrl: flow.roastUrl,
-    submitterTelegramId: ctx.from!.id,
-    submitterScore: flow.score,
-    submitterNotes: notes,
-  };
-
-  const exampleId = exampleRepo.insert(insert);
-  const total = exampleRepo.getCount();
-  const byType = exampleRepo.getCountByType();
-
-  // Quick confirmation
-  const typeCounts = Object.entries(TYPE_LABELS)
-    .map(([t, label]) => `${label}: ${String(byType[t] ?? 0)}`)
-    .join(', ');
-
-  await ctx.reply(
-    [
-      `✅ <b>Example #${String(exampleId)} saved</b>`,
-      '',
-      `Type: ${TYPE_LABELS[flow.type]}`,
-      `Score: ${'⭐'.repeat(flow.score)}`,
-      notes ? `Notes: ${escapeHtml(notes)}` : '',
-      '',
-      `📚 Library: ${String(total)} total (${typeCounts})`,
-      provider ? '\n🔍 Analyzing...' : '\n⚠️ LLM not available — analysis skipped',
-    ].filter(Boolean).join('\n'),
-    { parse_mode: 'HTML' },
-  );
-
-  // Run LLM analysis if provider available
-  if (!provider) return;
-
-  try {
-    const analysis = await analyzeExample(
-      {
-        type: flow.type,
-        originalText: flow.originalText,
-        roastText: flow.roastText,
-        submitterNotes: notes,
-      },
-      provider,
-      logger,
-    );
-
-    if (!analysis) {
-      await ctx.reply('⚠️ Analysis failed — example saved without analysis. You can retry later.');
-      return;
-    }
-
-    // Update DB with analysis
-    exampleRepo.updateAnalysis(
-      exampleId,
-      analysis,
-      analysis.reusablePattern,
-      analysis.beefAngleMapping,
-      analysis.specificityScore,
-    );
-
-    // Upsert pattern
-    patternRepo.upsert({
-      patternType: 'technique',
-      description: analysis.reusablePattern,
-      sourceExampleIds: [exampleId],
-      effectiveness: flow.score,
-    });
-
-    // Send analysis result
-    await ctx.reply(
-      [
-        '<b>📊 Analysis</b>',
-        '',
-        `<b>Technique:</b> ${escapeHtml(analysis.technique)}`,
-        analysis.secondaryTechniques.length > 0
-          ? `<b>Secondary:</b> ${analysis.secondaryTechniques.map(escapeHtml).join(', ')}`
-          : '',
-        `<b>Structure:</b> ${escapeHtml(analysis.structure)}`,
-        `<b>Specificity:</b> ${String(Math.round(analysis.specificityScore * 100))}%`,
-        `<b>Tone:</b> ${escapeHtml(analysis.tone)}`,
-        `<b>$BEEF angle:</b> ${escapeHtml(analysis.beefAngleMapping)}`,
-        '',
-        `<b>Why it works:</b> ${escapeHtml(analysis.whatMakesItWork)}`,
-        '',
-        `<b>Reusable pattern:</b>`,
-        `<code>${escapeHtml(analysis.reusablePattern)}</code>`,
-        '',
-        `<b>Adaptation hint:</b> ${escapeHtml(analysis.adaptationHint)}`,
-        '',
-        analysis.dataPointsUsed.length > 0
-          ? `<b>Data points:</b> ${analysis.dataPointsUsed.map(escapeHtml).join(', ')}`
-          : '',
-      ].filter(Boolean).join('\n'),
-      { parse_mode: 'HTML' },
-    );
-  } catch (error) {
-    logger.error({ err: getErrorMessage(error), exampleId }, 'Example analysis failed');
-    await ctx.reply(
-      `⚠️ Analysis error: ${escapeHtml(getErrorMessage(error).slice(0, 200))}\nExample saved — you can retry analysis later.`,
-      { parse_mode: 'HTML' },
-    );
-  }
 }
