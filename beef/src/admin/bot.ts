@@ -8,6 +8,7 @@ import { getErrorMessage } from '@common/utils/error.util.js';
 import type { FeedbackRepository } from '@storage/repositories/feedback.repository.js';
 import type { QueueManager } from '@queue/queue-manager.js';
 import type { ConfigRepository } from '@storage/repositories/config.repository.js';
+import { computeStyleSupplement } from '@learning/style-analyzer.js';
 import { ratingKeyboard, sessionDoneKeyboard } from './keyboards.js';
 import { SessionStore } from './session-store.js';
 import type { RoastSession } from './types.js';
@@ -104,6 +105,10 @@ export function createBot(opts: {
         '✅ GOOD — good enough to post',
         '❌ BAD — not good enough',
         '✏️ EDIT — write your own version (saved as gold)',
+        '',
+        '<b>Learning:</b>',
+        '<code>/analyze</code> — compute style supplement from feedback',
+        '<code>/evolution</code> — fire rate trend + angle leaderboard',
         '',
         '<b>Other commands:</b>',
         '<code>/stats</code> — feedback statistics',
@@ -342,6 +347,78 @@ export function createBot(opts: {
     }
     configRepo.setPaused(false);
     await ctx.reply('▶️ Autonomous posting resumed.');
+  });
+
+  bot.command('analyze', async (ctx) => {
+    const supplement = computeStyleSupplement(feedbackRepo);
+    if (!supplement) {
+      await ctx.reply('Not enough data yet (need ≥10 gold ratings).');
+      return;
+    }
+
+    if (configRepo) {
+      configRepo.setStyleSupplement(supplement);
+    }
+
+    await ctx.reply(
+      [
+        '<b>📊 Style Analysis</b>',
+        '',
+        `<code>${escapeHtml(supplement.text)}</code>`,
+        '',
+        `Sample: ${String(supplement.sampleSize)} gold ratings`,
+        `Computed: ${supplement.computedAt.slice(0, 16)}`,
+        configRepo ? '✅ Saved — will be injected into next roast prompt' : '⚠️ Config repo unavailable — not saved',
+      ].join('\n'),
+      { parse_mode: 'HTML' },
+    );
+  });
+
+  bot.command('evolution', async (ctx) => {
+    const metrics = feedbackRepo.getSessionMetrics(10);
+    if (metrics.length === 0) {
+      await ctx.reply('No session data yet. Rate some roasts first!');
+      return;
+    }
+
+    const lines: string[] = ['<b>📈 Evolution Dashboard</b>', ''];
+
+    // Fire rate trend
+    lines.push('<b>Fire rate trend (last 10 days):</b>');
+    for (const m of metrics) {
+      const bar = '🟩'.repeat(Math.round(m.fireRate * 10)) + '⬜'.repeat(10 - Math.round(m.fireRate * 10));
+      const scoreStr = m.avgLlmScore !== null ? ` · LLM: ${String(m.avgLlmScore)}` : '';
+      lines.push(`  ${m.date}: ${bar} ${String(Math.round(m.fireRate * 100))}% (${String(m.fireCount)}/${String(m.total)})${scoreStr}`);
+    }
+    lines.push('');
+
+    // Angle leaderboard
+    const anglePerf = feedbackRepo.getAnglePerformance();
+    if (anglePerf.length > 0) {
+      lines.push('<b>Angle leaderboard:</b>');
+      const sorted = [...anglePerf]
+        .filter((a) => a.total >= 2)
+        .sort((a, b) => b.fireCount / b.total - (a.fireCount / a.total));
+      for (const a of sorted) {
+        const fireRate = Math.round((a.fireCount / a.total) * 100);
+        const rejectRate = Math.round((a.rejectCount / a.total) * 100);
+        const medal = fireRate >= 50 ? '🥇' : fireRate >= 30 ? '🥈' : rejectRate >= 50 ? '💀' : '  ';
+        lines.push(`  ${medal} ${escapeHtml(a.angle)} — 🔥${String(fireRate)}% ❌${String(rejectRate)}% (${String(a.total)})`);
+      }
+      lines.push('');
+    }
+
+    // Style supplement status
+    const supplement = configRepo?.getStyleSupplement();
+    if (supplement) {
+      lines.push('<b>Active style supplement:</b>');
+      lines.push(`  <code>${escapeHtml(supplement.text)}</code>`);
+      lines.push(`  Updated: ${supplement.computedAt.slice(0, 16)} (n=${String(supplement.sampleSize)})`);
+    } else {
+      lines.push('<i>No style supplement active. Run /analyze to compute.</i>');
+    }
+
+    await ctx.reply(lines.join('\n'), { parse_mode: 'HTML' });
   });
 
   // --- Callback: rating buttons ---
