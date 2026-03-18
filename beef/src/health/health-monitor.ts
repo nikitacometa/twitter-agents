@@ -86,6 +86,15 @@ export class HealthMonitor {
       res.end();
     });
 
+    this.server.on('error', (err: NodeJS.ErrnoException) => {
+      if (err.code === 'EADDRINUSE') {
+        this.logger.warn({ port: this.port }, 'Health monitor port in use — running without health endpoint');
+      } else {
+        this.logger.error({ err, port: this.port }, 'Health monitor server error');
+      }
+      this.server = null;
+    });
+
     this.server.listen(this.port, () => {
       this.logger.info({ port: this.port }, 'Health monitor HTTP server started');
     });

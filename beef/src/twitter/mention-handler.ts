@@ -52,6 +52,11 @@ export class MentionHandler {
     let latestId = sinceId;
 
     for (const m of mentions) {
+      // Always advance cursor regardless of whether we've seen this mention
+      if (!latestId || m.tweetId > latestId) {
+        latestId = m.tweetId;
+      }
+
       if (this.mentionRepo.exists(m.tweetId)) continue;
 
       const requestType = classifyMention(m.text);
@@ -85,10 +90,6 @@ export class MentionHandler {
             'Roast request queued from mention',
           );
         }
-      }
-
-      if (!latestId || m.tweetId > latestId) {
-        latestId = m.tweetId;
       }
 
       processed++;
