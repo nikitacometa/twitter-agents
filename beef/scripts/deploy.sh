@@ -18,6 +18,7 @@ git push origin main
 echo "[3/4] Deploying on VPS..."
 ssh "$VPS_HOST" bash -s "$REMOTE_DIR" <<'REMOTE'
 set -euo pipefail
+export PATH="/home/deploy/.npm-global/bin:$PATH"
 REMOTE_DIR="$1"
 cd "$REMOTE_DIR/.."
 
@@ -39,7 +40,7 @@ REMOTE
 # Step 4: Smoke check
 echo "[4/4] Smoke check..."
 sleep 3
-STATUS=$(ssh "$VPS_HOST" "pm2 jlist" | python3 -c "
+STATUS=$(ssh "$VPS_HOST" "export PATH=/home/deploy/.npm-global/bin:\$PATH && pm2 jlist" | python3 -c "
 import sys, json
 apps = json.load(sys.stdin)
 for a in apps:
@@ -55,6 +56,6 @@ if [ "$STATUS" = "online" ]; then
 else
   echo "=== Deploy FAILED! Status: $STATUS ==="
   echo "Last 20 log lines:"
-  ssh "$VPS_HOST" "pm2 logs beef-bot --lines 20 --nostream"
+  ssh "$VPS_HOST" "export PATH=/home/deploy/.npm-global/bin:\$PATH && pm2 logs beef-bot --lines 20 --nostream"
   exit 1
 fi
