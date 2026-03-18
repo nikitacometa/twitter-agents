@@ -60,6 +60,29 @@ export class QueueManager {
       return false;
     }
 
+    return this.dequeueAndProcess();
+  }
+
+  /**
+   * Enqueue a target for autonomous roasting.
+   */
+  enqueueAutonomous(targetName: string): number {
+    return this.queueRepo.enqueue({
+      targetName,
+      targetType: 'project',
+      source: 'autonomous',
+      priority: 5,
+    });
+  }
+
+  /**
+   * Force-process next item, ignoring pause/quiet/limit (for manual testing).
+   */
+  async processNextForce(): Promise<boolean> {
+    return this.dequeueAndProcess();
+  }
+
+  private async dequeueAndProcess(): Promise<boolean> {
     const item = this.queueRepo.dequeue();
     if (!item) {
       this.logger.debug('Queue empty');
@@ -76,10 +99,8 @@ export class QueueManager {
         return true;
       }
 
-      // Pick the best variant
       const best = output.variants[output.bestIndex] ?? output.variants[0]!;
 
-      // Save roast record
       const roastId = this.roastRepo.insert({
         targetName: item.targetName,
         targetType: item.targetType,
@@ -91,7 +112,7 @@ export class QueueManager {
         agentOutput: JSON.stringify(output),
       });
 
-      // Post to Twitter — reply if triggered by a mention, standalone otherwise
+      // Reply if triggered by a mention, standalone tweet otherwise
       const replyToId = extractReplyToId(item.context);
       const postResult = replyToId
         ? await this.twitter.replyToTweet(best.text, replyToId)
@@ -114,70 +135,6 @@ export class QueueManager {
       const msg = getErrorMessage(error);
       this.logger.error({ err: error, queueId: item.id, target: item.targetName }, 'Queue processing failed');
       this.queueRepo.fail(item.id, msg.slice(0, 500));
-      return true;
-    }
-  }
-
-  /**
-   * Enqueue a target for autonomous roasting.
-   */
-  enqueueAutonomous(targetName: string): number {
-    return this.queueRepo.enqueue({
-      targetName,
-      targetType: 'project',
-      source: 'autonomous',
-      priority: 5,
-    });
-  }
-
-  /**
-   * Force-process next item, ignoring pause/quiet/limit (for manual testing).
-   */
-  async processNextForce(): Promise<boolean> {
-    const item = this.queueRepo.dequeue();
-    if (!item) return false;
-
-    this.logger.info({ queueId: item.id, target: item.targetName }, 'Force-processing queue item');
-
-    try {
-      const output = await generateRoasts(item.targetName, this.provider, this.logger, this.feedbackRepo);
-
-      if (output.variants.length === 0) {
-        this.queueRepo.fail(item.id, 'No variants generated');
-        return true;
-      }
-
-      const best = output.variants[output.bestIndex] ?? output.variants[0]!;
-
-      const roastId = this.roastRepo.insert({
-        targetName: item.targetName,
-        targetType: item.targetType,
-        tweetText: best.text,
-        source: item.source,
-        status: 'pending_approval',
-        factChecked: output.factCheckPassed,
-        contextData: output.researchNotes ?? undefined,
-        agentOutput: JSON.stringify(output),
-      });
-
-      const replyToId = extractReplyToId(item.context);
-      const postResult = replyToId
-        ? await this.twitter.replyToTweet(best.text, replyToId)
-        : await this.twitter.postTweet(best.text);
-
-      if (postResult) {
-        this.roastRepo.updateStatus(roastId, 'posted', postResult.tweetId);
-        this.queueRepo.complete(item.id);
-      } else {
-        this.roastRepo.updateStatus(roastId, 'failed');
-        this.queueRepo.fail(item.id, 'Twitter post failed');
-      }
-
-      return true;
-    } catch (error) {
-      const errMsg = getErrorMessage(error);
-      this.logger.error({ err: error, queueId: item.id }, 'Force-processing failed');
-      this.queueRepo.fail(item.id, errMsg.slice(0, 500));
       return true;
     }
   }
