@@ -78,7 +78,7 @@ export class MentionHandler {
             targetType: 'project',
             source: 'mention',
             priority: 3,
-            context: `Requested by @${m.authorName}: ${m.text}`,
+            context: `reply_to:${m.tweetId}|by:@${m.authorName}|${m.text}`,
           });
           this.logger.info(
             { tweetId: m.tweetId, target, author: m.authorName },

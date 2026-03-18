@@ -105,6 +105,7 @@ export function createBot(opts: {
         '<code>/stats</code> — feedback statistics',
         '<code>/status</code> — bot health + provider info',
         '<code>/queue &lt;target&gt;</code> — add target to posting queue',
+        '<code>/trigger</code> — force-process next queue item',
         '<code>/pause</code> / <code>/resume</code> — toggle autonomous posting',
         '',
         isGroupChat(ctx)
@@ -251,6 +252,34 @@ export function createBot(opts: {
         `📋 Queue: <b>${String(count)}</b> items pending\n\nUsage: <code>/queue &lt;target&gt;</code> to add`,
         { parse_mode: 'HTML' },
       );
+    }
+  });
+
+  bot.command('trigger', async (ctx) => {
+    if (!queueManager) {
+      await ctx.reply('⚠️ Queue manager not configured.');
+      return;
+    }
+
+    const count = queueManager.getPendingCount();
+    if (count === 0) {
+      await ctx.reply('Queue is empty. Add targets with /queue <target>');
+      return;
+    }
+
+    await ctx.reply(`⚡ Force-processing next item (${String(count)} pending)...`);
+
+    try {
+      const processed = await queueManager.processNextForce();
+      if (processed) {
+        await ctx.reply('✅ Queue item processed.');
+      } else {
+        await ctx.reply('⚠️ No item could be dequeued.');
+      }
+    } catch (error) {
+      await ctx.reply(`❌ Processing failed: ${escapeHtml(getErrorMessage(error).slice(0, 200))}`, {
+        parse_mode: 'HTML',
+      });
     }
   });
 

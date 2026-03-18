@@ -91,13 +91,17 @@ export class QueueManager {
         agentOutput: JSON.stringify(output),
       });
 
-      // Post to Twitter
-      const postResult = await this.twitter.postTweet(best.text);
+      // Post to Twitter — reply if triggered by a mention, standalone otherwise
+      const replyToId = extractReplyToId(item.context);
+      const postResult = replyToId
+        ? await this.twitter.replyToTweet(best.text, replyToId)
+        : await this.twitter.postTweet(best.text);
+
       if (postResult) {
         this.roastRepo.updateStatus(roastId, 'posted', postResult.tweetId);
         this.queueRepo.complete(item.id);
         this.logger.info(
-          { queueId: item.id, roastId, tweetId: postResult.tweetId, target: item.targetName },
+          { queueId: item.id, roastId, tweetId: postResult.tweetId, target: item.targetName, isReply: !!replyToId },
           'Roast posted successfully',
         );
       } else {
@@ -126,7 +130,65 @@ export class QueueManager {
     });
   }
 
+  /**
+   * Force-process next item, ignoring pause/quiet/limit (for manual testing).
+   */
+  async processNextForce(): Promise<boolean> {
+    const item = this.queueRepo.dequeue();
+    if (!item) return false;
+
+    this.logger.info({ queueId: item.id, target: item.targetName }, 'Force-processing queue item');
+
+    try {
+      const output = await generateRoasts(item.targetName, this.provider, this.logger, this.feedbackRepo);
+
+      if (output.variants.length === 0) {
+        this.queueRepo.fail(item.id, 'No variants generated');
+        return true;
+      }
+
+      const best = output.variants[output.bestIndex] ?? output.variants[0]!;
+
+      const roastId = this.roastRepo.insert({
+        targetName: item.targetName,
+        targetType: item.targetType,
+        tweetText: best.text,
+        source: item.source,
+        status: 'pending_approval',
+        factChecked: output.factCheckPassed,
+        contextData: output.researchNotes ?? undefined,
+        agentOutput: JSON.stringify(output),
+      });
+
+      const replyToId = extractReplyToId(item.context);
+      const postResult = replyToId
+        ? await this.twitter.replyToTweet(best.text, replyToId)
+        : await this.twitter.postTweet(best.text);
+
+      if (postResult) {
+        this.roastRepo.updateStatus(roastId, 'posted', postResult.tweetId);
+        this.queueRepo.complete(item.id);
+      } else {
+        this.roastRepo.updateStatus(roastId, 'failed');
+        this.queueRepo.fail(item.id, 'Twitter post failed');
+      }
+
+      return true;
+    } catch (error) {
+      const errMsg = getErrorMessage(error);
+      this.logger.error({ err: error, queueId: item.id }, 'Force-processing failed');
+      this.queueRepo.fail(item.id, errMsg.slice(0, 500));
+      return true;
+    }
+  }
+
   getPendingCount(): number {
     return this.queueRepo.getPendingCount();
   }
+}
+
+function extractReplyToId(context: string | null): string | undefined {
+  if (!context) return undefined;
+  const match = context.match(/reply_to:(\d+)/);
+  return match?.[1];
 }
