@@ -146,6 +146,6 @@ export class QueueManager {
 
 function extractReplyToId(context: string | null): string | undefined {
   if (!context) return undefined;
-  const match = context.match(/reply_to:(\d+)/);
+  const match = context.match(/^reply_to:(\d+)/);
   return match?.[1];
 }

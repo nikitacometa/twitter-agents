@@ -261,21 +261,11 @@ export function createBot(opts: {
       return;
     }
 
-    const count = queueManager.getPendingCount();
-    if (count === 0) {
-      await ctx.reply('Queue is empty. Add targets with /queue <target>');
-      return;
-    }
-
-    await ctx.reply(`⚡ Force-processing next item (${String(count)} pending)...`);
+    await ctx.reply('⚡ Force-processing next queue item...');
 
     try {
       const processed = await queueManager.processNextForce();
-      if (processed) {
-        await ctx.reply('✅ Queue item processed.');
-      } else {
-        await ctx.reply('⚠️ No item could be dequeued.');
-      }
+      await ctx.reply(processed ? '✅ Queue item processed.' : '⚠️ Queue is empty.');
     } catch (error) {
       await ctx.reply(`❌ Processing failed: ${escapeHtml(getErrorMessage(error).slice(0, 200))}`, {
         parse_mode: 'HTML',

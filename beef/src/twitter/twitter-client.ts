@@ -154,24 +154,32 @@ export class TwitterClient {
     const result = new Map<string, TweetMetrics>();
     if (!this.client || tweetIds.length === 0) return result;
 
-    try {
-      const response = await this.client.v2.tweets(tweetIds, {
-        'tweet.fields': 'public_metrics',
-      });
+    // Twitter API v2 allows max 100 IDs per request
+    const chunks: string[][] = [];
+    for (let i = 0; i < tweetIds.length; i += 100) {
+      chunks.push(tweetIds.slice(i, i + 100));
+    }
 
-      for (const tweet of response.data ?? []) {
-        const m = tweet.public_metrics;
-        if (m) {
-          result.set(tweet.id, {
-            likes: m.like_count ?? 0,
-            retweets: m.retweet_count ?? 0,
-            replies: m.reply_count ?? 0,
-            impressions: m.impression_count ?? 0,
-          });
+    for (const chunk of chunks) {
+      try {
+        const response = await this.client.v2.tweets(chunk, {
+          'tweet.fields': 'public_metrics',
+        });
+
+        for (const tweet of response.data ?? []) {
+          const m = tweet.public_metrics;
+          if (m) {
+            result.set(tweet.id, {
+              likes: m.like_count ?? 0,
+              retweets: m.retweet_count ?? 0,
+              replies: m.reply_count ?? 0,
+              impressions: m.impression_count ?? 0,
+            });
+          }
         }
+      } catch (error) {
+        this.logger.error({ err: error, chunkSize: chunk.length }, 'Failed to fetch tweet metrics');
       }
-    } catch (error) {
-      this.logger.error({ err: error, tweetIds }, 'Failed to fetch tweet metrics');
     }
 
     return result;

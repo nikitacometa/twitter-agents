@@ -54,8 +54,17 @@ export class HealthMonitor {
 
     const twitter = this.checks.isTwitterConfigured();
     const provider = this.checks.isProviderAvailable();
-    const queuePending = this.checks.getQueuePending();
-    const roastsToday = this.checks.getRoastsToday();
+
+    let queuePending = 0;
+    let roastsToday = 0;
+    if (dbOk) {
+      try {
+        queuePending = this.checks.getQueuePending();
+        roastsToday = this.checks.getRoastsToday();
+      } catch {
+        dbOk = false;
+      }
+    }
 
     const status = !dbOk ? 'error' : !provider ? 'degraded' : 'ok';
 

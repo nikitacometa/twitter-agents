@@ -53,7 +53,7 @@ export class MentionHandler {
 
     for (const m of mentions) {
       // Always advance cursor regardless of whether we've seen this mention
-      if (!latestId || m.tweetId > latestId) {
+      if (!latestId || BigInt(m.tweetId) > BigInt(latestId)) {
         latestId = m.tweetId;
       }
 
