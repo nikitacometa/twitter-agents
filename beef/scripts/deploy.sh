@@ -4,7 +4,7 @@ set -euo pipefail
 VPS_HOST="hostinger"
 REMOTE_DIR="/home/deploy/twitter-agents/beef"
 
-echo "=== $BEEF Deploy ==="
+echo '=== $BEEF Deploy ==='
 
 # Step 1: Local typecheck
 echo "[1/4] Running typecheck..."
