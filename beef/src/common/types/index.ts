@@ -183,6 +183,58 @@ export interface CreativeMemory {
   rejectExamples?: RejectExample[];
   styleSupplement?: string;
   angleWeights?: AngleWeight[];
+  externalExamples?: FireExample[];
+  learnedTechniques?: string[];
+}
+
+// --- External examples ---
+
+export type ExternalExampleType = 'post_roast' | 'person_roast' | 'news_roast';
+
+export interface ExternalExample {
+  id: number;
+  type: ExternalExampleType;
+  originalText: string;
+  originalAuthor: string | null;
+  originalUrl: string | null;
+  roastText: string;
+  roastAuthor: string | null;
+  roastUrl: string | null;
+  context: string | null;
+  submitterTelegramId: number;
+  submitterScore: number | null;
+  submitterNotes: string | null;
+  analysis: ExampleAnalysis | null;
+  extractedPattern: string | null;
+  classifiedAngle: string | null;
+  specificityScore: number | null;
+  createdAt: string;
+  usedInPrompts: number;
+}
+
+export interface ExampleAnalysis {
+  technique: string;
+  secondaryTechniques: string[];
+  structure: string;
+  specificityScore: number;
+  whatMakesItWork: string;
+  reusablePattern: string;
+  dataPointsUsed: string[];
+  tone: string;
+  lengthCategory: string;
+  beefAngleMapping: string;
+  adaptationHint: string;
+}
+
+export interface RoastPattern {
+  id: number;
+  patternType: 'structure' | 'technique' | 'angle_variant';
+  description: string;
+  sourceExampleIds: number[];
+  frequency: number;
+  effectiveness: number | null;
+  createdAt: string;
+  updatedAt: string;
 }
 
 // --- Config ---

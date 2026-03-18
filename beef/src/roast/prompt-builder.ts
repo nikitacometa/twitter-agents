@@ -63,12 +63,20 @@ function buildExamples(
   memory?: CreativeMemory,
 ): string {
   const dynamicExamples = memory?.fireExamples ?? [];
+  const externalExamples = memory?.externalExamples ?? [];
   const dynamicCount = Math.min(dynamicExamples.length, 2);
-  const staticCount = 5 - dynamicCount;
+  const externalCount = Math.min(externalExamples.length, 1);
+  const staticCount = 5 - dynamicCount - externalCount;
 
   const staticExamples = getRandomExamples(character, staticCount);
   const allExamples: CharacterExample[] = [
     ...dynamicExamples.slice(0, dynamicCount).map((ex) => ({
+      text: ex.text,
+      target: ex.target,
+      angle: ex.angle,
+      charCount: ex.text.length,
+    })),
+    ...externalExamples.slice(0, externalCount).map((ex) => ({
       text: ex.text,
       target: ex.target,
       angle: ex.angle,
@@ -80,6 +88,15 @@ function buildExamples(
   // Shuffle so dynamic examples aren't always first
   allExamples.sort(() => Math.random() - 0.5);
   return formatExamples(allExamples);
+}
+
+function buildTechniquesSection(techniques: string[]): string {
+  if (techniques.length === 0) return '';
+
+  const lines = techniques.slice(0, 5).map((t) => `  - ${t}`);
+  return `\n## LEARNED TECHNIQUES (from curated external examples — adapt to your voice)
+${lines.join('\n')}
+`;
 }
 
 function buildContextLine(targetName: string, memory?: CreativeMemory): string {
@@ -107,6 +124,7 @@ export function buildRoastPrompt(
   const styleLine = memory?.styleSupplement
     ? `\n## LEARNED STYLE OBSERVATIONS\n${memory.styleSupplement}\n`
     : '';
+  const techniquesLine = buildTechniquesSection(memory?.learnedTechniques ?? []);
 
   return `${character.systemPrompt}
 
@@ -115,7 +133,7 @@ ${character.originStory}
 
 ## FEW-SHOT EXAMPLES (match this quality and voice)
 ${examples}
-${antiPatterns}${styleLine}${contextLine}
+${antiPatterns}${styleLine}${techniquesLine}${contextLine}
 ## TASK: Research and roast "${targetName}"
 
 ### STEP 1 — RESEARCH
@@ -161,6 +179,7 @@ export function buildNoResearchPrompt(
   const styleLine = memory?.styleSupplement
     ? `\n## LEARNED STYLE OBSERVATIONS\n${memory.styleSupplement}\n`
     : '';
+  const techniquesLine = buildTechniquesSection(memory?.learnedTechniques ?? []);
 
   return `${character.systemPrompt}
 
@@ -169,7 +188,7 @@ ${character.originStory}
 
 ## FEW-SHOT EXAMPLES (match this quality and voice)
 ${examples}
-${antiPatterns}${styleLine}
+${antiPatterns}${styleLine}${techniquesLine}
 ## TASK: Roast "${targetName}" using your existing knowledge
 
 Generate ${String(variantCount)} roast variants WITHOUT web research. Use general knowledge only.

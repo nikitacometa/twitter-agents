@@ -8,11 +8,14 @@ import { getErrorMessage } from '@common/utils/error.util.js';
 import type { FeedbackRepository } from '@storage/repositories/feedback.repository.js';
 import type { QueueManager } from '@queue/queue-manager.js';
 import type { ConfigRepository } from '@storage/repositories/config.repository.js';
+import type { ExternalExampleRepository } from '@storage/repositories/external-example.repository.js';
+import type { RoastPatternRepository } from '@storage/repositories/roast-pattern.repository.js';
 import { computeStyleSupplement } from '@learning/style-analyzer.js';
 import { ratingKeyboard, sessionDoneKeyboard } from './keyboards.js';
 import { SessionStore } from './session-store.js';
 import type { RoastSession } from './types.js';
 import { generateRoasts } from './roast-generator.js';
+import { registerExampleFlow } from './example-flow.js';
 import {
   escapeHtml,
   formatManualEvalMessage,
@@ -37,8 +40,10 @@ export function createBot(opts: {
   logger: Logger;
   queueManager?: QueueManager;
   configRepo?: ConfigRepository;
+  exampleRepo?: ExternalExampleRepository;
+  patternRepo?: RoastPatternRepository;
 }): Bot {
-  const { token, adminIds, openAccess, feedbackRepo, provider, logger, queueManager, configRepo } = opts;
+  const { token, adminIds, openAccess, feedbackRepo, provider, logger, queueManager, configRepo, exampleRepo, patternRepo } = opts;
   const bot = new Bot(token);
   const sessions = new SessionStore();
 
@@ -75,6 +80,8 @@ export function createBot(opts: {
         '',
         '/roast &lt;target&gt; — generate roast variants',
         '/power &lt;target&gt; — Opus-quality roast (5 variants)',
+        '/example — add external roast example for learning',
+        '/examples — example library stats',
         '/analyze — compute style from feedback',
         '/evolution — quality trends + angle stats',
         '/stats — feedback statistics',
@@ -109,6 +116,8 @@ export function createBot(opts: {
         '✏️ EDIT — write your own version (saved as gold)',
         '',
         '<b>Learning:</b>',
+        '<code>/example</code> — add external roast example for learning',
+        '<code>/examples</code> — view example library stats',
         '<code>/analyze</code> — compute style supplement from feedback',
         '<code>/evolution</code> — fire rate trend + angle leaderboard',
         '',
@@ -160,7 +169,7 @@ export function createBot(opts: {
       }, 10_000);
 
       try {
-        const output = await generateRoasts(target, provider!, logger, feedbackRepo, profile, variantCount, configRepo);
+        const output = await generateRoasts(target, provider!, logger, feedbackRepo, profile, variantCount, configRepo, exampleRepo, patternRepo);
 
         // Create session
         const session = sessions.createSession(
@@ -422,6 +431,11 @@ export function createBot(opts: {
 
     await ctx.reply(lines.join('\n'), { parse_mode: 'HTML' });
   });
+
+  // --- External example learning flow ---
+  if (exampleRepo && patternRepo) {
+    registerExampleFlow(bot, { exampleRepo, patternRepo, provider, logger });
+  }
 
   // --- Callback: rating buttons ---
 

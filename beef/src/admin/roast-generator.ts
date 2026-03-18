@@ -3,7 +3,9 @@ import type { ProviderManager } from '@agent/provider-manager.js';
 import type { AgentRoastOutput, TaskProfile } from '@agent/agent.types.js';
 import type { FeedbackRepository } from '@storage/repositories/feedback.repository.js';
 import type { ConfigRepository } from '@storage/repositories/config.repository.js';
-import type { AngleWeight, CreativeMemory } from '@common/types/index.js';
+import type { ExternalExampleRepository } from '@storage/repositories/external-example.repository.js';
+import type { RoastPatternRepository } from '@storage/repositories/roast-pattern.repository.js';
+import type { AngleWeight, CreativeMemory, FireExample } from '@common/types/index.js';
 import { RoastEngine } from '@roast/roast-engine.js';
 
 let cachedEngine: RoastEngine | null = null;
@@ -19,6 +21,8 @@ function buildCreativeMemory(
   targetName: string,
   feedbackRepo: FeedbackRepository,
   configRepo?: ConfigRepository,
+  exampleRepo?: ExternalExampleRepository,
+  patternRepo?: RoastPatternRepository,
 ): CreativeMemory {
   // 1. Try to get a fire example from this specific target
   const targetFire = feedbackRepo.getFireExamplesForTarget(targetName, 1);
@@ -54,12 +58,40 @@ function buildCreativeMemory(
   // 6. Style supplement from config (computed by /analyze)
   const styleSupplement = configRepo?.getStyleSupplement()?.text;
 
+  // 7. External curated examples (best-rated, least-used)
+  let externalExamples: FireExample[] | undefined;
+  if (exampleRepo) {
+    const topExternal = exampleRepo.getForPrompt(3);
+    if (topExternal.length > 0) {
+      externalExamples = topExternal.map((ex) => ({
+        text: ex.roastText,
+        angle: ex.classifiedAngle ?? 'DATA_BOMB',
+        target: ex.originalAuthor ?? 'unknown',
+      }));
+      // Track usage
+      for (const ex of topExternal) {
+        exampleRepo.incrementUsage(ex.id);
+      }
+    }
+  }
+
+  // 8. Learned techniques from pattern repository
+  let learnedTechniques: string[] | undefined;
+  if (patternRepo) {
+    const topPatterns = patternRepo.getTop(5);
+    if (topPatterns.length > 0) {
+      learnedTechniques = topPatterns.map((p) => p.description);
+    }
+  }
+
   return {
     fireExamples,
     targetHistory,
     rejectExamples,
     angleWeights: angleWeights.length > 0 ? angleWeights : undefined,
     styleSupplement,
+    externalExamples,
+    learnedTechniques,
   };
 }
 
@@ -71,16 +103,20 @@ export async function generateRoasts(
   profile?: TaskProfile,
   variantCount?: number,
   configRepo?: ConfigRepository,
+  exampleRepo?: ExternalExampleRepository,
+  patternRepo?: RoastPatternRepository,
 ): Promise<AgentRoastOutput> {
   const engine = getEngine(provider, logger);
 
-  const memory = feedbackRepo ? buildCreativeMemory(targetName, feedbackRepo, configRepo) : undefined;
+  const memory = feedbackRepo ? buildCreativeMemory(targetName, feedbackRepo, configRepo, exampleRepo, patternRepo) : undefined;
 
-  if (memory && (memory.fireExamples.length > 0 || memory.angleWeights || memory.rejectExamples)) {
+  if (memory && (memory.fireExamples.length > 0 || memory.angleWeights || memory.rejectExamples || memory.externalExamples)) {
     logger.info(
       {
         target: targetName,
         fireExamples: memory.fireExamples.length,
+        externalExamples: memory.externalExamples?.length ?? 0,
+        learnedTechniques: memory.learnedTechniques?.length ?? 0,
         hasHistory: !!memory.targetHistory,
         rejectExamples: memory.rejectExamples?.length ?? 0,
         angleWeights: memory.angleWeights?.length ?? 0,

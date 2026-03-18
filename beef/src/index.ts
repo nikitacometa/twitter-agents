@@ -9,13 +9,17 @@ import { RoastRepository } from './storage/repositories/roast.repository.js';
 import { ConfigRepository } from './storage/repositories/config.repository.js';
 import { MentionRepository } from './storage/repositories/mention.repository.js';
 import { UserRepository } from './storage/repositories/user.repository.js';
+import { ExternalExampleRepository } from './storage/repositories/external-example.repository.js';
+import { RoastPatternRepository } from './storage/repositories/roast-pattern.repository.js';
 import { ClaudeCodeProvider } from './agent/claude-code.provider.js';
 import {
   createAnthropicSDKProvider,
 } from './agent/anthropic-sdk.provider.js';
 import { ProviderManager } from './agent/provider-manager.js';
 import { createBot } from './admin/bot.js';
+import type { ITwitterClient } from './twitter/twitter-client.interface.js';
 import { TwitterClient } from './twitter/twitter-client.js';
+import { ScraperTwitterClient } from './twitter/scraper-twitter-client.js';
 import { MentionHandler } from './twitter/mention-handler.js';
 import { Scheduler } from './scheduler/scheduler.js';
 import { QueueManager } from './queue/queue-manager.js';
@@ -35,6 +39,8 @@ const roastRepo = new RoastRepository(db);
 const configRepo = new ConfigRepository(db);
 const mentionRepo = new MentionRepository(db);
 const userRepo = new UserRepository(db);
+const exampleRepo = new ExternalExampleRepository(db);
+const patternRepo = new RoastPatternRepository(db);
 
 // --- LLM Providers (optional — bot works without them for manual eval) ---
 let provider: ProviderManager | null = null;
@@ -49,21 +55,46 @@ try {
 }
 
 // --- Twitter Client ---
-const twitterCredentials =
-  config.TWITTER_API_KEY && config.TWITTER_API_SECRET && config.TWITTER_ACCESS_TOKEN && config.TWITTER_ACCESS_SECRET
-    ? {
-        apiKey: config.TWITTER_API_KEY,
-        apiSecret: config.TWITTER_API_SECRET,
-        accessToken: config.TWITTER_ACCESS_TOKEN,
-        accessSecret: config.TWITTER_ACCESS_SECRET,
-      }
-    : undefined;
+let twitter: ITwitterClient;
 
-const twitter = new TwitterClient({
-  credentials: twitterCredentials,
-  dryRun: config.DRY_RUN,
-  logger,
-});
+if (config.TWITTER_CLIENT_MODE === 'scraper' && config.TWITTER_USERNAME && config.TWITTER_PASSWORD) {
+  const scraperClient = new ScraperTwitterClient({
+    credentials: {
+      username: config.TWITTER_USERNAME,
+      password: config.TWITTER_PASSWORD,
+      phone: config.TWITTER_PHONE,
+      twoFactorSecret: config.TWITTER_2FA_SECRET,
+    },
+    dryRun: config.DRY_RUN,
+    logger,
+  });
+
+  try {
+    await scraperClient.initialize();
+    twitter = scraperClient;
+    logger.info('Twitter client: scraper mode (cookie auth)');
+  } catch (error) {
+    logger.error({ err: error }, 'Scraper login failed — falling back to API mode');
+    twitter = new TwitterClient({ dryRun: config.DRY_RUN, logger });
+  }
+} else {
+  const twitterCredentials =
+    config.TWITTER_API_KEY && config.TWITTER_API_SECRET && config.TWITTER_ACCESS_TOKEN && config.TWITTER_ACCESS_SECRET
+      ? {
+          apiKey: config.TWITTER_API_KEY,
+          apiSecret: config.TWITTER_API_SECRET,
+          accessToken: config.TWITTER_ACCESS_TOKEN,
+          accessSecret: config.TWITTER_ACCESS_SECRET,
+        }
+      : undefined;
+
+  twitter = new TwitterClient({
+    credentials: twitterCredentials,
+    dryRun: config.DRY_RUN,
+    logger,
+  });
+  logger.info('Twitter client: API mode');
+}
 
 // --- Queue Manager ---
 let queueManager: QueueManager | null = null;
@@ -159,6 +190,8 @@ if (config.TELEGRAM_BOT_TOKEN) {
     logger,
     queueManager: queueManager ?? undefined,
     configRepo,
+    exampleRepo,
+    patternRepo,
   });
 
   void bot.start({
