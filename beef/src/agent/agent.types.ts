@@ -3,6 +3,7 @@
 export type TaskProfile =
   | 'roast-research'
   | 'roast-quick'
+  | 'roast-power'
   | 'reply'
   | 'discovery'
   | 'verify'

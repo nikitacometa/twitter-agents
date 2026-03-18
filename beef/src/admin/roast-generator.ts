@@ -1,6 +1,6 @@
 import type { Logger } from 'pino';
 import type { ProviderManager } from '@agent/provider-manager.js';
-import type { AgentRoastOutput } from '@agent/agent.types.js';
+import type { AgentRoastOutput, TaskProfile } from '@agent/agent.types.js';
 import type { FeedbackRepository } from '@storage/repositories/feedback.repository.js';
 import type { CreativeMemory } from '@common/types/index.js';
 import { RoastEngine } from '@roast/roast-engine.js';
@@ -44,6 +44,8 @@ export async function generateRoasts(
   provider: ProviderManager,
   logger: Logger,
   feedbackRepo?: FeedbackRepository,
+  profile?: TaskProfile,
+  variantCount?: number,
 ): Promise<AgentRoastOutput> {
   const engine = getEngine(provider, logger);
 
@@ -56,7 +58,7 @@ export async function generateRoasts(
     );
   }
 
-  const result = await engine.generateRoast(targetName, 'telegram', memory);
+  const result = await engine.generateRoast(targetName, 'telegram', memory, profile, variantCount);
 
   return {
     variants: result.draft.variants,

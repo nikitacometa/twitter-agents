@@ -2,7 +2,7 @@ import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { Logger } from 'pino';
 import type { ProviderManager } from '@agent/provider-manager.js';
-import type { AgentRoastOutput } from '@agent/agent.types.js';
+import type { AgentRoastOutput, TaskProfile } from '@agent/agent.types.js';
 import type { RoastDraft, RoastVariant, CreativeMemory } from '@common/types/index.js';
 import { loadCharacter } from './character.loader.js';
 import type { CharacterConfig } from './character.loader.js';
@@ -50,25 +50,33 @@ export class RoastEngine {
     targetName: string,
     source: string = 'engine',
     memory?: CreativeMemory,
+    profile?: TaskProfile,
+    variantCountOverride?: number,
   ): Promise<RoastResult> {
     const taskId = `roast-${source}-${Date.now()}`;
-    this.logger.info({ taskId, target: targetName }, 'Starting roast generation');
+    const effectiveProfile = profile ?? 'roast-research';
+    const effectiveVariantCount = variantCountOverride ?? this.variantCount;
+    this.logger.info({ taskId, target: targetName, profile: effectiveProfile }, 'Starting roast generation');
 
-    const prompt = buildRoastPrompt(targetName, this.character, this.variantCount, memory);
+    const prompt = buildRoastPrompt(targetName, this.character, effectiveVariantCount, memory);
 
     let result;
     try {
       result = await this.provider.run<AgentRoastOutput>(taskId, {
         prompt,
-        profile: 'roast-research',
+        profile: effectiveProfile,
         requiresResearch: true,
       });
     } catch (error) {
+      // roast-power: no fallback — surface the error directly
+      if (effectiveProfile === 'roast-power') {
+        throw error;
+      }
       this.logger.warn(
         { taskId, err: error },
         'Research-mode generation failed, trying no-research fallback',
       );
-      const fallbackPrompt = buildNoResearchPrompt(targetName, this.character, this.variantCount, memory);
+      const fallbackPrompt = buildNoResearchPrompt(targetName, this.character, effectiveVariantCount, memory);
       result = await this.provider.run<AgentRoastOutput>(taskId, {
         prompt: fallbackPrompt,
         profile: 'roast-quick',

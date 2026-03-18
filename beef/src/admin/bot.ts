@@ -2,6 +2,7 @@ import { Bot } from 'grammy';
 import type { Context } from 'grammy';
 import type { Logger } from 'pino';
 import type { ProviderManager } from '@agent/provider-manager.js';
+import type { TaskProfile } from '@agent/agent.types.js';
 import type { HumanVerdict } from '@common/types/index.js';
 import { getErrorMessage } from '@common/utils/error.util.js';
 import type { FeedbackRepository } from '@storage/repositories/feedback.repository.js';
@@ -72,6 +73,7 @@ export function createBot(opts: {
         '<b>🥩 $BEEF Roast Evaluator</b>',
         '',
         '/roast &lt;target&gt; — generate roast variants',
+        '/power &lt;target&gt; — Opus-quality roast (5 variants)',
         '/stats — feedback statistics',
         '/status — bot health',
         '/help — this message',
@@ -87,11 +89,12 @@ export function createBot(opts: {
         '<b>🥩 $BEEF Roast Evaluator — Help</b>',
         '',
         '<b>Generate roasts:</b>',
-        '<code>/roast hyperliquid</code> — Hyperliquid',
-        '<code>/roast pump.fun</code> — Pump.fun',
-        '<code>/roast opensea</code> — OpenSea',
-        '<code>/roast virtuals protocol</code> — Virtuals',
-        '<code>/roast worldcoin</code> — Worldcoin',
+        '<code>/roast hyperliquid</code> — Sonnet, 3 variants',
+        '<code>/power hyperliquid</code> — Opus, 5 variants, 10min timeout',
+        '',
+        '<b>Examples:</b>',
+        '<code>/roast pump.fun</code> · <code>/roast opensea</code>',
+        '<code>/roast virtuals protocol</code> · <code>/roast worldcoin</code>',
         '',
         '<b>Manual evaluation:</b>',
         'Paste any roast text (50-280 chars) → rate it with buttons',
@@ -117,29 +120,25 @@ export function createBot(opts: {
     );
   });
 
-  bot.command('roast', async (ctx) => {
-    const target = ctx.match?.trim();
-    if (!target) {
-      await ctx.reply('Usage: /roast &lt;target name&gt;\nExample: /roast hyperliquid', {
-        parse_mode: 'HTML',
-      });
-      return;
-    }
-
-    if (!provider) {
-      await ctx.reply('⚠️ LLM provider not configured. Paste roasts manually for evaluation.');
-      return;
-    }
-
-    const statusMsg = await ctx.reply(`🔍 Researching <b>${escapeHtml(target)}</b>...`, {
-      parse_mode: 'HTML',
-    });
-
-    const chatId = ctx.chat.id;
+  function handleRoastCommand(
+    ctx: Context,
+    target: string,
+    profile: TaskProfile,
+    variantCount: number,
+    progressEmoji: string,
+    progressLabel: string,
+  ): void {
+    const chatId = ctx.chat!.id;
     const api = ctx.api;
 
     // Fire-and-forget: don't block grammY's update loop during generation
     void (async () => {
+      const statusMsg = await api.sendMessage(
+        chatId,
+        `${progressEmoji} ${progressLabel} <b>${escapeHtml(target)}</b>...`,
+        { parse_mode: 'HTML' },
+      );
+
       const startTime = Date.now();
       const progressInterval = setInterval(() => {
         const elapsed = Math.round((Date.now() - startTime) / 1000);
@@ -147,14 +146,14 @@ export function createBot(opts: {
           .editMessageText(
             chatId,
             statusMsg.message_id,
-            `🔍 Researching <b>${escapeHtml(target)}</b>... <i>(${String(elapsed)}s)</i>`,
+            `${progressEmoji} ${progressLabel} <b>${escapeHtml(target)}</b>... <i>(${String(elapsed)}s)</i>`,
             { parse_mode: 'HTML' },
           )
           .catch(() => {});
       }, 10_000);
 
       try {
-        const output = await generateRoasts(target, provider, logger, feedbackRepo);
+        const output = await generateRoasts(target, provider!, logger, feedbackRepo, profile, variantCount);
 
         // Create session
         const session = sessions.createSession(
@@ -208,7 +207,7 @@ export function createBot(opts: {
       } catch (error) {
         clearInterval(progressInterval);
         const elapsed = Math.round((Date.now() - startTime) / 1000);
-        logger.error({ err: error, target, elapsedSec: elapsed }, 'Roast generation failed');
+        logger.error({ err: error, target, profile, elapsedSec: elapsed }, 'Roast generation failed');
         await api
           .editMessageText(
             chatId,
@@ -219,6 +218,40 @@ export function createBot(opts: {
           .catch(() => {});
       }
     })();
+  }
+
+  bot.command('roast', async (ctx) => {
+    const target = ctx.match?.trim();
+    if (!target) {
+      await ctx.reply('Usage: /roast &lt;target name&gt;\nExample: /roast hyperliquid', {
+        parse_mode: 'HTML',
+      });
+      return;
+    }
+
+    if (!provider) {
+      await ctx.reply('⚠️ LLM provider not configured. Paste roasts manually for evaluation.');
+      return;
+    }
+
+    handleRoastCommand(ctx, target, 'roast-research', 3, '🔍', 'Researching');
+  });
+
+  bot.command('power', async (ctx) => {
+    const target = ctx.match?.trim();
+    if (!target) {
+      await ctx.reply('Usage: /power &lt;target name&gt;\nExample: /power hyperliquid', {
+        parse_mode: 'HTML',
+      });
+      return;
+    }
+
+    if (!provider) {
+      await ctx.reply('⚠️ LLM provider not configured. Paste roasts manually for evaluation.');
+      return;
+    }
+
+    handleRoastCommand(ctx, target, 'roast-power', 5, '⚡', 'Power mode (Opus) —');
   });
 
   bot.command('stats', async (ctx) => {

@@ -40,6 +40,7 @@ const WEB_TOOLS = ['WebSearch', 'WebFetch', 'Bash(curl *)'];
 // | Profile          | Model  | Effort | Tools           | Turns | Timeout | Rationale                                |
 // |------------------|--------|--------|-----------------|-------|---------|------------------------------------------|
 // | roast-research   | sonnet | medium | Perplexity+Web  | 10    | 180s    | Research + generate — measured ~134s      |
+// | roast-power      | opus   | high   | Perplexity+Web  | 15    | 600s    | Premium Opus roast — no fallback          |
 // | roast-quick      | sonnet | low    | none            | 1     | 90s     | No-research fallback — measured ~38s      |
 // | reply            | sonnet | low    | none            | 1     | 30s     | Quick reply — speed matters most          |
 // | discovery        | sonnet | medium | Web+curl        | 10    | 120s    | Target finding — structured, not creative |
@@ -54,6 +55,13 @@ const DEFAULT_PRESETS: Record<TaskProfile, TaskPreset> = {
     maxTurns: 10,
     timeoutMs: 180_000,
     fallbackModel: 'haiku',
+  },
+  'roast-power': {
+    model: 'opus',
+    effort: 'high',
+    tools: RESEARCH_TOOLS,
+    maxTurns: 15,
+    timeoutMs: 600_000,
   },
   'roast-quick': {
     model: 'sonnet',
