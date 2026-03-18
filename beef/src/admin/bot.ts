@@ -5,6 +5,8 @@ import type { ProviderManager } from '@agent/provider-manager.js';
 import type { HumanVerdict } from '@common/types/index.js';
 import { getErrorMessage } from '@common/utils/error.util.js';
 import type { FeedbackRepository } from '@storage/repositories/feedback.repository.js';
+import type { QueueManager } from '@queue/queue-manager.js';
+import type { ConfigRepository } from '@storage/repositories/config.repository.js';
 import { ratingKeyboard } from './keyboards.js';
 import { SessionStore } from './session-store.js';
 import { generateRoasts } from './roast-generator.js';
@@ -30,8 +32,10 @@ export function createBot(opts: {
   feedbackRepo: FeedbackRepository;
   provider: ProviderManager | null;
   logger: Logger;
+  queueManager?: QueueManager;
+  configRepo?: ConfigRepository;
 }): Bot {
-  const { token, adminIds, openAccess, feedbackRepo, provider, logger } = opts;
+  const { token, adminIds, openAccess, feedbackRepo, provider, logger, queueManager, configRepo } = opts;
   const bot = new Bot(token);
   const sessions = new SessionStore();
 
@@ -100,6 +104,8 @@ export function createBot(opts: {
         '<b>Other commands:</b>',
         '<code>/stats</code> — feedback statistics',
         '<code>/status</code> — bot health + provider info',
+        '<code>/queue &lt;target&gt;</code> — add target to posting queue',
+        '<code>/pause</code> / <code>/resume</code> — toggle autonomous posting',
         '',
         isGroupChat(ctx)
           ? '<i>In groups: paste text as a reply to my message.</i>'
@@ -209,17 +215,61 @@ export function createBot(opts: {
       : 'Provider: <b>not configured</b>';
     const stats = feedbackRepo.getStats();
     const adminStr = openAccess ? 'open access' : adminIds.length > 0 ? adminIds.map(String).join(', ') : 'no admins configured (open)';
+    const runtime = configRepo?.getRuntime();
+    const queueCount = queueManager?.getPendingCount() ?? 0;
     await ctx.reply(
       [
         '<b>🤖 Bot Status</b>',
         '',
         providerStatus,
         `Total ratings: <b>${String(stats.total)}</b>`,
+        `Queue: <b>${String(queueCount)}</b> pending`,
+        runtime ? `Paused: <b>${String(runtime.paused)}</b>` : '',
         `Access: ${adminStr}`,
         `Chat type: ${ctx.chat.type}`,
-      ].join('\n'),
+      ].filter(Boolean).join('\n'),
       { parse_mode: 'HTML' },
     );
+  });
+
+  bot.command('queue', async (ctx) => {
+    if (!queueManager) {
+      await ctx.reply('⚠️ Queue manager not configured.');
+      return;
+    }
+
+    const target = ctx.match?.trim();
+    if (target) {
+      const id = queueManager.enqueueAutonomous(target);
+      await ctx.reply(
+        `✅ Added <b>${escapeHtml(target)}</b> to queue (id: ${String(id)})`,
+        { parse_mode: 'HTML' },
+      );
+    } else {
+      const count = queueManager.getPendingCount();
+      await ctx.reply(
+        `📋 Queue: <b>${String(count)}</b> items pending\n\nUsage: <code>/queue &lt;target&gt;</code> to add`,
+        { parse_mode: 'HTML' },
+      );
+    }
+  });
+
+  bot.command('pause', async (ctx) => {
+    if (!configRepo) {
+      await ctx.reply('⚠️ Config not available.');
+      return;
+    }
+    configRepo.setPaused(true);
+    await ctx.reply('⏸ Autonomous posting paused.');
+  });
+
+  bot.command('resume', async (ctx) => {
+    if (!configRepo) {
+      await ctx.reply('⚠️ Config not available.');
+      return;
+    }
+    configRepo.setPaused(false);
+    await ctx.reply('▶️ Autonomous posting resumed.');
   });
 
   // --- Callback: rating buttons ---

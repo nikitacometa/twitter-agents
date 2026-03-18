@@ -100,6 +100,8 @@ if (config.TELEGRAM_BOT_TOKEN) {
     feedbackRepo,
     provider,
     logger,
+    queueManager: queueManager ?? undefined,
+    configRepo,
   });
 
   void bot.start({
