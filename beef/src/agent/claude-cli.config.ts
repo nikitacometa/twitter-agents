@@ -20,6 +20,7 @@ export interface TaskPreset {
   effort: EffortLevel;
   tools: string[];
   maxTurns: number;
+  timeoutMs: number;
   fallbackModel?: ModelAlias;
 }
 
@@ -36,35 +37,38 @@ const WEB_TOOLS = ['WebSearch', 'WebFetch', 'Bash(curl *)'];
 
 // --- Task presets ---
 //
-// | Profile          | Model  | Effort | Tools           | Turns | Rationale                                |
-// |------------------|--------|--------|-----------------|-------|------------------------------------------|
-// | roast-research   | opus   | high   | Perplexity+Web  | 25    | Core product — max quality + deep research |
-// | roast-quick      | opus   | medium | none            | 1     | No-research fallback — still quality output |
-// | reply            | sonnet | low    | none            | 1     | Quick reply — speed matters most           |
-// | discovery        | sonnet | medium | Web+curl        | 10    | Target finding — structured, not creative  |
-// | verify           | sonnet | medium | Web             | 5     | Fact-check — straightforward lookup        |
-// | audit            | sonnet | low    | none            | 1     | Analytics — no research needed             |
+// | Profile          | Model  | Effort | Tools           | Turns | Timeout | Rationale                                |
+// |------------------|--------|--------|-----------------|-------|---------|------------------------------------------|
+// | roast-research   | sonnet | medium | Perplexity+Web  | 10    | 120s    | Research + generate — Sonnet fast enough  |
+// | roast-quick      | sonnet | low    | none            | 1     | 60s     | No-research fallback — speed priority     |
+// | reply            | sonnet | low    | none            | 1     | 30s     | Quick reply — speed matters most          |
+// | discovery        | sonnet | medium | Web+curl        | 10    | 120s    | Target finding — structured, not creative |
+// | verify           | sonnet | medium | Web             | 5     | 60s     | Fact-check — straightforward lookup       |
+// | audit            | sonnet | low    | none            | 1     | 30s     | Analytics — no research needed            |
 
 const DEFAULT_PRESETS: Record<TaskProfile, TaskPreset> = {
   'roast-research': {
-    model: 'opus',
-    effort: 'high',
+    model: 'sonnet',
+    effort: 'medium',
     tools: RESEARCH_TOOLS,
-    maxTurns: 25,
-    fallbackModel: 'sonnet',
+    maxTurns: 10,
+    timeoutMs: 120_000,
+    fallbackModel: 'haiku',
   },
   'roast-quick': {
-    model: 'opus',
-    effort: 'medium',
+    model: 'sonnet',
+    effort: 'low',
     tools: [],
     maxTurns: 1,
-    fallbackModel: 'sonnet',
+    timeoutMs: 60_000,
+    fallbackModel: 'haiku',
   },
   reply: {
     model: 'sonnet',
     effort: 'low',
     tools: [],
     maxTurns: 1,
+    timeoutMs: 30_000,
     fallbackModel: 'haiku',
   },
   discovery: {
@@ -72,6 +76,7 @@ const DEFAULT_PRESETS: Record<TaskProfile, TaskPreset> = {
     effort: 'medium',
     tools: WEB_TOOLS,
     maxTurns: 10,
+    timeoutMs: 120_000,
     fallbackModel: 'haiku',
   },
   verify: {
@@ -79,6 +84,7 @@ const DEFAULT_PRESETS: Record<TaskProfile, TaskPreset> = {
     effort: 'medium',
     tools: WEB_TOOLS,
     maxTurns: 5,
+    timeoutMs: 60_000,
     fallbackModel: 'haiku',
   },
   audit: {
@@ -86,6 +92,7 @@ const DEFAULT_PRESETS: Record<TaskProfile, TaskPreset> = {
     effort: 'low',
     tools: [],
     maxTurns: 1,
+    timeoutMs: 30_000,
   },
 };
 

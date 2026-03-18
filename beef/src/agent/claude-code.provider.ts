@@ -15,7 +15,7 @@ import { getPreset, cliConfig } from './claude-cli.config.js';
 
 const execFileAsync = promisify(execFileCb);
 
-const DEFAULT_TIMEOUT_MS = 0; // 0 = no timeout; measuring real durations first
+const DEFAULT_TIMEOUT_MS = 120_000;
 const HEALTH_CHECK_TIMEOUT_MS = 10_000;
 const SLOT_POLL_MS = 1_000;
 
@@ -48,7 +48,7 @@ export class ClaudeCodeProvider implements LLMProvider {
     const preset = getPreset(task.profile ?? 'roast-research');
     const tools = task.allowedTools?.join(',') ?? preset.tools.join(',');
     const maxTurns = task.maxTurns ?? preset.maxTurns;
-    const timeout = task.timeoutMs ?? DEFAULT_TIMEOUT_MS;
+    const timeout = task.timeoutMs ?? preset.timeoutMs ?? DEFAULT_TIMEOUT_MS;
 
     const args = [
       '-p',

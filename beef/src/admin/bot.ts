@@ -126,6 +126,19 @@ export function createBot(opts: {
       parse_mode: 'HTML',
     });
 
+    const startTime = Date.now();
+    const progressInterval = setInterval(() => {
+      const elapsed = Math.round((Date.now() - startTime) / 1000);
+      ctx.api
+        .editMessageText(
+          ctx.chat.id,
+          statusMsg.message_id,
+          `🔍 Researching <b>${escapeHtml(target)}</b>... <i>(${String(elapsed)}s)</i>`,
+          { parse_mode: 'HTML' },
+        )
+        .catch(() => {});
+    }, 10_000);
+
     try {
       const output = await generateRoasts(target, provider, logger, feedbackRepo);
 
@@ -140,6 +153,8 @@ export function createBot(opts: {
         })),
         ctx.chat.id,
       );
+
+      clearInterval(progressInterval);
 
       // Update status message
       const researchNote = output.researchNotes
@@ -166,11 +181,13 @@ export function createBot(opts: {
         variant.messageId = msg.message_id;
       }
     } catch (error) {
-      logger.error({ err: error, target }, 'Roast generation failed');
+      clearInterval(progressInterval);
+      const elapsed = Math.round((Date.now() - startTime) / 1000);
+      logger.error({ err: error, target, elapsedSec: elapsed }, 'Roast generation failed');
       await ctx.api.editMessageText(
         ctx.chat.id,
         statusMsg.message_id,
-        `❌ Generation failed: ${escapeHtml(getErrorMessage(error))}`,
+        `❌ Generation failed after ${String(elapsed)}s: ${escapeHtml(getErrorMessage(error).slice(0, 200))}`,
         { parse_mode: 'HTML' },
       );
     }

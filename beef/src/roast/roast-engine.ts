@@ -17,8 +17,6 @@ export interface RoastEngineOptions {
   logger: Logger;
   characterPath?: string;
   variantCount?: number;
-  timeoutMs?: number;
-  maxTurns?: number;
 }
 
 export interface RoastResult {
@@ -33,15 +31,11 @@ export class RoastEngine {
   private readonly logger: Logger;
   private readonly character: CharacterConfig;
   private readonly variantCount: number;
-  private readonly timeoutMs: number;
-  private readonly maxTurns: number;
 
   constructor(opts: RoastEngineOptions) {
     this.provider = opts.provider;
     this.logger = opts.logger;
     this.variantCount = opts.variantCount ?? 3;
-    this.timeoutMs = opts.timeoutMs ?? 0;
-    this.maxTurns = opts.maxTurns ?? 25;
 
     const charPath = opts.characterPath ?? DEFAULT_CHARACTER_PATH;
     this.character = loadCharacter(charPath);
@@ -68,8 +62,6 @@ export class RoastEngine {
         prompt,
         profile: 'roast-research',
         requiresResearch: true,
-        maxTurns: this.maxTurns,
-        timeoutMs: this.timeoutMs,
       });
     } catch (error) {
       this.logger.warn(
@@ -81,7 +73,6 @@ export class RoastEngine {
         prompt: fallbackPrompt,
         profile: 'roast-quick',
         requiresResearch: false,
-        timeoutMs: this.timeoutMs,
       });
     }
 
