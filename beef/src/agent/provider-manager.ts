@@ -94,6 +94,10 @@ export class ProviderManager implements LLMProvider {
     return primaryOk || (this.fallback ? await this.fallback.healthCheck() : false);
   }
 
+  async waitForIdle(maxWaitMs: number): Promise<void> {
+    await this.primary.waitForIdle?.(maxWaitMs);
+  }
+
   shutdown(): void {
     if (this.recoveryTimer) {
       clearInterval(this.recoveryTimer);

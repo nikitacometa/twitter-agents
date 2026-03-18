@@ -183,7 +183,10 @@ const shutdown = async () => {
   scheduler.stop();
   healthMonitor.stop();
   if (bot) await bot.stop();
-  provider?.shutdown();
+  if (provider) {
+    await provider.waitForIdle(185_000);
+    provider.shutdown();
+  }
   db.close();
   process.exit(0);
 };

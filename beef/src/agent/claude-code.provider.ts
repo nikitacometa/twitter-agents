@@ -118,6 +118,20 @@ export class ClaudeCodeProvider implements LLMProvider {
     }
   }
 
+  async waitForIdle(maxWaitMs: number): Promise<void> {
+    if (this.runningCount === 0) return;
+
+    this.logger.info({ active: this.runningCount }, 'Waiting for active Claude tasks to finish...');
+    const deadline = Date.now() + maxWaitMs;
+    while (this.runningCount > 0 && Date.now() < deadline) {
+      await new Promise((resolve) => setTimeout(resolve, SLOT_POLL_MS));
+    }
+
+    if (this.runningCount > 0) {
+      this.logger.warn({ active: this.runningCount }, 'Timeout waiting for tasks — killing remaining');
+    }
+  }
+
   shutdown(): void {
     for (const child of this.childProcesses) {
       child.kill('SIGTERM');
