@@ -557,7 +557,7 @@ export function createBot(opts: {
       // Check if all variants rated → send summary
       const evaluatorRatings = session.ratings.get(evaluatorId);
       if (evaluatorRatings && evaluatorRatings.size === session.variants.length) {
-        await ctx.reply(formatSessionSummary(session), { parse_mode: 'HTML' });
+        await sendSessionReport(ctx, session, feedbackRepo);
       }
 
       return;
@@ -620,12 +620,13 @@ async function sendSessionReport(
   const goldCount = stats.byVerdict['fire'] ?? 0;
   const goldForTarget = feedbackRepo.getFireExamplesForTarget(session.targetName, 100).length;
 
-  const fireAngles: string[] = [];
+  // Collect new golds from this session
+  const newGolds: Array<{ angle: string; text: string }> = [];
   for (const [, eRatings] of session.ratings) {
     for (const [idx, v] of eRatings) {
       if (v === 'fire') {
         const va = session.variants[idx];
-        if (va) fireAngles.push(va.angle);
+        if (va) newGolds.push({ angle: va.angle, text: va.text });
       }
     }
   }
@@ -634,15 +635,118 @@ async function sendSessionReport(
     [...session.ratings.values()].flatMap((m) => [...m.keys()]),
   ).size;
 
-  const learningLines = [
-    '',
-    `<b>📚 Training impact:</b>`,
-    `Rated: <b>${String(ratedCount)}/${String(session.variants.length)}</b> variants`,
-    `Gold examples: <b>${String(goldCount)}</b> total (${String(goldForTarget)} for ${escapeHtml(session.targetName)})`,
-  ];
-  if (fireAngles.length > 0) {
-    learningLines.push(`New gold: ${fireAngles.map((a) => escapeHtml(a)).join(', ')}`);
+  const lines: string[] = [summary];
+
+  // --- Section: Learning delta ---
+  lines.push('<b>🧠 What the bot learned:</b>');
+
+  if (newGolds.length > 0) {
+    for (const g of newGolds) {
+      const preview = g.text.length > 60 ? g.text.slice(0, 60) + '...' : g.text;
+      lines.push(`  🔥 New gold [${escapeHtml(g.angle)}]: <code>${escapeHtml(preview)}</code>`);
+    }
+  } else {
+    lines.push('  No new gold examples from this session');
   }
 
-  await ctx.reply(summary + learningLines.join('\n'), { parse_mode: 'HTML' });
+  lines.push(`  Gold library: <b>${String(goldCount)}</b> total (${String(goldForTarget)} for ${escapeHtml(session.targetName)})`);
+  lines.push(`  Rated: ${String(ratedCount)}/${String(session.variants.length)} variants`);
+  lines.push('');
+
+  // --- Section: Angle performance ---
+  const anglePerf = feedbackRepo.getAnglePerformance();
+  if (anglePerf.length > 0) {
+    lines.push('<b>📐 Angle performance (all sessions):</b>');
+    for (const a of anglePerf.slice(0, 7)) {
+      const fireRate = Math.round((a.fireCount / a.total) * 100);
+      const rejectRate = Math.round((a.rejectCount / a.total) * 100);
+      lines.push(`  ${escapeHtml(a.angle)} — 🔥${String(fireRate)}% · ❌${String(rejectRate)}% (${String(a.total)} ratings)`);
+    }
+    lines.push('');
+  }
+
+  // --- Section: Prompt impact ---
+  const targetExamples = feedbackRepo.getFireExamplesForTarget(session.targetName, 1);
+  const allFireExamples = feedbackRepo.getFireExamples(5);
+  const otherExamples = allFireExamples
+    .filter((e) => e.target.toLowerCase() !== session.targetName.toLowerCase())
+    .slice(0, 2 - targetExamples.length);
+  const promptExamples = [...targetExamples, ...otherExamples];
+
+  lines.push(`<b>🔮 Next prompt for ${escapeHtml(session.targetName)}:</b>`);
+
+  if (promptExamples.length > 0) {
+    lines.push(`  Dynamic examples (${String(promptExamples.length)}/5 few-shot slots):`);
+    for (const ex of promptExamples) {
+      const preview = ex.text.length > 50 ? ex.text.slice(0, 50) + '...' : ex.text;
+      lines.push(`  · [${escapeHtml(ex.angle)}] <code>${escapeHtml(preview)}</code>`);
+    }
+    lines.push(`  + ${String(5 - promptExamples.length)} static examples from character`);
+  } else {
+    lines.push('  No dynamic examples yet — using 5 static character examples');
+  }
+
+  const targetSessions = feedbackRepo.getTargetSessionCount(session.targetName);
+  const targetAngles = feedbackRepo.getTargetAngleHistory(session.targetName);
+  if (targetSessions >= 3) {
+    const angleSummary = targetAngles.map((a) => `${a.angle} (${String(a.count)}x)`).join(', ');
+    lines.push(`  Context injected: "${escapeHtml(session.targetName)}" roasted ${String(targetSessions)}x, angles: ${angleSummary}`);
+  } else if (targetSessions > 0) {
+    lines.push(`  ${escapeHtml(session.targetName)}: ${String(targetSessions)} session(s) — context line unlocks at 3`);
+  }
+
+  // --- Section: Insights ---
+  const insights = generateInsights(anglePerf, newGolds.length, goldCount, session);
+  if (insights.length > 0) {
+    lines.push('');
+    lines.push('<b>💡 Insights:</b>');
+    for (const insight of insights) {
+      lines.push(`  ${insight}`);
+    }
+  }
+
+  await ctx.reply(lines.join('\n'), { parse_mode: 'HTML' });
+}
+
+function generateInsights(
+  anglePerf: Array<{ angle: string; total: number; fireCount: number; rejectCount: number }>,
+  newGoldsCount: number,
+  totalGold: number,
+  session: RoastSession,
+): string[] {
+  const insights: string[] = [];
+
+  // Find best and worst angles (min 3 ratings to be meaningful)
+  const significant = anglePerf.filter((a) => a.total >= 3);
+  if (significant.length >= 2) {
+    const best = significant.reduce((a, b) => (a.fireCount / a.total > b.fireCount / b.total ? a : b));
+    const worst = significant.reduce((a, b) => (a.rejectCount / a.total > b.rejectCount / b.total ? a : b));
+    const bestRate = Math.round((best.fireCount / best.total) * 100);
+    const worstRate = Math.round((worst.rejectCount / worst.total) * 100);
+
+    if (bestRate > 40) {
+      insights.push(`Best angle: ${best.angle} (${String(bestRate)}% fire rate)`);
+    }
+    if (worstRate > 40) {
+      insights.push(`Weakest angle: ${worst.angle} (${String(worstRate)}% reject rate)`);
+    }
+  }
+
+  // Gold ratio insight
+  const totalRatings = anglePerf.reduce((sum, a) => sum + a.total, 0);
+  if (totalRatings >= 5) {
+    const goldRatio = Math.round((totalGold / totalRatings) * 100);
+    if (goldRatio < 15) {
+      insights.push(`Gold rate ${String(goldRatio)}% — consider being more generous with 🔥`);
+    } else if (goldRatio > 50) {
+      insights.push(`Gold rate ${String(goldRatio)}% — high quality! Prompt learning is strong`);
+    }
+  }
+
+  // Session coverage
+  if (session.variants.length > 0 && newGoldsCount === 0) {
+    insights.push('No gold this session — bot will use existing examples');
+  }
+
+  return insights;
 }

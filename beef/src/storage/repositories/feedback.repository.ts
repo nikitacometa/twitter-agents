@@ -59,6 +59,7 @@ export class FeedbackRepository {
   private readonly fireExamplesForTargetStmt: Database.Statement;
   private readonly targetSessionCountStmt: Database.Statement;
   private readonly targetAngleHistoryStmt: Database.Statement;
+  private readonly anglePerformanceStmt: Database.Statement;
 
   constructor(db: Database.Database) {
     this.insertStmt = db.prepare(`
@@ -136,6 +137,18 @@ export class FeedbackRepository {
       )
       GROUP BY angle
       ORDER BY count DESC
+    `);
+
+    this.anglePerformanceStmt = db.prepare(`
+      SELECT
+        angle,
+        COUNT(*) as total,
+        SUM(CASE WHEN verdict = 'fire' THEN 1 ELSE 0 END) as fire_count,
+        SUM(CASE WHEN verdict = 'reject' THEN 1 ELSE 0 END) as reject_count
+      FROM human_feedback
+      WHERE angle IS NOT NULL AND angle != 'manual'
+      GROUP BY angle
+      ORDER BY total DESC
     `);
   }
 
@@ -229,6 +242,22 @@ export class FeedbackRepository {
 
   getTargetAngleHistory(targetName: string): AngleUsage[] {
     return this.targetAngleHistoryStmt.all(targetName) as AngleUsage[];
+  }
+
+  getAnglePerformance(): Array<{ angle: string; total: number; fireCount: number; rejectCount: number }> {
+    return (
+      this.anglePerformanceStmt.all() as Array<{
+        angle: string;
+        total: number;
+        fire_count: number;
+        reject_count: number;
+      }>
+    ).map((row) => ({
+      angle: row.angle,
+      total: row.total,
+      fireCount: row.fire_count,
+      rejectCount: row.reject_count,
+    }));
   }
 }
 
