@@ -39,8 +39,8 @@ const WEB_TOOLS = ['WebSearch', 'WebFetch', 'Bash(curl *)'];
 //
 // | Profile          | Model  | Effort | Tools           | Turns | Timeout | Rationale                                |
 // |------------------|--------|--------|-----------------|-------|---------|------------------------------------------|
-// | roast-research   | sonnet | medium | Perplexity+Web  | 10    | 120s    | Research + generate — Sonnet fast enough  |
-// | roast-quick      | sonnet | low    | none            | 1     | 60s     | No-research fallback — speed priority     |
+// | roast-research   | sonnet | medium | Perplexity+Web  | 10    | 180s    | Research + generate — measured ~134s      |
+// | roast-quick      | sonnet | low    | none            | 1     | 90s     | No-research fallback — measured ~38s      |
 // | reply            | sonnet | low    | none            | 1     | 30s     | Quick reply — speed matters most          |
 // | discovery        | sonnet | medium | Web+curl        | 10    | 120s    | Target finding — structured, not creative |
 // | verify           | sonnet | medium | Web             | 5     | 60s     | Fact-check — straightforward lookup       |
@@ -52,7 +52,7 @@ const DEFAULT_PRESETS: Record<TaskProfile, TaskPreset> = {
     effort: 'medium',
     tools: RESEARCH_TOOLS,
     maxTurns: 10,
-    timeoutMs: 120_000,
+    timeoutMs: 180_000,
     fallbackModel: 'haiku',
   },
   'roast-quick': {
@@ -60,7 +60,7 @@ const DEFAULT_PRESETS: Record<TaskProfile, TaskPreset> = {
     effort: 'low',
     tools: [],
     maxTurns: 1,
-    timeoutMs: 60_000,
+    timeoutMs: 90_000,
     fallbackModel: 'haiku',
   },
   reply: {

@@ -1,4 +1,4 @@
-import { execFile as execFileCb } from 'node:child_process';
+import { execFile as execFileCb, spawn } from 'node:child_process';
 import { promisify } from 'node:util';
 import type { ChildProcess } from 'node:child_process';
 import type { Logger } from 'pino';
@@ -132,32 +132,43 @@ export class ClaudeCodeProvider implements LLMProvider {
 
   private execClaude(args: string[], timeout: number): Promise<{ stdout: string }> {
     return new Promise((resolve, reject) => {
-      const child = execFileCb(
-        'claude',
-        args,
-        {
-          timeout,
-          maxBuffer: 10 * 1024 * 1024,
-          env: { ...process.env, ...cliConfig.env },
-        },
-        (error, stdout, stderr) => {
-          this.childProcesses.delete(child);
-          if (error) {
-            const err = error as NodeJS.ErrnoException & { killed?: boolean; signal?: string };
-            const reason = err.killed
-              ? `killed by ${err.signal ?? 'timeout'} after ${String(timeout)}ms`
-              : `exit code ${String(err.code ?? 'unknown')}`;
-            reject(
-              new Error(
-                `claude process failed (${reason})${stderr ? `\nstderr: ${stderr}` : ''}`,
-              ),
-            );
-          } else {
-            resolve({ stdout });
-          }
-        },
-      );
+      const child = spawn('claude', args, {
+        stdio: ['ignore', 'pipe', 'pipe'],
+        env: { ...process.env, ...cliConfig.env },
+      });
       this.childProcesses.add(child);
+
+      let stdout = '';
+      let stderr = '';
+      child.stdout.on('data', (chunk: Buffer) => { stdout += chunk.toString(); });
+      child.stderr.on('data', (chunk: Buffer) => { stderr += chunk.toString(); });
+
+      const timer = timeout > 0
+        ? setTimeout(() => { child.kill('SIGTERM'); }, timeout)
+        : null;
+
+      child.on('close', (code, signal) => {
+        if (timer) clearTimeout(timer);
+        this.childProcesses.delete(child);
+
+        if (signal) {
+          reject(new Error(
+            `claude process failed (killed by ${signal} after ${String(timeout)}ms)${stderr ? `\nstderr: ${stderr}` : ''}`,
+          ));
+        } else if (code !== 0) {
+          reject(new Error(
+            `claude process failed (exit code ${String(code)})${stderr ? `\nstderr: ${stderr}` : ''}`,
+          ));
+        } else {
+          resolve({ stdout });
+        }
+      });
+
+      child.on('error', (err) => {
+        if (timer) clearTimeout(timer);
+        this.childProcesses.delete(child);
+        reject(new Error(`claude process spawn failed: ${err.message}`));
+      });
     });
   }
 
