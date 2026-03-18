@@ -3,7 +3,7 @@ import { fileURLToPath } from 'node:url';
 import type { Logger } from 'pino';
 import type { ProviderManager } from '@agent/provider-manager.js';
 import type { AgentRoastOutput } from '@agent/agent.types.js';
-import type { RoastDraft, RoastVariant } from '@common/types/index.js';
+import type { RoastDraft, RoastVariant, CreativeMemory } from '@common/types/index.js';
 import { loadCharacter } from './character.loader.js';
 import type { CharacterConfig } from './character.loader.js';
 import { buildRoastPrompt, buildNoResearchPrompt } from './prompt-builder.js';
@@ -52,16 +52,21 @@ export class RoastEngine {
     return this.character;
   }
 
-  async generateRoast(targetName: string, source: string = 'engine'): Promise<RoastResult> {
+  async generateRoast(
+    targetName: string,
+    source: string = 'engine',
+    memory?: CreativeMemory,
+  ): Promise<RoastResult> {
     const taskId = `roast-${source}-${Date.now()}`;
     this.logger.info({ taskId, target: targetName }, 'Starting roast generation');
 
-    const prompt = buildRoastPrompt(targetName, this.character, this.variantCount);
+    const prompt = buildRoastPrompt(targetName, this.character, this.variantCount, memory);
 
     let result;
     try {
       result = await this.provider.run<AgentRoastOutput>(taskId, {
         prompt,
+        profile: 'roast-research',
         requiresResearch: true,
         maxTurns: this.maxTurns,
         timeoutMs: this.timeoutMs,
@@ -74,9 +79,9 @@ export class RoastEngine {
       const fallbackPrompt = buildNoResearchPrompt(targetName, this.character, this.variantCount);
       result = await this.provider.run<AgentRoastOutput>(taskId, {
         prompt: fallbackPrompt,
+        profile: 'roast-quick',
         requiresResearch: false,
-        maxTurns: 5,
-        timeoutMs: 0,
+        timeoutMs: this.timeoutMs,
       });
     }
 

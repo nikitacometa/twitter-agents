@@ -1,7 +1,16 @@
 // LLM provider abstraction — strategy pattern for CLI vs SDK fallback.
 
+export type TaskProfile =
+  | 'roast-research'
+  | 'roast-quick'
+  | 'reply'
+  | 'discovery'
+  | 'verify'
+  | 'audit';
+
 export interface AgentTask {
   prompt: string;
+  profile?: TaskProfile;
   maxTurns?: number;
   timeoutMs?: number;
   allowedTools?: string[];

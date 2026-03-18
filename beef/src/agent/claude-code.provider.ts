@@ -11,20 +11,10 @@ import type {
   ProviderCapabilities,
   ProviderName,
 } from './agent.types.js';
+import { getPreset, cliConfig } from './claude-cli.config.js';
 
 const execFileAsync = promisify(execFileCb);
 
-const DEFAULT_TOOLS = [
-  'mcp__perplexity-ask__perplexity_ask',
-  'WebSearch',
-  'WebFetch',
-  'Read',
-  'Grep',
-  'Glob',
-  'Bash(curl *)',
-].join(',');
-
-const DEFAULT_MAX_TURNS = 25;
 const DEFAULT_TIMEOUT_MS = 0; // 0 = no timeout; measuring real durations first
 const HEALTH_CHECK_TIMEOUT_MS = 10_000;
 const SLOT_POLL_MS = 1_000;
@@ -34,8 +24,8 @@ export class ClaudeCodeProvider implements LLMProvider {
   readonly capabilities: ProviderCapabilities = {
     hasPerplexity: true,
     hasWebSearch: true,
-    hasFileAccess: true,
-    maxTurns: DEFAULT_MAX_TURNS,
+    hasFileAccess: false,
+    maxTurns: 25,
   };
 
   private runningCount = 0;
@@ -55,22 +45,32 @@ export class ClaudeCodeProvider implements LLMProvider {
     this.runningCount++;
 
     const start = Date.now();
-    const tools = task.allowedTools?.join(',') ?? DEFAULT_TOOLS;
-    const maxTurns = task.maxTurns ?? DEFAULT_MAX_TURNS;
+    const preset = getPreset(task.profile ?? 'roast-research');
+    const tools = task.allowedTools?.join(',') ?? preset.tools.join(',');
+    const maxTurns = task.maxTurns ?? preset.maxTurns;
     const timeout = task.timeoutMs ?? DEFAULT_TIMEOUT_MS;
 
     const args = [
       '-p',
       task.prompt,
       '--model',
-      'sonnet',
+      preset.model,
+      '--effort',
+      preset.effort,
       '--output-format',
       'json',
       '--max-turns',
       String(maxTurns),
-      '--allowedTools',
-      tools,
+      '--no-session-persistence',
     ];
+
+    if (tools) {
+      args.push('--allowedTools', tools);
+    }
+
+    if (preset.fallbackModel) {
+      args.push('--fallback-model', preset.fallbackModel);
+    }
 
     try {
       const { stdout } = await this.execClaude(args, timeout);
@@ -79,7 +79,10 @@ export class ClaudeCodeProvider implements LLMProvider {
       const data = JSON.parse(parsed) as T;
       const durationMs = Date.now() - start;
 
-      this.logger.info({ taskId, durationMs, provider: this.name }, 'Agent task completed');
+      this.logger.info(
+        { taskId, durationMs, provider: this.name, model: preset.model, effort: preset.effort },
+        'Agent task completed',
+      );
       this.logRepo.insert({
         taskId,
         taskType: this.name,
@@ -92,7 +95,7 @@ export class ClaudeCodeProvider implements LLMProvider {
     } catch (error) {
       const durationMs = Date.now() - start;
       this.logger.error(
-        { err: error, taskId, durationMs },
+        { err: error, taskId, durationMs, model: preset.model },
         `Claude Code provider failed: ${getErrorMessage(error)}`,
       );
       throw error;
@@ -132,7 +135,11 @@ export class ClaudeCodeProvider implements LLMProvider {
       const child = execFileCb(
         'claude',
         args,
-        { timeout, maxBuffer: 10 * 1024 * 1024 },
+        {
+          timeout,
+          maxBuffer: 10 * 1024 * 1024,
+          env: { ...process.env, ...cliConfig.env },
+        },
         (error, stdout, stderr) => {
           this.childProcesses.delete(child);
           if (error) {
