@@ -451,13 +451,9 @@ export async function sendFarmNotification(
       }),
     });
 
-    if (!response.ok) {
-      throw new Error(`Telegram HTTP error: ${String(response.status)} ${response.statusText}`);
-    }
-
     const body = (await response.json()) as TelegramApiResponse;
-    if (!body.ok) {
-      throw new Error(`Telegram API error: ${body.description ?? 'unknown'}`);
+    if (!response.ok || !body.ok) {
+      throw new Error(`Telegram API error (${String(response.status)}): ${body.description ?? 'unknown'}`);
     }
   }
 }

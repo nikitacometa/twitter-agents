@@ -16,6 +16,8 @@
  *   pnpm farm prune --attempts-ttl 30
  */
 
+import { config } from 'dotenv';
+config({ override: true });
 import { Command } from 'commander';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -452,6 +454,8 @@ program
   .option('--eval-limit <n>', 'Max attempts to evaluate', '20')
   .option('--threshold <score>', 'Minimum score for stockpile', '4.0')
   .option('--concurrency <n>', 'Parallel tasks', '2')
+  .option('--enrich', 'Enrich top candidates via Perplexity')
+  .option('--max-enrich <n>', 'Max Perplexity enrichment calls', '5')
   .option('--notify', 'Send Telegram notification on completion')
   .action(async (opts: {
     db: string;
@@ -463,6 +467,8 @@ program
     evalLimit: string;
     threshold: string;
     concurrency: string;
+    enrich?: boolean;
+    maxEnrich: string;
     notify?: boolean;
   }) => {
     const { db, farmTarget, farmAttempt, stockpile, logger } = createRepos(opts.db);
@@ -510,16 +516,19 @@ program
 
       const discoverLimit = parseInt(opts.discoverLimit, 10);
 
+      const maxEnrich = parseInt(opts.maxEnrich, 10);
       const discoverer = new TargetDiscoverer({
         provider,
         farmTarget,
         stockpile,
         logger,
+        maxEnrich,
       });
 
       const { targets: discoveredTargets, result: discoverResult } = await discoverer.discover({
         limit: discoverLimit,
         sources,
+        enrich: opts.enrich ?? false,
       });
 
       discoverData.discovered = discoverResult.discovered;
