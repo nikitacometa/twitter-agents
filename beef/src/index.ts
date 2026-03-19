@@ -1,4 +1,5 @@
-import 'dotenv/config';
+import dotenv from 'dotenv';
+dotenv.config({ override: true });
 import { validateEnv } from './common/config/env.validation.js';
 import { logger } from './common/utils/logger.js';
 import { createDatabase } from './storage/database.js';
@@ -207,32 +208,14 @@ if (config.TELEGRAM_BOT_TOKEN) {
     pollMentions: () => mentionHandler.poll(),
   });
 
-  const startTelegramBot = async (retries = 3, delayMs = 10_000) => {
-    for (let attempt = 1; attempt <= retries; attempt++) {
-      try {
-        await bot!.start({
-          drop_pending_updates: true,
-          onStart: () => {
-            logger.info(
-              { admins: config.TELEGRAM_ADMIN_IDS, openAccess: config.TELEGRAM_OPEN_ACCESS },
-              'Telegram bot polling started',
-            );
-          },
-        });
-        return; // clean exit (bot.stop() called)
-      } catch (err) {
-        const isConflict = err instanceof Error && err.message.includes('409');
-        if (isConflict && attempt < retries) {
-          logger.warn({ attempt, retries, delayMs }, 'Telegram 409 conflict — retrying after delay');
-          await new Promise((r) => setTimeout(r, delayMs));
-        } else {
-          logger.error({ err, attempt }, 'Telegram bot polling failed — bot continues without Telegram');
-          return;
-        }
-      }
-    }
-  };
-  void startTelegramBot();
+  void bot.start({
+    drop_pending_updates: true,
+    onStart: () =>
+      logger.info(
+        { admins: config.TELEGRAM_ADMIN_IDS, openAccess: config.TELEGRAM_OPEN_ACCESS },
+        'Telegram bot polling started',
+      ),
+  });
 } else {
   logger.warn('TELEGRAM_BOT_TOKEN not set — Telegram bot disabled');
 }

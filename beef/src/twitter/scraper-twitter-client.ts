@@ -1,10 +1,14 @@
 import { Scraper } from '@the-convocation/twitter-scraper';
 import { cycleTLSFetch, cycleTLSExit } from '@the-convocation/twitter-scraper/cycletls';
+
+// Must match CycleTLS Chrome fingerprint version for consistent TLS/UA pairing
+const CHROME_USER_AGENT =
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36';
 import type { Logger } from 'pino';
 import type { TweetMetrics } from '@common/types/index.js';
 import type { ITwitterClient, PostResult, MentionData } from './twitter-client.interface.js';
 import { CookieStore } from './cookie-store.js';
-import { retryWithBackoff } from '@common/utils/error.util.js';
+import { retryWithBackoff, NonRetryableError } from '@common/utils/error.util.js';
 
 export interface ScraperCredentials {
   username: string;
@@ -192,7 +196,7 @@ export class ScraperTwitterClient implements ITwitterClient {
     const bearerToken =
       'AAAAAAAAAAAAAAAAAAAAANRILgAAAAAAnNwIzUejRCOuH5E6I8xnZz4puTs%3D1Zv7ttfk8LF81IUq16cHjhLTvJu4FA33AGWWjCpTnA';
 
-    const queryId = 'znCnMXKGFTMBDK9GdBPORA';
+    const queryId = '7TKRKCPuAGsmYde0CudbVg';
 
     const variables: Record<string, unknown> = {
       tweet_text: text,
@@ -208,37 +212,47 @@ export class ScraperTwitterClient implements ITwitterClient {
       };
     }
 
+    // Features dict aligned with current Twitter web client (March 2026)
     const features = {
+      rweb_video_screen_enabled: false,
+      profile_label_improvements_pcf_label_in_post_enabled: true,
+      responsive_web_profile_redirect_enabled: false,
+      rweb_tipjar_consumption_enabled: false,
+      verified_phone_label_enabled: false,
+      creator_subscriptions_tweet_preview_api_enabled: true,
+      responsive_web_graphql_timeline_navigation_enabled: true,
+      responsive_web_graphql_skip_user_profile_image_extensions_enabled: false,
+      premium_content_api_read_enabled: false,
       communities_web_enable_tweet_community_results_fetch: true,
       c9s_tweet_anatomy_moderator_badge_enabled: true,
+      responsive_web_grok_analyze_button_fetch_trends_enabled: false,
+      responsive_web_grok_analyze_post_followups_enabled: true,
+      responsive_web_jetfuel_frame: true,
+      responsive_web_grok_share_attachment_enabled: true,
+      responsive_web_grok_annotations_enabled: true,
+      articles_preview_enabled: true,
       responsive_web_edit_tweet_api_enabled: true,
       graphql_is_translatable_rweb_tweet_is_translatable_enabled: true,
       view_counts_everywhere_api_enabled: true,
       longform_notetweets_consumption_enabled: true,
       responsive_web_twitter_article_tweet_consumption_enabled: true,
       tweet_awards_web_tipping_enabled: false,
-      creator_subscriptions_quote_tweet_preview_enabled: false,
-      longform_notetweets_rich_text_read_enabled: true,
-      longform_notetweets_inline_media_enabled: true,
-      articles_preview_enabled: true,
-      rweb_video_timestamps_enabled: true,
-      rweb_tipjar_consumption_enabled: true,
-      responsive_web_graphql_exclude_directive_enabled: true,
-      verified_phone_label_enabled: false,
+      responsive_web_grok_show_grok_translated_post: true,
+      responsive_web_grok_analysis_button_from_backend: true,
+      post_ctas_fetch_enabled: true,
       freedom_of_speech_not_reach_fetch_enabled: true,
       standardized_nudges_misinfo: true,
       tweet_with_visibility_results_prefer_gql_limited_actions_policy_enabled: true,
-      responsive_web_graphql_skip_user_profile_image_extensions_enabled: false,
-      responsive_web_graphql_timeline_navigation_enabled: true,
+      longform_notetweets_rich_text_read_enabled: true,
+      longform_notetweets_inline_media_enabled: true,
+      responsive_web_grok_image_annotation_enabled: true,
+      responsive_web_grok_imagine_annotation_enabled: true,
+      responsive_web_grok_community_note_auto_translation_is_enabled: false,
       responsive_web_enhance_cards_enabled: false,
-      tweetypie_unmention_optimization_enabled: true,
-      responsive_web_text_conversations_enabled: false,
-      interactive_text_enabled: true,
-      responsive_web_media_download_video_enabled: false,
-      vibe_api_enabled: true,
     };
 
-    const resp = await fetch(
+    // Use CycleTLS fetch to match Chrome TLS fingerprint — regular fetch triggers 226 anti-automation
+    const resp = await cycleTLSFetch(
       `https://x.com/i/api/graphql/${queryId}/CreateTweet`,
       {
         method: 'POST',
@@ -250,8 +264,7 @@ export class ScraperTwitterClient implements ITwitterClient {
           'x-twitter-active-user': 'yes',
           'x-twitter-client-language': 'en',
           'content-type': 'application/json',
-          'user-agent':
-            'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+          'user-agent': CHROME_USER_AGENT,
           referer: 'https://x.com/compose/tweet',
         },
         body: JSON.stringify({ variables, features, queryId }),
@@ -271,17 +284,30 @@ export class ScraperTwitterClient implements ITwitterClient {
           };
         };
       };
-      errors?: Array<{ message: string }>;
+      errors?: Array<{ code?: number; message: string }>;
     };
 
+    // Check for GraphQL errors (can appear alongside data or with empty data)
     const errors = data.errors;
     if (errors && errors.length > 0) {
-      throw new Error(`CreateTweet GraphQL error: ${errors.map((e) => e.message).join(', ')}`);
+      const msg = errors.map((e) => `[${String(e.code ?? '?')}] ${e.message}`).join('; ');
+      // Non-retryable: rate limits (344), anti-automation (226), permissions
+      const nonRetryableCodes = new Set([226, 344, 326, 187]);
+      const hasNonRetryable = errors.some((e) => e.code !== undefined && nonRetryableCodes.has(e.code));
+      if (hasNonRetryable) {
+        throw new NonRetryableError(`CreateTweet blocked: ${msg}`);
+      }
+      throw new Error(`CreateTweet GraphQL error: ${msg}`);
     }
 
     const tweetId = data.data?.create_tweet?.tweet_results?.result?.rest_id;
     if (!tweetId) {
-      throw new Error('CreateTweet response missing tweet ID');
+      // Empty tweet_results without errors — may indicate silent rate limit or account restriction
+      this.logger.warn(
+        { replyToId, hasCreateTweet: !!data.data?.create_tweet },
+        'CreateTweet returned empty tweet_results (possible silent rate limit or account restriction)',
+      );
+      throw new Error('CreateTweet response missing tweet ID (empty tweet_results)');
     }
 
     return tweetId;
@@ -304,8 +330,9 @@ export class ScraperTwitterClient implements ITwitterClient {
   }
 
   /**
-   * Fetch mentions using Twitter's notifications/mentions.json endpoint.
-   * More reliable than SearchTimeline (which rotates GraphQL query IDs).
+   * Fetch mentions using Twitter's notifications/all.json endpoint.
+   * Uses all.json instead of mentions.json because the latter misses
+   * reply-mentions (tags in replies to other users' tweets).
    */
   private async fetchMentionsViaNotifications(sinceId?: string): Promise<MentionData[]> {
     const cookies = await this.scraper.getCookies();
@@ -347,7 +374,7 @@ export class ScraperTwitterClient implements ITwitterClient {
       'AAAAAAAAAAAAAAAAAAAAANRILgAAAAAAnNwIzUejRCOuH5E6I8xnZz4puTs%3D1Zv7ttfk8LF81IUq16cHjhLTvJu4FA33AGWWjCpTnA';
 
     const resp = await fetch(
-      `https://x.com/i/api/2/notifications/mentions.json?${params.toString()}`,
+      `https://x.com/i/api/2/notifications/all.json?${params.toString()}`,
       {
         headers: {
           authorization: `Bearer ${bearerToken}`,
@@ -356,16 +383,15 @@ export class ScraperTwitterClient implements ITwitterClient {
           'x-twitter-auth-type': 'OAuth2Session',
           'x-twitter-active-user': 'yes',
           'x-twitter-client-language': 'en',
-          'user-agent':
-            'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+          'user-agent': CHROME_USER_AGENT,
           accept: '*/*',
-          referer: 'https://x.com/notifications/mentions',
+          referer: 'https://x.com/notifications',
         },
       },
     );
 
     if (!resp.ok) {
-      throw new Error(`notifications/mentions returned ${resp.status}`);
+      throw new Error(`notifications/all returned ${resp.status}`);
     }
 
     interface NotifTweet {
@@ -388,6 +414,8 @@ export class ScraperTwitterClient implements ITwitterClient {
     const users = data.globalObjects?.users ?? {};
     const results: MentionData[] = [];
 
+    const botMentionPattern = `@${this.botUsername}`.toLowerCase();
+
     for (const [tweetId, tweet] of Object.entries(tweets)) {
       // Skip own tweets
       const user = users[tweet.user_id_str];
@@ -397,6 +425,9 @@ export class ScraperTwitterClient implements ITwitterClient {
       if (sinceId && BigInt(tweetId) <= BigInt(sinceId)) continue;
 
       if (!tweet.full_text) continue;
+
+      // all.json returns all notifications — only keep tweets mentioning us
+      if (!tweet.full_text.toLowerCase().includes(botMentionPattern)) continue;
 
       const mention: MentionData = {
         tweetId,
@@ -430,6 +461,24 @@ export class ScraperTwitterClient implements ITwitterClient {
       }
 
       results.push(mention);
+    }
+
+    // Enrich mentions that are replies but missing parent tweet data
+    const needsParent = results.filter((m) => m.inReplyToTweetId && !m.parentTweetText);
+    for (const mention of needsParent.slice(0, 5)) {
+      try {
+        const parentTweet = await this.scraper.getTweet(mention.inReplyToTweetId!);
+        if (parentTweet) {
+          mention.parentTweetText = parentTweet.text ?? undefined;
+          mention.parentAuthorName = parentTweet.username ?? undefined;
+          const photos = parentTweet.photos?.map((p) => p.url).filter(Boolean);
+          if (photos && photos.length > 0) {
+            mention.parentMediaUrls = photos;
+          }
+        }
+      } catch (err) {
+        this.logger.debug({ err, parentId: mention.inReplyToTweetId }, 'Failed to fetch parent tweet');
+      }
     }
 
     return results;

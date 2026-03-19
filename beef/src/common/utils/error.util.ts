@@ -8,8 +8,19 @@ export function getErrorMessage(error: unknown): string {
 }
 
 /**
+ * Error that should not be retried (rate limits, permission errors, etc.).
+ */
+export class NonRetryableError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'NonRetryableError';
+  }
+}
+
+/**
  * Retries an async function with exponential backoff.
  * Throws the last error after all retries are exhausted.
+ * Immediately rethrows NonRetryableError without retrying.
  */
 export async function retryWithBackoff<T>(
   fn: () => Promise<T>,
@@ -21,6 +32,9 @@ export async function retryWithBackoff<T>(
     try {
       return await fn();
     } catch (error) {
+      if (error instanceof NonRetryableError) {
+        throw error;
+      }
       if (attempt === maxRetries) {
         throw error;
       }

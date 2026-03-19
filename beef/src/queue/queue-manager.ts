@@ -10,6 +10,14 @@ import { getErrorMessage } from '@common/utils/error.util.js';
 import { isQuietHour } from '@scheduler/scheduler.js';
 import { downloadTweetMedia } from '@common/utils/media-downloader.js';
 
+export interface QueueProcessResult {
+  dequeued: boolean;
+  posted?: boolean;
+  tweetId?: string;
+  target?: string;
+  error?: string;
+}
+
 export class QueueManager {
   private readonly queueRepo: QueueRepository;
   private readonly roastRepo: RoastRepository;
@@ -47,24 +55,24 @@ export class QueueManager {
   }
 
   /**
-   * Process one item from the queue. Returns true if an item was processed.
+   * Process one item from the queue (respects pause/quiet/limits).
    */
-  async processNext(): Promise<boolean> {
+  async processNext(): Promise<QueueProcessResult> {
     const runtime = this.configRepo.getRuntime();
     if (runtime.paused) {
       this.logger.debug('Queue paused — skipping');
-      return false;
+      return { dequeued: false };
     }
 
     if (isQuietHour()) {
       this.logger.debug('Quiet hours — skipping queue processing');
-      return false;
+      return { dequeued: false };
     }
 
     const todayCount = this.roastRepo.getTodayCount('autonomous');
     if (todayCount >= this.dailyLimit) {
       this.logger.info({ todayCount, dailyLimit: this.dailyLimit }, 'Daily limit reached');
-      return false;
+      return { dequeued: false };
     }
 
     return this.dequeueAndProcess();
@@ -85,15 +93,15 @@ export class QueueManager {
   /**
    * Force-process next item, ignoring pause/quiet/limit/posting-mode (for manual testing).
    */
-  async processNextForce(): Promise<boolean> {
+  async processNextForce(): Promise<QueueProcessResult> {
     return this.dequeueAndProcess(true);
   }
 
-  private async dequeueAndProcess(force = false): Promise<boolean> {
+  private async dequeueAndProcess(force = false): Promise<QueueProcessResult> {
     const item = this.queueRepo.dequeue();
     if (!item) {
       this.logger.debug('Queue empty');
-      return false;
+      return { dequeued: false };
     }
 
     this.logger.info({ queueId: item.id, target: item.targetName, source: item.source }, 'Processing queue item');
@@ -106,12 +114,12 @@ export class QueueManager {
       if (isReply && !this.enableMentionReplies) {
         this.logger.info({ queueId: item.id, target: item.targetName }, 'Mention reply skipped — ENABLE_MENTION_REPLIES=false');
         this.queueRepo.fail(item.id, 'Mention replies disabled');
-        return true;
+        return { dequeued: true, posted: false, target: item.targetName, error: 'Mention replies disabled' };
       }
       if (!isReply && !this.enableAutonomousPosting) {
         this.logger.info({ queueId: item.id, target: item.targetName }, 'Autonomous post skipped — ENABLE_AUTONOMOUS_POSTING=false');
         this.queueRepo.fail(item.id, 'Autonomous posting disabled');
-        return true;
+        return { dequeued: true, posted: false, target: item.targetName, error: 'Autonomous posting disabled' };
       }
     }
 
@@ -135,7 +143,7 @@ export class QueueManager {
 
       if (output.variants.length === 0) {
         this.queueRepo.fail(item.id, 'No variants generated');
-        return true;
+        return { dequeued: true, posted: false, target: item.targetName, error: 'No variants generated' };
       }
 
       const best = output.variants[output.bestIndex] ?? output.variants[0]!;
@@ -163,17 +171,17 @@ export class QueueManager {
           { queueId: item.id, roastId, tweetId: postResult.tweetId, target: item.targetName, isReply: !!replyToId },
           'Roast posted successfully',
         );
+        return { dequeued: true, posted: true, tweetId: postResult.tweetId, target: item.targetName };
       } else {
         this.roastRepo.updateStatus(roastId, 'failed');
-        this.queueRepo.fail(item.id, 'Twitter post failed');
+        this.queueRepo.fail(item.id, 'Twitter post returned null');
+        return { dequeued: true, posted: false, target: item.targetName, error: 'Twitter post returned null' };
       }
-
-      return true;
     } catch (error) {
       const msg = getErrorMessage(error);
       this.logger.error({ err: error, queueId: item.id, target: item.targetName }, 'Queue processing failed');
       this.queueRepo.fail(item.id, msg.slice(0, 500));
-      return true;
+      return { dequeued: true, posted: false, target: item.targetName, error: msg.slice(0, 200) };
     } finally {
       if (downloaded) {
         await downloaded.cleanup().catch((err) => {

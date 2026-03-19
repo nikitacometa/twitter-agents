@@ -16,6 +16,7 @@ import { SessionStore } from './session-store.js';
 import type { RoastSession } from './types.js';
 import { generateRoasts } from './roast-generator.js';
 import { registerExampleFlow } from './example-flow.js';
+import type { PollResult } from '@twitter/mention-handler.js';
 import {
   escapeHtml,
   formatManualEvalMessage,
@@ -43,10 +44,11 @@ export function createBot(opts: {
   exampleRepo?: ExternalExampleRepository;
   patternRepo?: RoastPatternRepository;
   postingMode?: { autonomous: boolean; mentionReplies: boolean };
-  pollMentions?: () => Promise<number>;
+  pollMentions?: () => Promise<PollResult>;
 }): Bot {
   const { token, adminIds, openAccess, feedbackRepo, provider, logger, queueManager, configRepo, exampleRepo, patternRepo, postingMode, pollMentions } = opts;
   const bot = new Bot(token);
+
   const sessions = new SessionStore();
 
   // --- Admin guard (skip if openAccess or no IDs configured) ---
@@ -339,8 +341,32 @@ export function createBot(opts: {
 
     await ctx.reply('🔍 Polling mentions...');
     try {
-      const count = await pollMentions();
-      await ctx.reply(count > 0 ? `✅ ${String(count)} new mention(s) processed.` : '📭 No new mentions.');
+      const result = await pollMentions();
+      if (result.processed === 0) {
+        await ctx.reply('📭 No new mentions.');
+        return;
+      }
+
+      const lines: string[] = [`✅ <b>${String(result.processed)}</b> new mention(s) processed.`, ''];
+      for (const m of result.mentions) {
+        const textSnippet = m.text.length > 80 ? m.text.slice(0, 80) + '...' : m.text;
+        lines.push(`<b>@${escapeHtml(m.authorName)}</b>: <code>${escapeHtml(textSnippet)}</code>`);
+        if (m.inReplyToTweetId) {
+          const parentInfo = m.parentAuthorName ? `@${escapeHtml(m.parentAuthorName)}` : 'unknown';
+          const parentSnippet = m.parentTextSnippet
+            ? `: "${escapeHtml(m.parentTextSnippet.slice(0, 60))}${m.parentTextSnippet.length > 60 ? '...' : ''}"`
+            : '';
+          lines.push(`  ↳ reply to ${parentInfo}${parentSnippet}`);
+        }
+        if (m.queued && m.queueTarget) {
+          lines.push(`  → Queued: <i>${escapeHtml(m.queueTarget.slice(0, 80))}</i>`);
+        } else if (!m.queued) {
+          lines.push(`  → Not queued (type: ${m.requestType})`);
+        }
+        lines.push('');
+      }
+
+      await ctx.reply(lines.join('\n'), { parse_mode: 'HTML' });
     } catch (error) {
       await ctx.reply(`❌ Poll failed: ${escapeHtml(getErrorMessage(error).slice(0, 200))}`, {
         parse_mode: 'HTML',
@@ -357,8 +383,20 @@ export function createBot(opts: {
     await ctx.reply('⚡ Force-processing next queue item...');
 
     try {
-      const processed = await queueManager.processNextForce();
-      await ctx.reply(processed ? '✅ Queue item processed.' : '⚠️ Queue is empty.');
+      const result = await queueManager.processNextForce();
+      if (!result.dequeued) {
+        await ctx.reply('⚠️ Queue is empty.');
+      } else if (result.posted) {
+        await ctx.reply(
+          `✅ Posted! Target: <b>${escapeHtml(result.target ?? '?')}</b>\nTweet ID: <code>${escapeHtml(result.tweetId ?? '?')}</code>`,
+          { parse_mode: 'HTML' },
+        );
+      } else {
+        await ctx.reply(
+          `❌ Posting failed for <b>${escapeHtml(result.target ?? '?')}</b>\n${escapeHtml(result.error ?? 'Unknown error')}`,
+          { parse_mode: 'HTML' },
+        );
+      }
     } catch (error) {
       await ctx.reply(`❌ Processing failed: ${escapeHtml(getErrorMessage(error).slice(0, 200))}`, {
         parse_mode: 'HTML',
