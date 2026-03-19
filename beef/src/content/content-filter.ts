@@ -34,6 +34,21 @@ const PERSONAL_ATTACK_PATTERNS = [
   /\b(?:mental\s+health|depression|anxiety)\b/i,
 ];
 
+const AI_ARTIFACT_PATTERNS = [
+  /\bas an ai\b/i,
+  /\bi cannot\b/i,
+  /\bdelve\b/i,
+  /\bcertainly!/i,
+  /\bit'?s worth noting\b/i,
+  /\bi should note\b/i,
+  /\bi must emphasize\b/i,
+  /\bin conclusion\b/i,
+  /\blet me be clear\b/i,
+  /\bfirstly\b/i,
+  /\bfurthermore\b/i,
+  /\bmore ?over\b/i,
+];
+
 export interface FilterResult {
   passed: boolean;
   reasons: string[];
@@ -85,6 +100,14 @@ export function filterRoast(text: string): FilterResult {
   for (const pattern of PERSONAL_ATTACK_PATTERNS) {
     if (pattern.test(text)) {
       reasons.push('personal attack pattern');
+      break;
+    }
+  }
+
+  // AI artifact detection (LLM slop leaking through)
+  for (const pattern of AI_ARTIFACT_PATTERNS) {
+    if (pattern.test(text)) {
+      reasons.push('AI artifact detected');
       break;
     }
   }

@@ -193,7 +193,7 @@ function classifyMention(text: string): MentionRequestType {
 
 /**
  * Detect "bare" mentions — just @handle with no meaningful text.
- * Examples: "@BeefRoastBot", "@BeefRoastBot 🔥", "@BeefRoastBot pls"
+ * Examples: "@BeefThis", "@BeefThis 🔥", "@BeefThis pls"
  */
 function isBareOrSimpleMention(text: string): boolean {
   // Strip all @mentions, emojis (common Unicode ranges), and whitespace
