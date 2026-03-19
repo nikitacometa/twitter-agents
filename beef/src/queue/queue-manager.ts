@@ -19,6 +19,8 @@ export class QueueManager {
   private readonly twitter: ITwitterClient;
   private readonly logger: Logger;
   private readonly dailyLimit: number;
+  private readonly enableAutonomousPosting: boolean;
+  private readonly enableMentionReplies: boolean;
 
   constructor(opts: {
     queueRepo: QueueRepository;
@@ -29,6 +31,8 @@ export class QueueManager {
     twitter: ITwitterClient;
     logger: Logger;
     dailyLimit: number;
+    enableAutonomousPosting: boolean;
+    enableMentionReplies: boolean;
   }) {
     this.queueRepo = opts.queueRepo;
     this.roastRepo = opts.roastRepo;
@@ -38,6 +42,8 @@ export class QueueManager {
     this.twitter = opts.twitter;
     this.logger = opts.logger;
     this.dailyLimit = opts.dailyLimit;
+    this.enableAutonomousPosting = opts.enableAutonomousPosting;
+    this.enableMentionReplies = opts.enableMentionReplies;
   }
 
   /**
@@ -92,6 +98,21 @@ export class QueueManager {
 
     this.logger.info({ queueId: item.id, target: item.targetName, source: item.source }, 'Processing queue item');
 
+    // Check posting mode before generating roast
+    const replyToId = extractReplyToId(item.context);
+    const isReply = !!replyToId;
+
+    if (isReply && !this.enableMentionReplies) {
+      this.logger.info({ queueId: item.id, target: item.targetName }, 'Mention reply skipped — ENABLE_MENTION_REPLIES=false');
+      this.queueRepo.fail(item.id, 'Mention replies disabled');
+      return true;
+    }
+    if (!isReply && !this.enableAutonomousPosting) {
+      this.logger.info({ queueId: item.id, target: item.targetName }, 'Autonomous post skipped — ENABLE_AUTONOMOUS_POSTING=false');
+      this.queueRepo.fail(item.id, 'Autonomous posting disabled');
+      return true;
+    }
+
     const mediaUrls = extractMediaUrls(item.context);
     let downloaded: { paths: string[]; cleanup: () => Promise<void> } | undefined;
 
@@ -129,7 +150,6 @@ export class QueueManager {
       });
 
       // Reply if triggered by a mention, standalone tweet otherwise
-      const replyToId = extractReplyToId(item.context);
       const postResult = replyToId
         ? await this.twitter.replyToTweet(best.text, replyToId)
         : await this.twitter.postTweet(best.text);

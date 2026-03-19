@@ -35,6 +35,14 @@ const envSchema = z
       .enum(['true', 'false'])
       .default('false')
       .transform((v) => v === 'true'),
+    ENABLE_AUTONOMOUS_POSTING: z
+      .enum(['true', 'false'])
+      .default('false')
+      .transform((v) => v === 'true'),
+    ENABLE_MENTION_REPLIES: z
+      .enum(['true', 'false'])
+      .default('true')
+      .transform((v) => v === 'true'),
 
     // Monitoring
     SENTRY_DSN: z.string().optional(),

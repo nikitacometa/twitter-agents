@@ -4,6 +4,7 @@ import type { Logger } from 'pino';
 import type { TweetMetrics } from '@common/types/index.js';
 import type { ITwitterClient, PostResult, MentionData } from './twitter-client.interface.js';
 import { CookieStore } from './cookie-store.js';
+import { retryWithBackoff } from '@common/utils/error.util.js';
 
 export interface ScraperCredentials {
   username: string;
@@ -123,36 +124,167 @@ export class ScraperTwitterClient implements ITwitterClient {
     }
   }
 
-  /**
-   * Post a tweet. Note: @the-convocation/twitter-scraper is read-only.
-   * Write operations log as DRY_RUN regardless of config.
-   * For actual posting, switch to TWITTER_CLIENT_MODE=api with Official API keys.
-   */
-  postTweet(text: string): Promise<PostResult | null> {
+  async postTweet(text: string): Promise<PostResult | null> {
     if (text.length > 280) {
       this.logger.error({ charCount: text.length }, 'Tweet exceeds 280 chars — rejected');
-      return Promise.resolve(null);
+      return null;
     }
 
-    // Scraper library is read-only — always dry run for writes
-    this.logger.info(
-      { text, charCount: text.length, dryRun: this.dryRun },
-      '[SCRAPER DRY RUN] Would post tweet (scraper is read-only — use API mode for posting)',
+    if (this.dryRun) {
+      this.logger.info({ text, charCount: text.length }, '[DRY RUN] Would post tweet (scraper)');
+      return { tweetId: `dry_${Date.now()}` };
+    }
+
+    if (!(await this.ensureLoggedIn())) {
+      this.logger.error('Cannot post — scraper not logged in');
+      return null;
+    }
+
+    return retryWithBackoff(
+      async () => {
+        const tweetId = await this.createTweetGraphQL(text);
+        this.logger.info({ tweetId, charCount: text.length }, 'Tweet posted (scraper)');
+        return { tweetId };
+      },
+      { maxRetries: 2, baseDelayMs: 2000, label: 'scraper.postTweet' },
     );
-    return Promise.resolve({ tweetId: `dry_${Date.now()}` });
   }
 
-  replyToTweet(text: string, replyToId: string): Promise<PostResult | null> {
+  async replyToTweet(text: string, replyToId: string): Promise<PostResult | null> {
     if (text.length > 280) {
       this.logger.error({ charCount: text.length }, 'Reply exceeds 280 chars — rejected');
-      return Promise.resolve(null);
+      return null;
     }
 
-    this.logger.info(
-      { text, replyToId, charCount: text.length, dryRun: this.dryRun },
-      '[SCRAPER DRY RUN] Would reply (scraper is read-only — use API mode for posting)',
+    if (this.dryRun) {
+      this.logger.info({ text, replyToId, charCount: text.length }, '[DRY RUN] Would reply (scraper)');
+      return { tweetId: `dry_reply_${Date.now()}` };
+    }
+
+    if (!(await this.ensureLoggedIn())) {
+      this.logger.error('Cannot reply — scraper not logged in');
+      return null;
+    }
+
+    return retryWithBackoff(
+      async () => {
+        const tweetId = await this.createTweetGraphQL(text, replyToId);
+        this.logger.info({ tweetId, replyToId }, 'Reply posted (scraper)');
+        return { tweetId };
+      },
+      { maxRetries: 2, baseDelayMs: 2000, label: 'scraper.replyToTweet' },
     );
-    return Promise.resolve({ tweetId: `dry_reply_${Date.now()}` });
+  }
+
+  /**
+   * Post a tweet via Twitter's internal GraphQL CreateTweet mutation.
+   * Same authentication pattern as fetchMentionsViaNotifications.
+   */
+  private async createTweetGraphQL(text: string, replyToId?: string): Promise<string> {
+    const cookies = await this.scraper.getCookies();
+    const ct0Cookie = cookies.find((c: { key: string }) => c.key === 'ct0') as
+      | { key: string; value: string }
+      | undefined;
+    const cookieStr = cookies
+      .map((c: { key: string; value: string }) => `${c.key}=${c.value}`)
+      .join('; ');
+
+    const bearerToken =
+      'AAAAAAAAAAAAAAAAAAAAANRILgAAAAAAnNwIzUejRCOuH5E6I8xnZz4puTs%3D1Zv7ttfk8LF81IUq16cHjhLTvJu4FA33AGWWjCpTnA';
+
+    const queryId = 'znCnMXKGFTMBDK9GdBPORA';
+
+    const variables: Record<string, unknown> = {
+      tweet_text: text,
+      dark_request: false,
+      media: { media_entities: [], possibly_sensitive: false },
+      semantic_annotation_ids: [],
+    };
+
+    if (replyToId) {
+      variables['reply'] = {
+        in_reply_to_tweet_id: replyToId,
+        exclude_reply_user_ids: [],
+      };
+    }
+
+    const features = {
+      communities_web_enable_tweet_community_results_fetch: true,
+      c9s_tweet_anatomy_moderator_badge_enabled: true,
+      responsive_web_edit_tweet_api_enabled: true,
+      graphql_is_translatable_rweb_tweet_is_translatable_enabled: true,
+      view_counts_everywhere_api_enabled: true,
+      longform_notetweets_consumption_enabled: true,
+      responsive_web_twitter_article_tweet_consumption_enabled: true,
+      tweet_awards_web_tipping_enabled: false,
+      creator_subscriptions_quote_tweet_preview_enabled: false,
+      longform_notetweets_rich_text_read_enabled: true,
+      longform_notetweets_inline_media_enabled: true,
+      articles_preview_enabled: true,
+      rweb_video_timestamps_enabled: true,
+      rweb_tipjar_consumption_enabled: true,
+      responsive_web_graphql_exclude_directive_enabled: true,
+      verified_phone_label_enabled: false,
+      freedom_of_speech_not_reach_fetch_enabled: true,
+      standardized_nudges_misinfo: true,
+      tweet_with_visibility_results_prefer_gql_limited_actions_policy_enabled: true,
+      responsive_web_graphql_skip_user_profile_image_extensions_enabled: false,
+      responsive_web_graphql_timeline_navigation_enabled: true,
+      responsive_web_enhance_cards_enabled: false,
+      tweetypie_unmention_optimization_enabled: true,
+      responsive_web_text_conversations_enabled: false,
+      interactive_text_enabled: true,
+      responsive_web_media_download_video_enabled: false,
+      vibe_api_enabled: true,
+    };
+
+    const resp = await fetch(
+      `https://x.com/i/api/graphql/${queryId}/CreateTweet`,
+      {
+        method: 'POST',
+        headers: {
+          authorization: `Bearer ${bearerToken}`,
+          cookie: cookieStr,
+          'x-csrf-token': ct0Cookie?.value ?? '',
+          'x-twitter-auth-type': 'OAuth2Session',
+          'x-twitter-active-user': 'yes',
+          'x-twitter-client-language': 'en',
+          'content-type': 'application/json',
+          'user-agent':
+            'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+          referer: 'https://x.com/compose/tweet',
+        },
+        body: JSON.stringify({ variables, features, queryId }),
+      },
+    );
+
+    if (!resp.ok) {
+      const body = await resp.text();
+      throw new Error(`CreateTweet returned ${String(resp.status)}: ${body.slice(0, 500)}`);
+    }
+
+    const data = (await resp.json()) as {
+      data?: {
+        create_tweet?: {
+          tweet_results?: {
+            result?: { rest_id?: string };
+          };
+        };
+      };
+      errors?: Array<{ message: string }>;
+    };
+
+    const errors = data.errors;
+    if (errors && errors.length > 0) {
+      throw new Error(`CreateTweet GraphQL error: ${errors.map((e) => e.message).join(', ')}`);
+    }
+
+    const tweetId = data.data?.create_tweet?.tweet_results?.result?.rest_id;
+    if (!tweetId) {
+      throw new Error('CreateTweet response missing tweet ID');
+    }
+
+    return tweetId;
   }
 
   async getMentions(sinceId?: string): Promise<MentionData[]> {
