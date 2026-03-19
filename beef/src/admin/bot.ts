@@ -43,8 +43,9 @@ export function createBot(opts: {
   exampleRepo?: ExternalExampleRepository;
   patternRepo?: RoastPatternRepository;
   postingMode?: { autonomous: boolean; mentionReplies: boolean };
+  pollMentions?: () => Promise<number>;
 }): Bot {
-  const { token, adminIds, openAccess, feedbackRepo, provider, logger, queueManager, configRepo, exampleRepo, patternRepo, postingMode } = opts;
+  const { token, adminIds, openAccess, feedbackRepo, provider, logger, queueManager, configRepo, exampleRepo, patternRepo, postingMode, pollMentions } = opts;
   const bot = new Bot(token);
   const sessions = new SessionStore();
 
@@ -126,6 +127,7 @@ export function createBot(opts: {
         '<code>/stats</code> — feedback statistics',
         '<code>/status</code> — bot health + provider info',
         '<code>/queue &lt;target&gt;</code> — add target to posting queue',
+        '<code>/poll</code> — check for new mentions now',
         '<code>/trigger</code> — force-process next queue item',
         '<code>/pause</code> / <code>/resume</code> — toggle autonomous posting',
         '',
@@ -326,6 +328,23 @@ export function createBot(opts: {
         `📋 Queue: <b>${String(count)}</b> items pending\n\nUsage: <code>/queue &lt;target&gt;</code> to add`,
         { parse_mode: 'HTML' },
       );
+    }
+  });
+
+  bot.command('poll', async (ctx) => {
+    if (!pollMentions) {
+      await ctx.reply('⚠️ Mention handler not configured.');
+      return;
+    }
+
+    await ctx.reply('🔍 Polling mentions...');
+    try {
+      const count = await pollMentions();
+      await ctx.reply(count > 0 ? `✅ ${String(count)} new mention(s) processed.` : '📭 No new mentions.');
+    } catch (error) {
+      await ctx.reply(`❌ Poll failed: ${escapeHtml(getErrorMessage(error).slice(0, 200))}`, {
+        parse_mode: 'HTML',
+      });
     }
   });
 

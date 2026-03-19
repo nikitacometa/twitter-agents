@@ -1,12 +1,12 @@
 # Twitter Agents — Task Board
 
-> Last updated: 2026-03-17 (v5.3: technical launch plan, milestones 1-8, anti-detection, Telegram command center)
+> Last updated: 2026-03-19 (v6: scraper posting, config flags, board audit)
 
 ## Conventions
 - **ID format**: `TA-NNN` (sequential, never reuse)
 - **Statuses**: `todo` | `in_progress` | `blocked` | `done`
 - **Priorities**: `critical` | `high` | `medium` | `low`
-- Next available ID: **TA-101**
+- Next available ID: **TA-105**
 
 ---
 
@@ -14,137 +14,132 @@
 
 | ID | Task | Status | Priority | Notes |
 |----|------|--------|----------|-------|
-| TA-015 | Define bot personality — forensic accounting AI, deprecated auditor | done | critical | Character design: origin story, 7 traits, emotional range, self-mythology, 25 examples. See `docs/character-design.md` |
-| TA-016 | Create character config (JSON + Zod validation) | done | critical | `characters/beef-bot.json` v1.0.0 — full systemPrompt, 25 examples, personality, voice rules, eval framework refs |
-| TA-048 | Craft-roast prompt template | done | critical | 3 variants (Rubric/Persona/Adversarial) + research/reply/iteration prompts + A/B framework. See `docs/craft-roast-prompt-design.md` |
-| TA-020 | Roast engine (orchestrates agent) | done | critical | `roast/roast-engine.ts` — loadCharacter → buildPrompt → provider.run() → contentFilter → rank → best. Telegram rewired to use engine |
-| TA-023 | Content filter (regex, no LLM) | done | critical | `content/content-filter.ts` — TOS, banned words, ≤280 chars, no ticker spam, no financial advice, no @mention start. 14 tests |
-| TA-059 | Fix extractJsonFromOutput greedy regex bug | done | high | `agent/claude-code.provider.ts` — replaced greedy regex with balanced brace parser |
-| TA-035 | Character loader + validator | done | high | `roast/character.loader.ts` — Zod schema, loads beef-bot.json, 6 tests |
+| TA-015 | Define bot personality | done | critical | Character design: origin story, 7 traits, emotional range, self-mythology, 25 examples |
+| TA-016 | Create character config (JSON + Zod) | done | critical | `characters/beef-bot.json` v1.0.0 |
+| TA-048 | Craft-roast prompt template | done | critical | 3 variants + research/reply/iteration prompts |
+| TA-020 | Roast engine (orchestrates agent) | done | critical | loadCharacter → buildPrompt → provider.run() → contentFilter → rank → best |
+| TA-023 | Content filter (regex, no LLM) | done | critical | 14 tests |
+| TA-059 | Fix extractJsonFromOutput greedy regex | done | high | Balanced brace parser |
+| TA-035 | Character loader + validator | done | high | Zod schema, 6 tests |
 
 ## Milestone 2: Twitter Integration
 
 | ID | Task | Status | Priority | Notes |
 |----|------|--------|----------|-------|
-| TA-017 | Choose Twitter handle for the bot | todo | critical | Check: @BeefRoastBot, @BeefRoasts, @beef_agent, @0xBEEF |
-| TA-061 | Create bot accounts + credentials (Twitter) | todo | critical | Twitter account + X Premium ($8) + 2FA + avatar/logo |
-| TA-082 | Add agent-twitter-client to dependencies | todo | critical | `pnpm add agent-twitter-client` — cookie auth library. Verify Node 22 compat |
-| TA-019 | Twitter client (dual-mode) | todo | critical | `twitter/twitter-client.ts` — CookieAuthClient (agent-twitter-client + PROXY_URL) + ApiClient (twitter-api-v2). Auto-failover |
-| TA-083 | Rate limiter | todo | critical | `twitter/rate-limiter.ts` — token bucket, separate limits for posts vs reads, daily count tracking |
-| TA-084 | Cookie session manager | todo | critical | `twitter/cookie-manager.ts` — login once → save cookies → reuse. TOTP from TWITTER_2FA_SECRET |
-| TA-085 | Purchase ISP residential proxy (Decodo) | todo | critical | SOCKS5, static IP, ~$3-5/mo. Config: `PROXY_URL=socks5://...` in .env |
-| TA-086 | Update env.validation.ts with new vars | in_progress | high | Done: TELEGRAM_ADMIN_IDS. Remaining: PROXY_URL, TWITTER_2FA_SECRET, TWITTER_COOKIES_PATH, POST_JITTER_PERCENT |
+| TA-061 | Create bot accounts + credentials | done | critical | @euphoriaai_ account, X Premium, 2FA |
+| TA-019 | Twitter client (dual-mode) | done | critical | `ITwitterClient` interface, `TwitterClient` (API) + `ScraperTwitterClient` (cookie auth) |
+| TA-084 | Cookie session manager | done | critical | `cookie-store.ts` — save/load cookies, auto-relogin |
+| TA-101 | Scraper GraphQL posting (CreateTweet) | done | critical | `postTweet` + `replyToTweet` via GraphQL mutation, `retryWithBackoff`, DRY_RUN support |
+| TA-102 | Autonomous/reply config flags | done | critical | `ENABLE_AUTONOMOUS_POSTING`, `ENABLE_MENTION_REPLIES` env vars, queue-level gating |
+| TA-086 | Env validation — all Twitter vars | done | high | Scraper credentials, client mode, posting flags |
+| TA-039 | Mention polling + classifier | done | high | `mention-handler.ts` — notifications endpoint, keyword classification, parent tweet enrichment |
+| TA-083 | Rate limiter for scraper posting | todo | high | Token bucket, daily reply cap (~50/day), anti-spam jitter |
+| TA-085 | ISP residential proxy | todo | medium | SOCKS5 for scraper — currently running without proxy (local IP ok, datacenter risky) |
 
 ## Milestone 3: Telegram Command Center
 
 | ID | Task | Status | Priority | Notes |
 |----|------|--------|----------|-------|
-| TA-087 | Add grammY + plugins to dependencies | done | critical | `grammy 1.41.1` installed. Conversations plugin deferred — not needed for MVP |
-| TA-071 | Telegram admin bot — core + RLHF flow | done | critical | `src/admin/` — bot.ts, guard, session-store, keyboards, formatters, roast-generator. /roast, /stats, /status + text eval + rating buttons |
-| TA-088 | Telegram management commands | in_progress | high | /status + /stats done. Remaining: /pause, /resume, /queue, /config, /emergency |
-| TA-089 | Telegram notifications system | todo | high | Push alerts: errors, rate limits, high engagement, challenges, daily digest |
-| TA-044 | Telegram bot extended features | todo | medium | /approve (moderation mode), multi-admin support, inline keyboards |
+| TA-087 | grammY setup | done | critical | grammy 1.41.1 |
+| TA-071 | Telegram admin bot — core + RLHF flow | done | critical | /roast, /power, /stats, /status + text eval + rating buttons |
+| TA-088 | Telegram management commands | done | high | /status, /stats, /queue, /trigger, /poll, /pause, /resume, /example, /analyze, /evolution |
+| TA-103 | /poll command for manual mention check | done | high | Bypasses cron — instant mention fetch for testing |
+| TA-089 | Telegram notifications system | todo | high | Push alerts: errors, rate limits, high engagement, daily digest |
+| TA-044 | Telegram bot extended features | todo | medium | /approve (moderation mode), inline keyboards |
 
 ## Milestone 4: Scheduler + Queue + Wiring
 
 | ID | Task | Status | Priority | Notes |
 |----|------|--------|----------|-------|
-| TA-038 | Human-like jitter module | todo | high | `scheduler/jitter.ts` — quiet hours (2-7 UTC), bursts, distraction delays |
-| TA-049 | Scheduler with all job types | todo | high | `scheduler/scheduler.ts` — uses `cron` package. Jobs: autonomous-roast, mention-poll, engagement-track, daily-digest |
-| TA-040 | Queue manager | todo | high | `queue/queue.manager.ts` — dequeue by priority → process → update status. Max 3 attempts |
-| TA-036 | Bootstrap + wiring | todo | high | `bootstrap.ts` + `index.ts` — DI, create all services, start scheduler + telegram bot |
-| TA-042 | Graceful shutdown | todo | medium | SIGTERM/SIGINT → stop scheduler → drain queue → kill claude subprocesses → close DB |
+| TA-038 | Human-like jitter module | done | high | `scheduler.ts` — quiet hours (2-7 UTC), jittered delays |
+| TA-049 | Scheduler with all job types | done | high | cron jobs: queue-processor (20min), mention-poller (10min), engagement-tracker (1h) |
+| TA-040 | Queue manager | done | high | Priority dequeue, posting mode gating, force-process bypasses flags |
+| TA-036 | Bootstrap + wiring (index.ts) | done | high | Full DI, all services wired |
+| TA-042 | Graceful shutdown | done | medium | SIGTERM/SIGINT → stop scheduler → drain queue → close DB |
 
 ## Milestone 5: Deploy to VPS
 
 | ID | Task | Status | Priority | Notes |
 |----|------|--------|----------|-------|
-| TA-090 | Install pnpm + PM2 globally on VPS | done | critical | PM2 6.0.14 installed. pnpm not yet — using npm |
-| TA-091 | Install + authorize Claude Code CLI on VPS | done | critical | claude-code@2.1.62 installed globally, Node 22.22.1 |
-| TA-092 | Create PM2 ecosystem config | done | high | `ecosystem.config.cjs` — tsx runtime, 2G memory limit, graceful shutdown |
-| TA-029 | Deploy bot to Hostinger VPS | done | high | Deployed via PM2 + tsx. Telegram bot online, 59MB RAM, 0 restarts |
-| TA-093 | Create deploy script | done | high | `scripts/deploy.sh` + `sync.sh` + `setup-vps.sh` — full deploy + data sync pipeline |
-| TA-094 | Setup Sentry project for error tracking | todo | medium | Create project on sentry.io, add DSN to .env |
+| TA-090 | Install pnpm + PM2 on VPS | done | critical | PM2 6.0.14, pnpm via npm-global |
+| TA-091 | Install Claude Code CLI on VPS | done | critical | Node 22.22.1 |
+| TA-092 | PM2 ecosystem config | done | high | tsx runtime, 2G memory limit |
+| TA-029 | Deploy bot to Hostinger VPS | done | high | PM2 + tsx, 59MB RAM |
+| TA-093 | Deploy scripts | done | high | `deploy.sh` + `sync.sh` + `setup-vps.sh` |
+| TA-094 | Sentry error tracking | todo | medium | Create project on sentry.io |
 
 ## Milestone 6: Testing
 
 | ID | Task | Status | Priority | Notes |
 |----|------|--------|----------|-------|
-| TA-037 | Unit tests for critical path | todo | critical | content-filter, roast-engine, character-loader, rate-limiter, twitter-client, jitter, queue-manager, guards. ~80-120 tests |
-| TA-043 | Integration test — full pipeline | todo | high | `tests/integration/pipeline.spec.ts` — in-memory SQLite + mocked provider + mocked twitter → queue item → roast → filter → "post" |
-| TA-021 | DRY_RUN roast quality test | todo | high | 10-15 roasts with real LLM, review quality. Prompt tuning |
-| TA-095 | Smoke test script for deploy | todo | medium | PM2 status + health endpoint + last log lines. Run after every deploy |
+| TA-037 | Unit tests for critical path | in_progress | critical | 73 tests passing (content-filter, provider-manager, character-loader, repos). Missing: twitter-client, queue-manager |
+| TA-043 | Integration test — full pipeline | todo | high | In-memory SQLite + mocked provider + mocked twitter → queue → roast → post |
+| TA-021 | DRY_RUN roast quality test | todo | high | 10-15 roasts with real LLM, review quality |
+| TA-095 | Smoke test script for deploy | todo | medium | PM2 status + health endpoint + last log lines |
 
 ## Milestone 7: Blockchain Integration (post-token)
 
 | ID | Task | Status | Priority | Notes |
 |----|------|--------|----------|-------|
-| TA-096 | Base chain client setup (viem) | todo | high | `src/chain/client.ts` — public client, Alchemy RPC. Already have viem in deps |
-| TA-067 | Register $BEEF in ERC-8004 Identity Registry | todo | critical | On-chain tx on Base. "First AI roast agent with verifiable on-chain identity" |
-| TA-068 | ERC-8004 announcement tweet thread | todo | critical | Explain what ERC-8004 is + why $BEEF uses it |
-| TA-026 | Burn detection + roast request flow | todo | high | Alchemy webhooks watching Transfer(to=0x...dead) → queue roast. viem watchEvent fallback |
-| TA-025 | Token launch via Bankr | todo | critical | BOT launches (not co-founder). Bot must have 5-10 live posts first |
-| TA-024 | Set up Snapshot.org space for challenge voting | todo | medium | Off-chain, gasless, token-weighted governance |
-| TA-069 | Apply to Bankr tokenized-agents registry | todo | medium | GitHub PR to BankrBot/tokenized-agents |
+| TA-025 | Token launch via Bankr | todo | critical | BOT launches. Bot must have 5-10 live posts first |
+| TA-067 | Register $BEEF in ERC-8004 Identity Registry | todo | critical | On-chain tx on Base |
+| TA-068 | ERC-8004 announcement tweet thread | todo | critical | |
+| TA-096 | Base chain client setup (viem) | todo | high | `src/chain/client.ts` |
+| TA-026 | Burn detection + roast request flow | todo | high | Alchemy webhooks watching Transfer(to=0x...dead) |
+| TA-024 | Snapshot.org space for challenge voting | todo | medium | Off-chain, gasless, token-weighted |
+| TA-069 | Apply to Bankr tokenized-agents registry | todo | medium | |
 
-## Milestone 8: Visual Content + Scale (post-launch)
+## Milestone 8: Visual Content + Scale
 
 | ID | Task | Status | Priority | Notes |
 |----|------|--------|----------|-------|
-| TA-064 | Roast scorecard HTML template + Puppeteer | todo | high | Dark theme, fire accents, dynamic data. Image per roast for virality |
-| TA-072 | GIF generation for roasts | todo | medium | Giphy API or custom ffmpeg. Animated roast cards |
-| TA-039 | Mention polling + parser | todo | high | `twitter/mention.parser.ts` — detect roast requests from mentions |
-| TA-050 | Reply prompt template | todo | high | `agent/prompts/craft-reply.ts` — mention replies + reply-guy |
-| TA-051 | Target discovery prompt + selector | todo | high | `agent/prompts/discover-targets.ts` + `roast/target.selector.ts` |
-| TA-022 | News monitor — RSS + DexScreener | todo | medium | `news/sources/` — autonomous target discovery |
-| TA-053 | Engagement tracker | todo | medium | `learning/engagement.tracker.ts` — time-series snapshots |
-| TA-054 | Learning module | todo | medium | `learning/learning.module.ts` — analyze what works |
-| TA-077 | Dynamic avatar system | todo | medium | Change avatar weekly to most-roasted target |
+| TA-053 | Engagement tracker | done | medium | `learning/engagement-tracker.ts` — hourly cron, tracks metrics for recent roasts |
+| TA-064 | Roast scorecard HTML template | todo | high | Dark theme, fire accents, image per roast for virality |
+| TA-051 | Target discovery prompt + selector | todo | high | Agent-driven autonomous target finding |
+| TA-022 | News monitor — RSS + DexScreener | todo | medium | Autonomous target discovery |
+| TA-054 | Learning module | todo | medium | Analyze what works, feedback loop |
+| TA-077 | Dynamic avatar system | todo | medium | Change avatar weekly |
 
 ## Marketing + Launch Tasks
 
 | ID | Task | Status | Priority | Notes |
 |----|------|--------|----------|-------|
-| TA-056 | Blind test 20 roasts with real crypto people | in_progress | critical | 20 roasts generated, persona panel eval done: 4 FIRE / 6 POST / 0 REJECT. Top: #7 Virtuals (0.82), #15 Base (0.82), #8 HL (0.81), #16 Base (0.80). Need human validation — send top 5 to Telegram |
-| TA-098 | Multidimensional Evaluation Framework | done | critical | 3-layer pipeline: heuristics → LLM-as-Judge → persona panel. See `docs/evaluation-framework.md` |
-| TA-099 | CT audience personas for evaluation | done | high | 6 detailed personas with demographics, humor profiles, engagement triggers. See `docs/research-ct-audience-personas.md` |
-| TA-100 | Research: CT roast culture + evaluation frameworks | done | high | `docs/research-ct-roast-culture.md` + `docs/research-evaluation-frameworks.md` |
+| TA-056 | Blind test 20 roasts with real people | in_progress | critical | 20 generated, persona panel: 4 FIRE / 6 POST / 0 REJECT. Need human validation |
 | TA-062 | Prepare token launch assets | todo | critical | Pre-write launch thread, KOL coordination |
-| TA-065 | OpenAI Roast Campaign — day 1 content | todo | high | First 5 roasts targeting OpenAI token/airdrop narrative |
-| TA-073 | OpenSea Roast Campaign — launch day content | todo | high | "#1 мета для хейта" — sustained OpenSea roasts |
-| TA-066 | "Reply with a ticker" interactive thread | todo | high | Free roast scorecards for engagement |
-| TA-074 | Find Jesse Pollak "roast me" tweet | todo | high | Jesse publicly invited criticism — reply for RT potential |
-| TA-075 | Collect reference roast tweets (Voronin) | todo | high | Voronin собирает рефы хороших роаст-твитов |
-| TA-078 | Coordinate pump advertisers ($30/repost) | todo | high | Cheap promotion via crypto Twitter reposters |
+| TA-065 | OpenAI Roast Campaign — day 1 content | todo | high | First 5 roasts targeting OpenAI narrative |
+| TA-066 | "Reply with a ticker" interactive thread | todo | high | Free roast scorecards |
+| TA-074 | Find Jesse Pollak "roast me" tweet | todo | high | Reply for RT potential |
+| TA-075 | Collect reference roast tweets (Voronin) | todo | high | |
 | TA-030 | Seed roasts with friends/KOLs | todo | high | Co-founder RTs best roasts |
-| TA-070 | First burn-to-roast demo (own funds) | todo | high | Immediately after token launch |
-| TA-076 | Register domain for bot | todo | medium | .xyz, .ai, or .bot |
-| TA-060 | Reach viral metric: 1 roast >300 RT or QT from >10K account | todo | high | Growth KPI |
-| TA-097 | Create Telegram group for community | todo | medium | Public group for roast requests, discussion |
+| TA-070 | First burn-to-roast demo (own funds) | todo | high | After token launch |
+| TA-060 | Reach viral metric: >300 RT or QT from >10K account | todo | high | Growth KPI |
 
 ## Backlog
 
 | ID | Task | Status | Priority | Notes |
 |----|------|--------|----------|-------|
-| TA-028 | Set up DexScreener + CoinGecko token monitoring | todo | low | Price/volume alerts after token launch |
-| TA-031 | Implement challenge/accountability flow | todo | low | ERC-8004 Validation Registry + Snapshot vote + treasury reward |
-| TA-045 | Health monitor + alerting | todo | low | Periodic checks + Claude Code CLI health check |
+| TA-104 | Mention reply prioritization by follower count/engagement | todo | medium | When mentions > daily capacity, prioritize high-follower accounts and roast-keyword mentions over bare @mentions |
+| TA-052 | Reply-guy scheduler job | todo | medium | Every 2.5h ±50% jitter, agent researches trending tweets + replies |
+| TA-055 | Agent prompts: quality audit + character tuning | todo | medium | Daily audit, weekly tuning |
+| TA-028 | DexScreener + CoinGecko token monitoring | todo | low | Price/volume alerts after token launch |
+| TA-031 | Challenge/accountability flow | todo | low | ERC-8004 Validation Registry + Snapshot vote |
 | TA-046 | Metrics collector | todo | low | In-memory counters for daily stats |
-| TA-052 | Reply-guy scheduler job | todo | medium | Every 2.5h ±50% jitter, agent researches + replies |
-| TA-055 | Agent prompts: quality audit + character tuning + content strategy | todo | medium | Daily audit, weekly tuning, daily planning |
 
-## Done
+## Done (archived)
 
-| ID | Task | Status | Priority | Notes |
-|----|------|--------|----------|-------|
-| TA-001 | Define bot personas — contrasting personality pair | done | critical | Pivoted: single roast bot, not PVP |
-| TA-002 | Design character.json files for both bots | done | critical | Pivoted: single bot character config |
-| TA-003 | Choose final ticker ($BEEF vs alternatives) | done | high | $BEEF confirmed |
-| TA-004 | Choose Twitter handles for both bots | done | high | Pivoted: single bot handle needed |
-| TA-005 | Technology stack research and decisions | done | high | Custom TypeScript over ElizaOS. See docs/stack-research.md |
-| TA-018 | Initialize TypeScript project — custom stack | done | high | Scaffold: tsconfig, eslint, vitest, husky, env validation |
-| TA-032 | Shared types + interfaces | done | critical | `common/types/index.ts` — all domain types |
-| TA-033 | SQLite setup + migrations (001 + 002) | done | critical | `storage/database.ts`, 10 tables + 2 FTS5 + FTS triggers |
-| TA-034 | All repositories | done | high | 7 repositories: roast, mention, queue, target, llm_log, user, config |
-| TA-047 | LLM Provider layer (CLI + SDK fallback) | done | critical | LLMProvider interface, ClaudeCode/SDK providers, ProviderManager, 31 tests |
-| TA-063 | Technical launch plan document | done | critical | `docs/technical-launch-plan.md` — milestones, anti-detection, Telegram, deploy, testing |
+| ID | Task | Status | Notes |
+|----|------|--------|-------|
+| TA-001 | Define bot personas | done | Pivoted: single roast bot, not PVP |
+| TA-002 | Design character.json files | done | Single bot character config |
+| TA-003 | Choose final ticker | done | $BEEF confirmed |
+| TA-004 | Choose Twitter handles | done | @euphoriaai_ |
+| TA-005 | Technology stack research | done | Custom TypeScript over ElizaOS |
+| TA-018 | Initialize TypeScript project | done | tsconfig, eslint, vitest, husky |
+| TA-032 | Shared types + interfaces | done | `common/types/index.ts` |
+| TA-033 | SQLite setup + migrations | done | 10 tables + 2 FTS5 |
+| TA-034 | All repositories | done | 7+ repositories |
+| TA-047 | LLM Provider layer | done | ClaudeCode/SDK providers, ProviderManager, 31 tests |
+| TA-063 | Technical launch plan | done | `docs/technical-launch-plan.md` |
+| TA-098 | Multidimensional Evaluation Framework | done | 3-layer pipeline |
+| TA-099 | CT audience personas | done | 6 detailed personas |
+| TA-100 | Research: CT roast culture | done | |

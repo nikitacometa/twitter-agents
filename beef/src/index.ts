@@ -204,6 +204,7 @@ if (config.TELEGRAM_BOT_TOKEN) {
       autonomous: config.ENABLE_AUTONOMOUS_POSTING,
       mentionReplies: config.ENABLE_MENTION_REPLIES,
     },
+    pollMentions: () => mentionHandler.poll(),
   });
 
   void bot.start({
