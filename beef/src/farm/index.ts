@@ -25,6 +25,7 @@ import { ClaudeCodeProvider } from '@agent/claude-code.provider.js';
 import { ProviderManager } from '@agent/provider-manager.js';
 import { SelfEvaluator } from './self-evaluator.js';
 import { BatchGenerator } from './batch-generator.js';
+import { TargetDiscoverer } from './target-discoverer.js';
 import { createFarmLogger } from './logger.js';
 import type { FarmStats } from './types.js';
 
@@ -129,6 +130,72 @@ program
     const { db, farmTarget, farmAttempt, stockpile } = createRepos(opts.db);
     const stats = buildStats(farmTarget, farmAttempt, stockpile);
     printStats(stats);
+    db.close();
+  });
+
+program
+  .command('discover')
+  .description('Discover roast targets from DexScreener and CoinGecko')
+  .option('--db <path>', 'Database path', DEFAULT_DB_PATH)
+  .option('--limit <n>', 'Max targets to discover', '20')
+  .option('--source <src>', 'Source: dexscreener, coingecko, or all', 'all')
+  .option('--enrich', 'Enrich top candidates via Perplexity')
+  .option('--max-enrich <n>', 'Max Perplexity enrichment calls', '5')
+  .action(async (opts: {
+    db: string;
+    limit: string;
+    source: string;
+    enrich?: boolean;
+    maxEnrich: string;
+  }) => {
+    const { db, farmTarget, stockpile, logger } = createRepos(opts.db);
+    const provider = createProviderFrom(db, logger);
+
+    const validSources = ['all', 'dexscreener', 'coingecko'] as const;
+    if (!validSources.includes(opts.source as typeof validSources[number])) {
+      console.log(`Invalid source "${opts.source}". Use: dexscreener, coingecko, or all.`);
+      db.close();
+      return;
+    }
+    const sources: Array<'dexscreener' | 'coingecko'> = opts.source === 'all'
+      ? ['dexscreener', 'coingecko']
+      : [opts.source as 'dexscreener' | 'coingecko'];
+
+    const limit = parseInt(opts.limit, 10);
+    const maxEnrich = parseInt(opts.maxEnrich, 10);
+
+    console.log(`Discovering targets from ${sources.join(' + ')} (limit ${String(limit)})...\n`);
+
+    const discoverer = new TargetDiscoverer({
+      provider,
+      farmTarget,
+      stockpile,
+      logger,
+      maxEnrich,
+    });
+
+    const { targets, result } = await discoverer.discover({
+      limit,
+      sources,
+      enrich: opts.enrich ?? false,
+    });
+
+    for (const target of targets) {
+      const scoreStr = target.priorityScore >= 0
+        ? `+${String(target.priorityScore)}`
+        : String(target.priorityScore);
+      console.log(`  ${scoreStr} ${target.name} (${target.type}, ${target.source})`);
+      console.log(`      ${target.reason}`);
+    }
+
+    if (result.errors.length > 0) {
+      console.log('\nErrors:');
+      for (const err of result.errors) {
+        console.log(`  ✗ ${err}`);
+      }
+    }
+
+    console.log(`\nDone: ${String(result.discovered)} discovered, ${String(result.skippedDuplicates)} duplicates skipped, ${String(result.enriched)} enriched`);
     db.close();
   });
 

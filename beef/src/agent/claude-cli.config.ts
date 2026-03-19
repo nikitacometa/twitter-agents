@@ -124,6 +124,14 @@ const DEFAULT_PRESETS: Record<TaskProfile, TaskPreset> = {
     maxTurns: 15,
     timeoutMs: 600_000,
   },
+  'farm-discover': {
+    model: 'sonnet',
+    effort: 'medium',
+    tools: RESEARCH_TOOLS,
+    maxTurns: 5,
+    timeoutMs: 120_000,
+    fallbackModel: 'haiku',
+  },
 };
 
 // --- Environment for all CLI subprocesses ---

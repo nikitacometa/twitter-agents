@@ -10,7 +10,8 @@ export type TaskProfile =
   | 'audit'
   | 'example-parse'
   | 'farm-evaluate'
-  | 'farm-generate';
+  | 'farm-generate'
+  | 'farm-discover';
 
 export interface AgentTask {
   prompt: string;
