@@ -110,6 +110,13 @@ const DEFAULT_PRESETS: Record<TaskProfile, TaskPreset> = {
     maxTurns: 3,
     timeoutMs: 120_000,
   },
+  'farm-evaluate': {
+    model: 'sonnet',
+    effort: 'medium',
+    tools: [],
+    maxTurns: 1,
+    timeoutMs: 60_000,
+  },
 };
 
 // --- Environment for all CLI subprocesses ---
