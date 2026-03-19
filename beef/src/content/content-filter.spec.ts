@@ -67,10 +67,17 @@ describe('filterRoast', () => {
 
   it('rejects text with too many sentences', () => {
     const result = filterRoast(
-      'First thing. Second thing. Third thing. Fourth thing. Fifth thing.',
+      'One. Two. Three. Four. Five. Six. Seven.',
     );
     expect(result.passed).toBe(false);
-    expect(result.reasons[0]).toMatch(/more than 2 sentences/);
+    expect(result.reasons[0]).toMatch(/more than 4 sentences/);
+  });
+
+  it('passes text with up to 4 sentences', () => {
+    const result = filterRoast(
+      'first thing. second thing. third thing. fourth thing is the kicker.',
+    );
+    expect(result.reasons).not.toContainEqual(expect.stringMatching(/sentences/));
   });
 
   it('passes text at exactly 280 chars', () => {

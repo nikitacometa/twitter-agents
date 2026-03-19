@@ -122,10 +122,10 @@ export function filterRoast(text: string): FilterResult {
     reasons.push('contains @mention in body (ban risk)');
   }
 
-  // More than 2 sentences (rough heuristic: count periods/exclamation/question marks)
+  // More than 4 sentences (rough heuristic: count periods/exclamation/question marks)
   const sentenceEnders = text.match(/[.!?]+(?:\s|$)/g);
-  if (sentenceEnders && sentenceEnders.length > 3) {
-    reasons.push('likely more than 2 sentences');
+  if (sentenceEnders && sentenceEnders.length > 5) {
+    reasons.push('likely more than 4 sentences');
   }
 
   return {
