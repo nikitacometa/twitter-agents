@@ -24,12 +24,14 @@
     "deploy": "bash scripts/deploy.sh",
     "sync:pull": "bash scripts/sync.sh pull",
     "sync:pull-feedback": "bash scripts/sync.sh pull-feedback",
-    "setup:vps": "bash scripts/setup-vps.sh"
+    "setup:vps": "bash scripts/setup-vps.sh",
+    "farm": "tsx src/farm/index.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.39.0",
     "@the-convocation/twitter-scraper": "^0.22.1",
     "better-sqlite3": "^12.8.0",
+    "commander": "^14.0.3",
     "cron": "^3.3.0",
     "cycletls": "^2.0.5",
     "dotenv": "^16.4.0",

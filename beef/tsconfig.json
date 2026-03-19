@@ -32,7 +32,8 @@
       "@queue/*": ["./src/queue/*"],
       "@scheduler/*": ["./src/scheduler/*"],
       "@admin/*": ["./src/admin/*"],
-      "@learning/*": ["./src/learning/*"]
+      "@learning/*": ["./src/learning/*"],
+      "@farm/*": ["./src/farm/*"]
     },
     "baseUrl": "."
   },
