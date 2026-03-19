@@ -6,7 +6,16 @@ import type { AgentRoastOutput, TaskProfile } from '@agent/agent.types.js';
 import type { RoastDraft, RoastVariant, CreativeMemory } from '@common/types/index.js';
 import { loadCharacter } from './character.loader.js';
 import type { CharacterConfig } from './character.loader.js';
-import { buildRoastPrompt, buildNoResearchPrompt } from './prompt-builder.js';
+import {
+  buildRoastPrompt,
+  buildNoResearchPrompt,
+  buildPersonaPrompt,
+  buildNoResearchPersonaPrompt,
+  buildAdversarialPrompt,
+  buildNoResearchAdversarialPrompt,
+  PROMPT_STRATEGIES,
+} from './prompt-builder.js';
+import type { PromptStrategy } from './prompt-builder.js';
 import { filterRoast } from '@content/content-filter.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -62,42 +71,41 @@ export class RoastEngine {
       'Starting roast generation',
     );
 
-    const prompt = buildRoastPrompt(targetName, this.character, effectiveVariantCount, memory, imagePaths);
+    // 3×3 Multi-strategy: rubric, persona, adversarial — each generates N variants
+    const strategyResults = await this.runMultiStrategy(
+      taskId, targetName, effectiveProfile, effectiveVariantCount, memory, imagePaths,
+    );
 
-    let result;
-    try {
-      result = await this.provider.run<AgentRoastOutput>(taskId, {
-        prompt,
-        profile: effectiveProfile,
-        requiresResearch: true,
-        imagePaths,
-      });
-    } catch (error) {
-      // roast-power: no fallback — surface the error directly
+    let allVariants = strategyResults.variants;
+    let researchNotes = strategyResults.researchNotes;
+    let factCheckPassed = strategyResults.factCheckPassed;
+
+    // If all strategies failed, try no-research fallback (unless roast-power)
+    if (allVariants.length === 0) {
       if (effectiveProfile === 'roast-power') {
-        throw error;
+        throw strategyResults.error instanceof Error
+          ? strategyResults.error
+          : new Error('All prompt strategies failed');
       }
-      this.logger.warn(
-        { taskId, err: error },
-        'Research-mode generation failed, trying no-research fallback',
-      );
+      this.logger.warn({ taskId }, 'All strategies failed, trying no-research fallback');
       const fallbackPrompt = buildNoResearchPrompt(targetName, this.character, effectiveVariantCount, memory, imagePaths);
-      result = await this.provider.run<AgentRoastOutput>(taskId, {
+      const fallback = await this.provider.run<AgentRoastOutput>(taskId, {
         prompt: fallbackPrompt,
         profile: 'roast-quick',
         requiresResearch: false,
         imagePaths,
       });
+      this.validateOutput(fallback.data, taskId);
+      allVariants = [...fallback.data.variants];
+      researchNotes = fallback.data.researchNotes;
+      factCheckPassed = fallback.data.factCheckPassed;
     }
-
-    const data = result.data;
-    this.validateOutput(data, taskId);
 
     // Content filter
     const filtered: RoastVariant[] = [];
     const passed: RoastVariant[] = [];
 
-    for (const variant of data.variants) {
+    for (const variant of allVariants) {
       const filterResult = filterRoast(variant.text);
       if (filterResult.passed) {
         passed.push(variant);
@@ -111,40 +119,149 @@ export class RoastEngine {
     }
 
     if (passed.length === 0) {
-      throw new Error(`All ${String(data.variants.length)} variants filtered out for "${targetName}"`);
+      throw new Error(`All ${String(allVariants.length)} variants filtered out for "${targetName}"`);
     }
 
-    // Rank by score descending
+    // Rank by score descending — best variant across all strategies wins
     passed.sort((a, b) => b.score - a.score);
 
-    const bestIndex = data.variants.indexOf(passed[0]!);
     const draft: RoastDraft = {
       target: { name: targetName, type: 'project' },
       variants: passed,
-      bestIndex: bestIndex >= 0 ? 0 : 0,
-      researchNotes: data.researchNotes,
-      factCheckPassed: data.factCheckPassed,
+      bestIndex: 0,
+      researchNotes,
+      factCheckPassed,
     };
 
     this.logger.info(
       {
         taskId,
         target: targetName,
-        total: data.variants.length,
+        totalVariants: allVariants.length,
         passed: passed.length,
         filtered: filtered.length,
         bestScore: passed[0]?.score,
-        durationMs: result.durationMs,
-        provider: result.provider,
+        durationMs: strategyResults.durationMs,
+        provider: strategyResults.provider,
+        strategies: strategyResults.strategiesSucceeded,
       },
-      'Roast generation complete',
+      'Multi-strategy roast generation complete',
     );
 
     return {
       draft,
       filtered,
-      durationMs: result.durationMs,
-      provider: result.provider,
+      durationMs: strategyResults.durationMs,
+      provider: strategyResults.provider,
+    };
+  }
+
+  private buildStrategyPrompt(
+    strategy: PromptStrategy,
+    targetName: string,
+    variantCount: number,
+    research: boolean,
+    memory?: CreativeMemory,
+    imagePaths?: string[],
+  ): string {
+    if (research) {
+      switch (strategy) {
+        case 'rubric': return buildRoastPrompt(targetName, this.character, variantCount, memory, imagePaths);
+        case 'persona': return buildPersonaPrompt(targetName, this.character, variantCount, memory, imagePaths);
+        case 'adversarial': return buildAdversarialPrompt(targetName, this.character, variantCount, memory, imagePaths);
+      }
+    }
+    switch (strategy) {
+      case 'rubric': return buildNoResearchPrompt(targetName, this.character, variantCount, memory, imagePaths);
+      case 'persona': return buildNoResearchPersonaPrompt(targetName, this.character, variantCount, memory, imagePaths);
+      case 'adversarial': return buildNoResearchAdversarialPrompt(targetName, this.character, variantCount, memory, imagePaths);
+    }
+  }
+
+  private async runMultiStrategy(
+    taskId: string,
+    targetName: string,
+    profile: TaskProfile,
+    variantCount: number,
+    memory?: CreativeMemory,
+    imagePaths?: string[],
+  ): Promise<{
+    variants: Array<{ text: string; score: number; angle: string }>;
+    researchNotes: string | null;
+    factCheckPassed: boolean;
+    durationMs: number;
+    provider: string;
+    strategiesSucceeded: PromptStrategy[];
+    error?: unknown;
+  }> {
+    const strategyPrompts = PROMPT_STRATEGIES.map((strategy) => ({
+      strategy,
+      prompt: this.buildStrategyPrompt(strategy, targetName, variantCount, true, memory, imagePaths),
+    }));
+
+    this.logger.info(
+      { taskId, strategies: PROMPT_STRATEGIES, variantsPerStrategy: variantCount },
+      'Running multi-strategy generation',
+    );
+
+    const results = await Promise.allSettled(
+      strategyPrompts.map(({ strategy, prompt }) =>
+        this.provider.run<AgentRoastOutput>(`${taskId}-${strategy}`, {
+          prompt,
+          profile,
+          requiresResearch: true,
+          imagePaths,
+        }),
+      ),
+    );
+
+    const allVariants: Array<{ text: string; score: number; angle: string }> = [];
+    let researchNotes: string | null = null;
+    let factCheckPassed = true;
+    let maxDurationMs = 0;
+    let lastProvider = '';
+    const strategiesSucceeded: PromptStrategy[] = [];
+    let firstError: unknown;
+
+    for (let i = 0; i < results.length; i++) {
+      const result = results[i]!;
+      const strategy = strategyPrompts[i]!.strategy;
+
+      if (result.status === 'fulfilled') {
+        try {
+          const data = result.value.data;
+          this.validateOutput(data, `${taskId}-${strategy}`);
+          allVariants.push(...data.variants);
+          if (data.researchNotes && !researchNotes) researchNotes = data.researchNotes;
+          if (!data.factCheckPassed) factCheckPassed = false;
+          lastProvider = result.value.provider;
+          maxDurationMs = Math.max(maxDurationMs, result.value.durationMs);
+          strategiesSucceeded.push(strategy);
+          this.logger.info(
+            { taskId, strategy, variants: data.variants.length },
+            'Prompt strategy completed',
+          );
+        } catch (validationError) {
+          if (!firstError) firstError = validationError;
+          this.logger.warn(
+            { taskId, strategy, err: validationError },
+            'Strategy output validation failed',
+          );
+        }
+      } else {
+        if (!firstError) firstError = result.reason;
+        this.logger.warn({ taskId, strategy, err: result.reason }, 'Prompt strategy failed');
+      }
+    }
+
+    return {
+      variants: allVariants,
+      researchNotes,
+      factCheckPassed,
+      durationMs: maxDurationMs,
+      provider: lastProvider,
+      strategiesSucceeded,
+      error: firstError,
     };
   }
 
