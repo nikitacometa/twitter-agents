@@ -110,11 +110,23 @@ function buildContextLine(targetName: string, memory?: CreativeMemory): string {
   return `\n## CONTEXT\nYou've roasted "${targetName}" ${String(history.roastCount)} times before. Angles used: ${angleSummary}.\n`;
 }
 
+function buildVisualContextSection(imagePaths?: string[]): string {
+  if (!imagePaths?.length) return '';
+
+  const fileList = imagePaths.map((p) => `  - ${p}`).join('\n');
+  return `\n## VISUAL CONTEXT
+The target tweet includes images. Read each file below for additional roast material (charts, screenshots, memes — all fair game):
+${fileList}
+Use the Read tool to view these images. Reference what you see in your roast if it adds bite.
+`;
+}
+
 export function buildRoastPrompt(
   targetName: string,
   character: CharacterConfig,
   variantCount: number = 3,
   memory?: CreativeMemory,
+  imagePaths?: string[],
 ): string {
   const examples = buildExamples(character, memory);
   const contextLine = buildContextLine(targetName, memory);
@@ -125,6 +137,7 @@ export function buildRoastPrompt(
     ? `\n## LEARNED STYLE OBSERVATIONS\n${memory.styleSupplement}\n`
     : '';
   const techniquesLine = buildTechniquesSection(memory?.learnedTechniques ?? []);
+  const visualContext = buildVisualContextSection(imagePaths);
 
   return `${character.systemPrompt}
 
@@ -133,14 +146,14 @@ ${character.originStory}
 
 ## FEW-SHOT EXAMPLES (match this quality and voice)
 ${examples}
-${antiPatterns}${styleLine}${techniquesLine}${contextLine}
+${antiPatterns}${styleLine}${techniquesLine}${contextLine}${visualContext}
 ## TASK: Research and roast "${targetName}"
 
 ### STEP 1 — RESEARCH
 ${formatResearchInstructions(character)}
 
 Use WebSearch or perplexity_ask to find current data about "${targetName}".
-Write down key findings before generating.
+Write down key findings before generating.${imagePaths?.length ? '\nAlso Read the attached images — they are part of the tweet being roasted.' : ''}
 
 ### STEP 2 — GENERATE ${String(variantCount)} VARIANTS
 Each variant MUST:
@@ -171,6 +184,7 @@ export function buildNoResearchPrompt(
   character: CharacterConfig,
   variantCount: number = 3,
   memory?: CreativeMemory,
+  imagePaths?: string[],
 ): string {
   const examples = buildExamples(character, memory);
   const angles = pickAngles(variantCount, memory?.angleWeights);
@@ -180,6 +194,7 @@ export function buildNoResearchPrompt(
     ? `\n## LEARNED STYLE OBSERVATIONS\n${memory.styleSupplement}\n`
     : '';
   const techniquesLine = buildTechniquesSection(memory?.learnedTechniques ?? []);
+  const visualContext = buildVisualContextSection(imagePaths);
 
   return `${character.systemPrompt}
 
@@ -188,7 +203,7 @@ ${character.originStory}
 
 ## FEW-SHOT EXAMPLES (match this quality and voice)
 ${examples}
-${antiPatterns}${styleLine}${techniquesLine}
+${antiPatterns}${styleLine}${techniquesLine}${visualContext}
 ## TASK: Roast "${targetName}" using your existing knowledge
 
 Generate ${String(variantCount)} roast variants WITHOUT web research. Use general knowledge only.

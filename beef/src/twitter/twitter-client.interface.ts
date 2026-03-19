@@ -15,6 +15,8 @@ export interface MentionData {
   parentTweetText?: string;
   /** Author username of the parent tweet. */
   parentAuthorName?: string;
+  /** Image URLs attached to the parent tweet. */
+  parentMediaUrls?: string[];
 }
 
 export interface ITwitterClient {

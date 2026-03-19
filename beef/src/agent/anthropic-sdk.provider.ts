@@ -1,3 +1,4 @@
+import { readFile } from 'node:fs/promises';
 import Anthropic from '@anthropic-ai/sdk';
 import type { Logger } from 'pino';
 import type { LlmLogRepository } from '@storage/repositories/llm-log.repository.js';
@@ -35,10 +36,11 @@ export class AnthropicSDKProvider implements LLMProvider {
     const start = Date.now();
 
     try {
+      const content = await this.buildMessageContent(task);
       const response = await this.client.messages.create({
         model: MODEL,
         max_tokens: DEFAULT_MAX_TOKENS,
-        messages: [{ role: 'user', content: task.prompt }],
+        messages: [{ role: 'user', content }],
       });
 
       const rawText = response.content
@@ -96,6 +98,35 @@ export class AnthropicSDKProvider implements LLMProvider {
       );
       return false;
     }
+  }
+
+  private async buildMessageContent(
+    task: AgentTask,
+  ): Promise<string | Anthropic.MessageCreateParams['messages'][0]['content']> {
+    if (!task.imagePaths?.length) return task.prompt;
+
+    const blocks: Anthropic.ContentBlockParam[] = [
+      { type: 'text', text: task.prompt },
+    ];
+
+    for (const imgPath of task.imagePaths) {
+      try {
+        const data = await readFile(imgPath);
+        const ext = imgPath.endsWith('.png') ? 'png' : 'jpeg';
+        blocks.push({
+          type: 'image',
+          source: {
+            type: 'base64',
+            media_type: `image/${ext}`,
+            data: data.toString('base64'),
+          },
+        });
+      } catch (error) {
+        this.logger.debug({ err: error, imgPath }, 'Failed to read image for SDK — skipping');
+      }
+    }
+
+    return blocks;
   }
 
   shutdown(): void {

@@ -105,9 +105,10 @@ export class TwitterClient implements ITwitterClient {
     try {
       const me = await this.client.v2.me();
       const params: Record<string, string> = {
-        'tweet.fields': 'author_id,created_at,referenced_tweets',
+        'tweet.fields': 'author_id,created_at,referenced_tweets,attachments',
         'user.fields': 'username',
-        expansions: 'author_id,referenced_tweets.id,referenced_tweets.id.author_id',
+        'media.fields': 'url,type,preview_image_url',
+        expansions: 'author_id,referenced_tweets.id,referenced_tweets.id.author_id,attachments.media_keys',
       };
       if (sinceId) params['since_id'] = sinceId;
 
@@ -120,11 +121,25 @@ export class TwitterClient implements ITwitterClient {
         }
       }
 
+      // Index media by key for image lookup
+      const mediaByKey = new Map<string, string>();
+      if (mentions.includes?.media) {
+        for (const m of mentions.includes.media) {
+          if (m.type === 'photo' && m.url) {
+            mediaByKey.set(m.media_key, m.url);
+          }
+        }
+      }
+
       // Index referenced tweets for parent tweet lookup
-      const refTweets = new Map<string, { text: string; author_id?: string }>();
+      const refTweets = new Map<string, { text: string; author_id?: string; mediaKeys?: string[] }>();
       if (mentions.includes?.tweets) {
         for (const t of mentions.includes.tweets) {
-          refTweets.set(t.id, { text: t.text, author_id: t.author_id });
+          refTweets.set(t.id, {
+            text: t.text,
+            author_id: t.author_id,
+            mediaKeys: t.attachments?.media_keys,
+          });
         }
       }
 
@@ -149,6 +164,15 @@ export class TwitterClient implements ITwitterClient {
             mention.parentTweetText = parent.text;
             if (parent.author_id) {
               mention.parentAuthorName = users.get(parent.author_id);
+            }
+            // Resolve media keys to image URLs
+            if (parent.mediaKeys) {
+              const imageUrls = parent.mediaKeys
+                .map((key) => mediaByKey.get(key))
+                .filter((url): url is string => url !== undefined);
+              if (imageUrls.length > 0) {
+                mention.parentMediaUrls = imageUrls;
+              }
             }
           }
         }

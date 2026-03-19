@@ -17,6 +17,8 @@ export interface AgentTask {
   timeoutMs?: number;
   allowedTools?: string[];
   requiresResearch: boolean;
+  /** Local file paths to images for multimodal context. */
+  imagePaths?: string[];
 }
 
 export interface AgentResult<T = unknown> {

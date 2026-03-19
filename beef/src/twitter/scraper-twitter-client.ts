@@ -236,14 +236,18 @@ export class ScraperTwitterClient implements ITwitterClient {
       throw new Error(`notifications/mentions returned ${resp.status}`);
     }
 
+    interface NotifTweet {
+      id_str: string;
+      user_id_str: string;
+      full_text?: string;
+      in_reply_to_status_id_str?: string;
+      entities?: { media?: Array<{ media_url_https?: string; type?: string }> };
+      extended_entities?: { media?: Array<{ media_url_https?: string; type?: string }> };
+    }
+
     const data = (await resp.json()) as {
       globalObjects?: {
-        tweets?: Record<string, {
-          id_str: string;
-          user_id_str: string;
-          full_text?: string;
-          in_reply_to_status_id_str?: string;
-        }>;
+        tweets?: Record<string, NotifTweet>;
         users?: Record<string, { id_str: string; screen_name: string }>;
       };
     };
@@ -279,6 +283,16 @@ export class ScraperTwitterClient implements ITwitterClient {
           const parentUser = users[parentTweet.user_id_str];
           if (parentUser) {
             mention.parentAuthorName = parentUser.screen_name;
+          }
+          // Extract image URLs from parent tweet
+          const media = parentTweet.extended_entities?.media ?? parentTweet.entities?.media;
+          if (media) {
+            const imageUrls = media
+              .filter((m) => m.type === 'photo' && m.media_url_https)
+              .map((m) => m.media_url_https!);
+            if (imageUrls.length > 0) {
+              mention.parentMediaUrls = imageUrls;
+            }
           }
         }
       }

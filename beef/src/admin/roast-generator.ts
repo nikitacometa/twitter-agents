@@ -105,6 +105,7 @@ export async function generateRoasts(
   configRepo?: ConfigRepository,
   exampleRepo?: ExternalExampleRepository,
   patternRepo?: RoastPatternRepository,
+  imagePaths?: string[],
 ): Promise<AgentRoastOutput> {
   const engine = getEngine(provider, logger);
 
@@ -126,7 +127,7 @@ export async function generateRoasts(
     );
   }
 
-  const result = await engine.generateRoast(targetName, 'telegram', memory, profile, variantCount);
+  const result = await engine.generateRoast(targetName, 'telegram', memory, profile, variantCount, imagePaths);
 
   return {
     variants: result.draft.variants,

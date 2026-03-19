@@ -52,13 +52,17 @@ export class RoastEngine {
     memory?: CreativeMemory,
     profile?: TaskProfile,
     variantCountOverride?: number,
+    imagePaths?: string[],
   ): Promise<RoastResult> {
     const taskId = `roast-${source}-${Date.now()}`;
     const effectiveProfile = profile ?? 'roast-research';
     const effectiveVariantCount = variantCountOverride ?? this.variantCount;
-    this.logger.info({ taskId, target: targetName, profile: effectiveProfile }, 'Starting roast generation');
+    this.logger.info(
+      { taskId, target: targetName, profile: effectiveProfile, images: imagePaths?.length ?? 0 },
+      'Starting roast generation',
+    );
 
-    const prompt = buildRoastPrompt(targetName, this.character, effectiveVariantCount, memory);
+    const prompt = buildRoastPrompt(targetName, this.character, effectiveVariantCount, memory, imagePaths);
 
     let result;
     try {
@@ -66,6 +70,7 @@ export class RoastEngine {
         prompt,
         profile: effectiveProfile,
         requiresResearch: true,
+        imagePaths,
       });
     } catch (error) {
       // roast-power: no fallback — surface the error directly
@@ -76,11 +81,12 @@ export class RoastEngine {
         { taskId, err: error },
         'Research-mode generation failed, trying no-research fallback',
       );
-      const fallbackPrompt = buildNoResearchPrompt(targetName, this.character, effectiveVariantCount, memory);
+      const fallbackPrompt = buildNoResearchPrompt(targetName, this.character, effectiveVariantCount, memory, imagePaths);
       result = await this.provider.run<AgentRoastOutput>(taskId, {
         prompt: fallbackPrompt,
         profile: 'roast-quick',
         requiresResearch: false,
+        imagePaths,
       });
     }
 

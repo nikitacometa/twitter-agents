@@ -8,6 +8,7 @@ import type { ITwitterClient } from '@twitter/twitter-client.interface.js';
 import { generateRoasts } from '@admin/roast-generator.js';
 import { getErrorMessage } from '@common/utils/error.util.js';
 import { isQuietHour } from '@scheduler/scheduler.js';
+import { downloadTweetMedia } from '@common/utils/media-downloader.js';
 
 export class QueueManager {
   private readonly queueRepo: QueueRepository;
@@ -91,8 +92,23 @@ export class QueueManager {
 
     this.logger.info({ queueId: item.id, target: item.targetName, source: item.source }, 'Processing queue item');
 
+    const mediaUrls = extractMediaUrls(item.context);
+    let downloaded: { paths: string[]; cleanup: () => Promise<void> } | undefined;
+
     try {
-      const output = await generateRoasts(item.targetName, this.provider, this.logger, this.feedbackRepo);
+      if (mediaUrls.length > 0) {
+        downloaded = await downloadTweetMedia(mediaUrls, this.logger);
+        this.logger.info(
+          { queueId: item.id, requested: mediaUrls.length, downloaded: downloaded.paths.length },
+          'Tweet media downloaded for roast',
+        );
+      }
+
+      const imagePaths = downloaded?.paths.length ? downloaded.paths : undefined;
+      const output = await generateRoasts(
+        item.targetName, this.provider, this.logger, this.feedbackRepo,
+        undefined, undefined, undefined, undefined, undefined, imagePaths,
+      );
 
       if (output.variants.length === 0) {
         this.queueRepo.fail(item.id, 'No variants generated');
@@ -136,6 +152,12 @@ export class QueueManager {
       this.logger.error({ err: error, queueId: item.id, target: item.targetName }, 'Queue processing failed');
       this.queueRepo.fail(item.id, msg.slice(0, 500));
       return true;
+    } finally {
+      if (downloaded) {
+        await downloaded.cleanup().catch((err) => {
+          this.logger.debug({ err }, 'Failed to cleanup downloaded media');
+        });
+      }
     }
   }
 
@@ -148,4 +170,11 @@ function extractReplyToId(context: string | null): string | undefined {
   if (!context) return undefined;
   const match = context.match(/^reply_to:(\d+)/);
   return match?.[1];
+}
+
+function extractMediaUrls(context: string | null): string[] {
+  if (!context) return [];
+  const match = context.match(/\|media:(.+?)(?:\||$)/);
+  if (!match?.[1]) return [];
+  return match[1].split(',').filter((url) => url.startsWith('http'));
 }

@@ -46,7 +46,12 @@ export class ClaudeCodeProvider implements LLMProvider {
 
     const start = Date.now();
     const preset = getPreset(task.profile ?? 'roast-research');
-    const tools = task.allowedTools?.join(',') ?? preset.tools.join(',');
+    const toolSet = task.allowedTools ?? [...preset.tools];
+    // Add Read tool when images are provided (Claude Code reads images via Read)
+    if (task.imagePaths?.length && !toolSet.includes('Read')) {
+      toolSet.push('Read');
+    }
+    const tools = toolSet.join(',');
     const maxTurns = task.maxTurns ?? preset.maxTurns;
     const timeout = task.timeoutMs ?? preset.timeoutMs ?? DEFAULT_TIMEOUT_MS;
 

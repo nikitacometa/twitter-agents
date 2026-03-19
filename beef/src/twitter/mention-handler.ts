@@ -113,15 +113,24 @@ export class MentionHandler {
   private enqueueParentTweetRoast(m: MentionData): void {
     const parentAuthor = m.parentAuthorName ?? 'anon';
     const tweetSnippet = m.parentTweetText!.slice(0, 120);
+    const mediaPart = m.parentMediaUrls?.length
+      ? `|media:${m.parentMediaUrls.join(',')}`
+      : '';
     this.queueRepo.enqueue({
       targetName: `tweet by @${parentAuthor}: "${tweetSnippet}"`,
       targetType: 'project',
       source: 'mention',
       priority: 3,
-      context: `reply_to:${m.tweetId}|by:@${m.authorName}|parent:${m.inReplyToTweetId!}`,
+      context: `reply_to:${m.tweetId}|by:@${m.authorName}|parent:${m.inReplyToTweetId!}${mediaPart}`,
     });
     this.logger.info(
-      { tweetId: m.tweetId, parentTweetId: m.inReplyToTweetId, parentAuthor, author: m.authorName },
+      {
+        tweetId: m.tweetId,
+        parentTweetId: m.inReplyToTweetId,
+        parentAuthor,
+        author: m.authorName,
+        mediaCount: m.parentMediaUrls?.length ?? 0,
+      },
       'Parent tweet roast queued from mention',
     );
   }
