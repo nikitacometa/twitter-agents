@@ -24,6 +24,7 @@ import { LlmLogRepository } from '@storage/repositories/llm-log.repository.js';
 import { ClaudeCodeProvider } from '@agent/claude-code.provider.js';
 import { ProviderManager } from '@agent/provider-manager.js';
 import { SelfEvaluator } from './self-evaluator.js';
+import { BatchGenerator } from './batch-generator.js';
 import { createFarmLogger } from './logger.js';
 import type { FarmStats } from './types.js';
 
@@ -128,6 +129,99 @@ program
     const { db, farmTarget, farmAttempt, stockpile } = createRepos(opts.db);
     const stats = buildStats(farmTarget, farmAttempt, stockpile);
     printStats(stats);
+    db.close();
+  });
+
+program
+  .command('generate')
+  .description('Generate roast variants for targets')
+  .option('--db <path>', 'Database path', DEFAULT_DB_PATH)
+  .option('--targets <names>', 'Comma-separated target names')
+  .option('--from-discovered', 'Use pending targets from farm_targets')
+  .option('--limit <n>', 'Max targets (with --from-discovered)', '5')
+  .option('--variants <n>', 'Variants per target', '3')
+  .option('--mutations <n>', 'Mutations per target', '2')
+  .option('--concurrency <n>', 'Parallel generation tasks', '2')
+  .action(async (opts: {
+    db: string;
+    targets?: string;
+    fromDiscovered?: boolean;
+    limit: string;
+    variants: string;
+    mutations: string;
+    concurrency: string;
+  }) => {
+    const { db, farmTarget, farmAttempt, logger } = createRepos(opts.db);
+    const provider = createProviderFrom(db, logger);
+
+    let targets: Array<{ name: string; type: string }> = [];
+
+    if (opts.targets) {
+      targets = opts.targets.split(',').map((name) => ({
+        name: name.trim(),
+        type: 'project',
+      }));
+    } else if (opts.fromDiscovered) {
+      const limit = parseInt(opts.limit, 10);
+      const pending = farmTarget.getPending(limit);
+      targets = pending.map((t) => ({ name: t.name, type: t.type }));
+
+      for (const t of pending) {
+        farmTarget.updateStatus(t.id, 'generating');
+      }
+    }
+
+    if (targets.length === 0) {
+      console.log('No targets specified. Use --targets or --from-discovered.');
+      db.close();
+      return;
+    }
+
+    const variantsPerTarget = parseInt(opts.variants, 10);
+    const mutationCount = parseInt(opts.mutations, 10);
+    const concurrency = parseInt(opts.concurrency, 10);
+
+    console.log(`Generating ${String(variantsPerTarget)} variants for ${String(targets.length)} targets...\n`);
+
+    const generator = new BatchGenerator({
+      provider,
+      farmAttempt,
+      logger,
+      variantsPerTarget,
+      mutationCount,
+    });
+
+    const results = await generator.generateBatch(targets, concurrency);
+
+    let totalAttempts = 0;
+    let totalFiltered = 0;
+
+    for (const result of results) {
+      totalAttempts += result.attempts;
+      totalFiltered += result.filtered;
+
+      const mutationLabel = result.mutations.length > 0
+        ? ` [${result.mutations.map((m) => m.id).join(', ')}]`
+        : '';
+
+      if (result.errors.length > 0) {
+        console.log(`  ✗ ${result.targetName} (${result.strategy}${mutationLabel}): ${result.errors[0]}`);
+      } else {
+        console.log(`  ✓ ${result.targetName} (${result.strategy}${mutationLabel}): ${String(result.attempts)} stored, ${String(result.filtered)} filtered`);
+      }
+    }
+
+    // Mark discovered targets as completed
+    if (opts.fromDiscovered) {
+      const pending = farmTarget.getPending(0);
+      for (const t of pending) {
+        if (t.status === 'generating') {
+          farmTarget.updateStatus(t.id, 'completed');
+        }
+      }
+    }
+
+    console.log(`\nDone: ${String(totalAttempts)} attempts stored, ${String(totalFiltered)} filtered out`);
     db.close();
   });
 

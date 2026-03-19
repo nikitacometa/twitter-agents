@@ -117,6 +117,13 @@ const DEFAULT_PRESETS: Record<TaskProfile, TaskPreset> = {
     maxTurns: 1,
     timeoutMs: 60_000,
   },
+  'farm-generate': {
+    model: 'opus',
+    effort: 'high',
+    tools: RESEARCH_TOOLS,
+    maxTurns: 15,
+    timeoutMs: 600_000,
+  },
 };
 
 // --- Environment for all CLI subprocesses ---
