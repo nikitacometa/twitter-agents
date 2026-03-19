@@ -192,7 +192,7 @@ export class MentionHandler {
   }
 }
 
-function classifyMention(text: string): MentionRequestType {
+export function classifyMention(text: string): MentionRequestType {
   const lower = text.toLowerCase();
 
   if (ROAST_KEYWORDS.some((kw) => lower.includes(kw))) {
