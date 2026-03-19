@@ -30,6 +30,7 @@ const envSchema = z
     // Bot config
     BOT_NAME: z.string().default('0xBeef'),
     ROASTS_PER_DAY: z.coerce.number().int().min(1).max(20).default(10),
+    MENTION_REPLIES_PER_DAY: z.coerce.number().int().min(1).max(100).default(20),
     MENTION_POLL_INTERVAL_MS: z.coerce.number().int().min(60_000).default(600_000),
     DRY_RUN: z
       .enum(['true', 'false'])

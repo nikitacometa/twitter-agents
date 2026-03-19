@@ -115,6 +115,7 @@ if (provider) {
     twitter,
     logger,
     dailyLimit: config.ROASTS_PER_DAY,
+    mentionReplyLimit: config.MENTION_REPLIES_PER_DAY,
     enableAutonomousPosting: config.ENABLE_AUTONOMOUS_POSTING,
     enableMentionReplies: config.ENABLE_MENTION_REPLIES,
   });

@@ -271,6 +271,11 @@ export class ScraperTwitterClient implements ITwitterClient {
       },
     );
 
+    if (resp.status === 429) {
+      const retryAfter = resp.headers.get('retry-after');
+      throw new NonRetryableError(`Rate limited (429). Retry-After: ${retryAfter ?? 'unknown'}`);
+    }
+
     if (!resp.ok) {
       const body = await resp.text();
       throw new Error(`CreateTweet returned ${String(resp.status)}: ${body.slice(0, 500)}`);
@@ -389,6 +394,10 @@ export class ScraperTwitterClient implements ITwitterClient {
         },
       },
     );
+
+    if (resp.status === 429) {
+      throw new NonRetryableError(`Notifications rate limited (429)`);
+    }
 
     if (!resp.ok) {
       throw new Error(`notifications/all returned ${resp.status}`);

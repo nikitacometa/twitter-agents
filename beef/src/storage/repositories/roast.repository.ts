@@ -39,6 +39,7 @@ export class RoastRepository {
   private readonly updateEngagementStmt: Database.Statement;
   private readonly updateStatusStmt: Database.Statement;
   private readonly searchStmt: Database.Statement;
+  private readonly findRecentByTargetStmt: Database.Statement;
 
   constructor(db: Database.Database) {
     this.insertStmt = db.prepare(`
@@ -74,6 +75,13 @@ export class RoastRepository {
       WHERE roasts_fts MATCH ?
       ORDER BY r.created_at DESC
       LIMIT ?
+    `);
+
+    this.findRecentByTargetStmt = db.prepare(`
+      SELECT id, tweet_id, status FROM roasts
+      WHERE target_name = ? AND source = ?
+      AND created_at >= datetime('now', '-1 hour')
+      ORDER BY created_at DESC LIMIT 1
     `);
   }
 
@@ -125,6 +133,15 @@ export class RoastRepository {
 
   searchByText(query: string, limit = 10): PostedRoast[] {
     return (this.searchStmt.all(query, limit) as RoastRow[]).map(mapRow);
+  }
+
+  findRecentByTarget(
+    targetName: string,
+    source: string,
+  ): { id: number; tweetId: string | null; status: string } | undefined {
+    return this.findRecentByTargetStmt.get(targetName, source) as
+      | { id: number; tweetId: string | null; status: string }
+      | undefined;
   }
 }
 

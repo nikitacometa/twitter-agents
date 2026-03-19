@@ -27,6 +27,7 @@ export class QueueManager {
   private readonly twitter: ITwitterClient;
   private readonly logger: Logger;
   private readonly dailyLimit: number;
+  private readonly mentionReplyLimit: number;
   private readonly enableAutonomousPosting: boolean;
   private readonly enableMentionReplies: boolean;
 
@@ -39,6 +40,7 @@ export class QueueManager {
     twitter: ITwitterClient;
     logger: Logger;
     dailyLimit: number;
+    mentionReplyLimit?: number;
     enableAutonomousPosting: boolean;
     enableMentionReplies: boolean;
   }) {
@@ -50,6 +52,7 @@ export class QueueManager {
     this.twitter = opts.twitter;
     this.logger = opts.logger;
     this.dailyLimit = opts.dailyLimit;
+    this.mentionReplyLimit = opts.mentionReplyLimit ?? 20;
     this.enableAutonomousPosting = opts.enableAutonomousPosting;
     this.enableMentionReplies = opts.enableMentionReplies;
   }
@@ -106,6 +109,17 @@ export class QueueManager {
 
     this.logger.info({ queueId: item.id, target: item.targetName, source: item.source }, 'Processing queue item');
 
+    // M3.4: Idempotency — skip if a roast for this target was already posted recently (crash recovery)
+    const existing = this.roastRepo.findRecentByTarget(item.targetName, item.source);
+    if (existing?.tweetId) {
+      this.logger.warn(
+        { queueId: item.id, existingRoastId: existing.id, tweetId: existing.tweetId },
+        'Skipping — roast already posted for this target (idempotency)',
+      );
+      this.queueRepo.complete(item.id);
+      return { dequeued: true, posted: true, tweetId: existing.tweetId, target: item.targetName };
+    }
+
     // Check posting mode before generating roast (force bypasses for Telegram /trigger)
     const replyToId = extractReplyToId(item.context);
     const isReply = !!replyToId;
@@ -120,6 +134,19 @@ export class QueueManager {
         this.logger.info({ queueId: item.id, target: item.targetName }, 'Autonomous post skipped — ENABLE_AUTONOMOUS_POSTING=false');
         this.queueRepo.fail(item.id, 'Autonomous posting disabled');
         return { dequeued: true, posted: false, target: item.targetName, error: 'Autonomous posting disabled' };
+      }
+
+      // M3.3: Daily limit for mention replies (separate from autonomous limit)
+      if (isReply) {
+        const mentionToday = this.roastRepo.getTodayCount('mention');
+        if (mentionToday >= this.mentionReplyLimit) {
+          this.logger.info(
+            { mentionToday, limit: this.mentionReplyLimit, queueId: item.id },
+            'Mention reply daily limit reached',
+          );
+          this.queueRepo.fail(item.id, 'Daily mention reply limit reached');
+          return { dequeued: true, posted: false, target: item.targetName, error: 'Mention reply limit reached' };
+        }
       }
     }
 

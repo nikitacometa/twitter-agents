@@ -2,7 +2,7 @@ import { TwitterApi } from 'twitter-api-v2';
 import type { Logger } from 'pino';
 import type { TweetMetrics } from '@common/types/index.js';
 import type { ITwitterClient, PostResult, MentionData } from './twitter-client.interface.js';
-import { retryWithBackoff } from '@common/utils/error.util.js';
+import { retryWithBackoff, NonRetryableError } from '@common/utils/error.util.js';
 
 export interface TwitterCredentials {
   apiKey: string;
@@ -12,6 +12,16 @@ export interface TwitterCredentials {
 }
 
 export { type PostResult } from './twitter-client.interface.js';
+
+function rethrowIfRateLimit(error: unknown): void {
+  if (
+    error instanceof Error &&
+    'code' in error &&
+    (error as Error & { code: number }).code === 429
+  ) {
+    throw new NonRetryableError('Twitter API rate limited (429)');
+  }
+}
 
 export class TwitterClient implements ITwitterClient {
   private readonly client: TwitterApi | null;
@@ -63,9 +73,14 @@ export class TwitterClient implements ITwitterClient {
 
     return retryWithBackoff(
       async () => {
-        const result = await this.client!.v2.tweet(text);
-        this.logger.info({ tweetId: result.data.id, charCount: text.length }, 'Tweet posted');
-        return { tweetId: result.data.id };
+        try {
+          const result = await this.client!.v2.tweet(text);
+          this.logger.info({ tweetId: result.data.id, charCount: text.length }, 'Tweet posted');
+          return { tweetId: result.data.id };
+        } catch (error) {
+          rethrowIfRateLimit(error);
+          throw error;
+        }
       },
       { maxRetries: 2, baseDelayMs: 2000, label: 'postTweet' },
     );
@@ -89,9 +104,14 @@ export class TwitterClient implements ITwitterClient {
 
     return retryWithBackoff(
       async () => {
-        const result = await this.client!.v2.reply(text, replyToId);
-        this.logger.info({ tweetId: result.data.id, replyToId }, 'Reply posted');
-        return { tweetId: result.data.id };
+        try {
+          const result = await this.client!.v2.reply(text, replyToId);
+          this.logger.info({ tweetId: result.data.id, replyToId }, 'Reply posted');
+          return { tweetId: result.data.id };
+        } catch (error) {
+          rethrowIfRateLimit(error);
+          throw error;
+        }
       },
       { maxRetries: 2, baseDelayMs: 2000, label: 'replyToTweet' },
     );
