@@ -9,7 +9,10 @@
  *   pnpm farm discover --limit 20
  *   pnpm farm generate --targets "Uniswap,Aave"
  *   pnpm farm evaluate --threshold 4.0
- *   pnpm farm export --top 50
+ *   pnpm farm export --top 50 --output data/landing.json
+ *   pnpm farm sync --export data/stockpile.ndjson
+ *   pnpm farm sync --import data/stockpile.ndjson
+ *   pnpm farm pipeline --discover-limit 10 --generate-limit 5
  *   pnpm farm prune --attempts-ttl 30
  */
 
@@ -27,6 +30,7 @@ import { SelfEvaluator } from './self-evaluator.js';
 import { BatchGenerator } from './batch-generator.js';
 import { TargetDiscoverer } from './target-discoverer.js';
 import { createFarmLogger } from './logger.js';
+import { exportNdjson, importNdjson, exportLandingJson } from './sync.js';
 import type { FarmStats } from './types.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -378,6 +382,230 @@ program
     console.log(`Pruned ${String(prunedAttempts)} old attempts (>${String(ttl)} days)`);
     console.log(`Expired ${String(prunedExpired)} data-dependent stockpile roasts`);
     db.close();
+  });
+
+program
+  .command('export')
+  .description('Export stockpile for landing page (JSON)')
+  .option('--db <path>', 'Database path', DEFAULT_DB_PATH)
+  .option('--top <n>', 'Max roasts to export', '50')
+  .option('--output <path>', 'Output file path')
+  .action(async (opts: { db: string; top: string; output?: string }) => {
+    const { db, stockpile } = createRepos(opts.db);
+    try {
+      const limit = parseInt(opts.top, 10);
+      const data = exportLandingJson(stockpile, limit);
+
+      if (opts.output) {
+        const { writeFile } = await import('node:fs/promises');
+        await writeFile(opts.output, JSON.stringify(data, null, 2), 'utf-8');
+        console.log(`Exported ${String(data.total)} roasts to ${opts.output}`);
+      } else {
+        console.log(JSON.stringify(data, null, 2));
+      }
+    } finally {
+      db.close();
+    }
+  });
+
+program
+  .command('sync')
+  .description('Sync stockpile via NDJSON (export/import)')
+  .option('--db <path>', 'Database path', DEFAULT_DB_PATH)
+  .option('--export <path>', 'Export stockpile to NDJSON file')
+  .option('--import <path>', 'Import stockpile from NDJSON file')
+  .option('--limit <n>', 'Max rows to export', '1000')
+  .action(async (opts: { db: string; export?: string; import?: string; limit: string }) => {
+    const { db, stockpile, logger } = createRepos(opts.db);
+    try {
+      if (!opts.export && !opts.import) {
+        console.log('Specify --export <path> or --import <path>.');
+        return;
+      }
+
+      if (opts.export) {
+        const limit = parseInt(opts.limit, 10);
+        const count = await exportNdjson(stockpile, opts.export, limit, logger);
+        console.log(`Exported ${String(count)} roasts to ${opts.export}`);
+      }
+
+      if (opts.import) {
+        const result = await importNdjson(stockpile, opts.import, logger);
+        console.log(`Imported ${String(result.imported)}, skipped ${String(result.skipped)} duplicates, ${String(result.errors)} errors`);
+      }
+    } finally {
+      db.close();
+    }
+  });
+
+program
+  .command('pipeline')
+  .description('Run full pipeline: discover → generate → evaluate')
+  .option('--db <path>', 'Database path', DEFAULT_DB_PATH)
+  .option('--discover-limit <n>', 'Max targets to discover', '10')
+  .option('--discover-source <src>', 'Source: dexscreener, coingecko, or all', 'all')
+  .option('--generate-limit <n>', 'Max targets to generate for', '5')
+  .option('--variants <n>', 'Variants per target', '3')
+  .option('--mutations <n>', 'Mutations per target', '2')
+  .option('--eval-limit <n>', 'Max attempts to evaluate', '20')
+  .option('--threshold <score>', 'Minimum score for stockpile', '4.0')
+  .option('--concurrency <n>', 'Parallel tasks', '2')
+  .action(async (opts: {
+    db: string;
+    discoverLimit: string;
+    discoverSource: string;
+    generateLimit: string;
+    variants: string;
+    mutations: string;
+    evalLimit: string;
+    threshold: string;
+    concurrency: string;
+  }) => {
+    const { db, farmTarget, farmAttempt, stockpile, logger } = createRepos(opts.db);
+    try {
+      const provider = createProviderFrom(db, logger);
+      const concurrency = parseInt(opts.concurrency, 10);
+
+      // --- Step 1: Discover ---
+      console.log('=== Step 1: Discover ===\n');
+
+      const validSources = ['all', 'dexscreener', 'coingecko'] as const;
+      if (!validSources.includes(opts.discoverSource as typeof validSources[number])) {
+        console.log(`Invalid source "${opts.discoverSource}". Use: dexscreener, coingecko, or all.`);
+        return;
+      }
+      const sources: Array<'dexscreener' | 'coingecko'> = opts.discoverSource === 'all'
+        ? ['dexscreener', 'coingecko']
+        : [opts.discoverSource as 'dexscreener' | 'coingecko'];
+
+      const discoverLimit = parseInt(opts.discoverLimit, 10);
+
+      const discoverer = new TargetDiscoverer({
+        provider,
+        farmTarget,
+        stockpile,
+        logger,
+      });
+
+      const { result: discoverResult } = await discoverer.discover({
+        limit: discoverLimit,
+        sources,
+      });
+
+      console.log(`Discovered ${String(discoverResult.discovered)} targets, ${String(discoverResult.skippedDuplicates)} duplicates skipped`);
+      if (discoverResult.errors.length > 0) {
+        for (const err of discoverResult.errors) {
+          console.log(`  ✗ ${err}`);
+        }
+      }
+
+      // --- Step 2: Generate ---
+      console.log('\n=== Step 2: Generate ===\n');
+
+      const generateLimit = parseInt(opts.generateLimit, 10);
+      const pending = farmTarget.getPending(generateLimit);
+
+      if (pending.length === 0) {
+        console.log('No pending targets for generation.');
+      } else {
+        for (const t of pending) {
+          farmTarget.updateStatus(t.id, 'generating');
+        }
+
+        const variantsPerTarget = parseInt(opts.variants, 10);
+        const mutationCount = parseInt(opts.mutations, 10);
+
+        console.log(`Generating ${String(variantsPerTarget)} variants for ${String(pending.length)} targets...\n`);
+
+        const generator = new BatchGenerator({
+          provider,
+          farmAttempt,
+          logger,
+          variantsPerTarget,
+          mutationCount,
+        });
+
+        const genTargets = pending.map((t) => ({ name: t.name, type: t.type }));
+        const genResults = await generator.generateBatch(genTargets, concurrency);
+
+        let totalAttempts = 0;
+        const failedTargetNames = new Set<string>();
+        for (const result of genResults) {
+          totalAttempts += result.attempts;
+          if (result.errors.length > 0) {
+            failedTargetNames.add(result.targetName);
+            console.log(`  ✗ ${result.targetName}: ${result.errors[0]}`);
+          } else {
+            console.log(`  ✓ ${result.targetName}: ${String(result.attempts)} attempts`);
+          }
+        }
+
+        // Mark successful targets as completed, failed ones back to pending
+        for (const t of pending) {
+          farmTarget.updateStatus(t.id, failedTargetNames.has(t.name) ? 'pending' : 'completed');
+        }
+
+        console.log(`Generated ${String(totalAttempts)} total attempts`);
+      }
+
+      // --- Step 3: Evaluate ---
+      console.log('\n=== Step 3: Evaluate ===\n');
+
+      const evalLimit = parseInt(opts.evalLimit, 10);
+      const threshold = parseFloat(opts.threshold);
+
+      const unevaluated = farmAttempt.getUnevaluated(evalLimit);
+      if (unevaluated.length === 0) {
+        console.log('No unevaluated attempts found.');
+      } else {
+        console.log(`Evaluating ${String(unevaluated.length)} attempts (threshold=${String(threshold)})...\n`);
+
+        const evaluator = new SelfEvaluator({ provider, logger, threshold });
+        const evalResults = await evaluator.evaluateBatch(unevaluated, concurrency);
+
+        let promoted = 0;
+        let discarded = 0;
+
+        for (const result of evalResults) {
+          const evalJson = JSON.stringify(result.evaluations);
+          farmAttempt.updateScore(result.attemptId, result.compositeScore, evalJson);
+
+          if (result.verdict === 'stockpile') {
+            const attempt = farmAttempt.getById(result.attemptId);
+            if (!attempt) continue;
+            if (stockpile.isDuplicate(attempt.tweetText, attempt.targetName)) {
+              discarded++;
+            } else {
+              stockpile.insert({
+                attemptId: attempt.id,
+                targetName: attempt.targetName,
+                targetType: attempt.targetType,
+                tweetText: attempt.tweetText,
+                angle: attempt.angle ?? undefined,
+                qualityScore: result.compositeScore,
+                evaluatorOutput: evalJson,
+                researchNotes: attempt.researchNotes ?? undefined,
+                freshnessType: 'evergreen',
+              });
+              farmAttempt.markPromoted(attempt.id);
+              promoted++;
+              console.log(`  ✓ ${attempt.targetName}: ${result.compositeScore.toFixed(1)} → stockpile`);
+            }
+          } else {
+            discarded++;
+          }
+        }
+
+        console.log(`\nEvaluated: ${String(promoted)} promoted, ${String(discarded)} discarded`);
+      }
+
+      // --- Summary ---
+      const stats = buildStats(farmTarget, farmAttempt, stockpile);
+      console.log('\n=== Pipeline Complete ===');
+      console.log(`Stockpile: ${String(stats.stockpile.available)} available (${String(stats.stockpile.total)} total)`);
+    } finally {
+      db.close();
+    }
   });
 
 program.parse();
