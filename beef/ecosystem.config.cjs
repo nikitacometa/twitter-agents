@@ -11,7 +11,7 @@ module.exports = {
       },
       max_memory_restart: '2G',
       exp_backoff_restart_delay: 100,
-      kill_timeout: 200000,
+      kill_timeout: 220000,
     },
   ],
 };

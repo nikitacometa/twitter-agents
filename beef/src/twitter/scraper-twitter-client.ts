@@ -493,7 +493,8 @@ export class ScraperTwitterClient implements ITwitterClient {
       return result;
     }
 
-    for (const id of tweetIds) {
+    for (let i = 0; i < tweetIds.length; i++) {
+      const id = tweetIds[i]!;
       try {
         const tweet = await this.scraper.getTweet(id);
         if (tweet) {
@@ -506,6 +507,10 @@ export class ScraperTwitterClient implements ITwitterClient {
         }
       } catch (error) {
         this.logger.debug({ err: error, tweetId: id }, 'Failed to fetch metrics for tweet');
+      }
+      // Throttle to avoid rate limits (M2.3)
+      if (i < tweetIds.length - 1) {
+        await new Promise((r) => setTimeout(r, 500));
       }
     }
 

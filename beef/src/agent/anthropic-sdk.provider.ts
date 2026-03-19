@@ -12,7 +12,7 @@ import type {
 } from './agent.types.js';
 
 const MODEL = 'claude-sonnet-4-20250514';
-const DEFAULT_MAX_TOKENS = 1024;
+const DEFAULT_MAX_TOKENS = 4096;
 export class AnthropicSDKProvider implements LLMProvider {
   readonly name: ProviderName = 'anthropic-sdk';
   readonly capabilities: ProviderCapabilities = {

@@ -17,6 +17,7 @@ export class TwitterClient implements ITwitterClient {
   private readonly client: TwitterApi | null;
   private readonly dryRun: boolean;
   private readonly logger: Logger;
+  private cachedUserId: string | null = null;
 
   constructor(opts: {
     credentials?: TwitterCredentials;
@@ -103,7 +104,10 @@ export class TwitterClient implements ITwitterClient {
     }
 
     try {
-      const me = await this.client.v2.me();
+      if (!this.cachedUserId) {
+        const me = await this.client.v2.me();
+        this.cachedUserId = me.data.id;
+      }
       const params: Record<string, string> = {
         'tweet.fields': 'author_id,created_at,referenced_tweets,attachments',
         'user.fields': 'username',
@@ -112,7 +116,7 @@ export class TwitterClient implements ITwitterClient {
       };
       if (sinceId) params['since_id'] = sinceId;
 
-      const mentions = await this.client.v2.userMentionTimeline(me.data.id, params);
+      const mentions = await this.client.v2.userMentionTimeline(this.cachedUserId, params);
 
       const users = new Map<string, string>();
       if (mentions.includes?.users) {

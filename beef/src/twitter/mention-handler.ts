@@ -34,6 +34,7 @@ export class MentionHandler {
   private readonly configRepo: ConfigRepository;
   private readonly queueRepo: QueueRepository;
   private readonly logger: Logger;
+  private isPolling = false;
 
   constructor(opts: {
     twitter: ITwitterClient;
@@ -52,10 +53,24 @@ export class MentionHandler {
   }
 
   async poll(): Promise<PollResult> {
+    if (this.isPolling) {
+      this.logger.debug('Mention poll skipped — already polling');
+      return { processed: 0, mentions: [] };
+    }
     if (!this.twitter.isConfigured) {
       this.logger.debug('Mention poll skipped — Twitter not configured');
       return { processed: 0, mentions: [] };
     }
+
+    this.isPolling = true;
+    try {
+      return await this.doPoll();
+    } finally {
+      this.isPolling = false;
+    }
+  }
+
+  private async doPoll(): Promise<PollResult> {
 
     const runtime = this.configRepo.getRuntime();
     const sinceId = runtime.mentionSinceId ?? undefined;
