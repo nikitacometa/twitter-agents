@@ -83,13 +83,13 @@ export class QueueManager {
   }
 
   /**
-   * Force-process next item, ignoring pause/quiet/limit (for manual testing).
+   * Force-process next item, ignoring pause/quiet/limit/posting-mode (for manual testing).
    */
   async processNextForce(): Promise<boolean> {
-    return this.dequeueAndProcess();
+    return this.dequeueAndProcess(true);
   }
 
-  private async dequeueAndProcess(): Promise<boolean> {
+  private async dequeueAndProcess(force = false): Promise<boolean> {
     const item = this.queueRepo.dequeue();
     if (!item) {
       this.logger.debug('Queue empty');
@@ -98,19 +98,21 @@ export class QueueManager {
 
     this.logger.info({ queueId: item.id, target: item.targetName, source: item.source }, 'Processing queue item');
 
-    // Check posting mode before generating roast
+    // Check posting mode before generating roast (force bypasses for Telegram /trigger)
     const replyToId = extractReplyToId(item.context);
     const isReply = !!replyToId;
 
-    if (isReply && !this.enableMentionReplies) {
-      this.logger.info({ queueId: item.id, target: item.targetName }, 'Mention reply skipped — ENABLE_MENTION_REPLIES=false');
-      this.queueRepo.fail(item.id, 'Mention replies disabled');
-      return true;
-    }
-    if (!isReply && !this.enableAutonomousPosting) {
-      this.logger.info({ queueId: item.id, target: item.targetName }, 'Autonomous post skipped — ENABLE_AUTONOMOUS_POSTING=false');
-      this.queueRepo.fail(item.id, 'Autonomous posting disabled');
-      return true;
+    if (!force) {
+      if (isReply && !this.enableMentionReplies) {
+        this.logger.info({ queueId: item.id, target: item.targetName }, 'Mention reply skipped — ENABLE_MENTION_REPLIES=false');
+        this.queueRepo.fail(item.id, 'Mention replies disabled');
+        return true;
+      }
+      if (!isReply && !this.enableAutonomousPosting) {
+        this.logger.info({ queueId: item.id, target: item.targetName }, 'Autonomous post skipped — ENABLE_AUTONOMOUS_POSTING=false');
+        this.queueRepo.fail(item.id, 'Autonomous posting disabled');
+        return true;
+      }
     }
 
     const mediaUrls = extractMediaUrls(item.context);

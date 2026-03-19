@@ -200,6 +200,10 @@ if (config.TELEGRAM_BOT_TOKEN) {
     configRepo,
     exampleRepo,
     patternRepo,
+    postingMode: {
+      autonomous: config.ENABLE_AUTONOMOUS_POSTING,
+      mentionReplies: config.ENABLE_MENTION_REPLIES,
+    },
   });
 
   void bot.start({

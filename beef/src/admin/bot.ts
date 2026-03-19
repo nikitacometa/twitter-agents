@@ -42,8 +42,9 @@ export function createBot(opts: {
   configRepo?: ConfigRepository;
   exampleRepo?: ExternalExampleRepository;
   patternRepo?: RoastPatternRepository;
+  postingMode?: { autonomous: boolean; mentionReplies: boolean };
 }): Bot {
-  const { token, adminIds, openAccess, feedbackRepo, provider, logger, queueManager, configRepo, exampleRepo, patternRepo } = opts;
+  const { token, adminIds, openAccess, feedbackRepo, provider, logger, queueManager, configRepo, exampleRepo, patternRepo, postingMode } = opts;
   const bot = new Bot(token);
   const sessions = new SessionStore();
 
@@ -287,6 +288,9 @@ export function createBot(opts: {
     const adminStr = openAccess ? 'open access' : adminIds.length > 0 ? adminIds.map(String).join(', ') : 'no admins configured (open)';
     const runtime = configRepo?.getRuntime();
     const queueCount = queueManager?.getPendingCount() ?? 0;
+    const postingStr = postingMode
+      ? `Posting: autonomous=<b>${String(postingMode.autonomous)}</b>, replies=<b>${String(postingMode.mentionReplies)}</b>`
+      : '';
     await ctx.reply(
       [
         '<b>🤖 Bot Status</b>',
@@ -295,6 +299,7 @@ export function createBot(opts: {
         `Total ratings: <b>${String(stats.total)}</b>`,
         `Queue: <b>${String(queueCount)}</b> pending`,
         runtime ? `Paused: <b>${String(runtime.paused)}</b>` : '',
+        postingStr,
         `Access: ${adminStr}`,
         `Chat type: ${ctx.chat.type}`,
       ].filter(Boolean).join('\n'),
