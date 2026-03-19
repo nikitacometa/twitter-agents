@@ -31,6 +31,8 @@ import { BatchGenerator } from './batch-generator.js';
 import { TargetDiscoverer } from './target-discoverer.js';
 import { createFarmLogger } from './logger.js';
 import { exportNdjson, importNdjson, exportLandingJson } from './sync.js';
+import { formatFarmSummary, sendFarmNotification } from './notify.js';
+import type { FarmRunSummary, GenerateTargetStats, EvaluateAttemptResult } from './notify.js';
 import type { FarmStats } from './types.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -450,6 +452,7 @@ program
   .option('--eval-limit <n>', 'Max attempts to evaluate', '20')
   .option('--threshold <score>', 'Minimum score for stockpile', '4.0')
   .option('--concurrency <n>', 'Parallel tasks', '2')
+  .option('--notify', 'Send Telegram notification on completion')
   .action(async (opts: {
     db: string;
     discoverLimit: string;
@@ -460,8 +463,35 @@ program
     evalLimit: string;
     threshold: string;
     concurrency: string;
+    notify?: boolean;
   }) => {
     const { db, farmTarget, farmAttempt, stockpile, logger } = createRepos(opts.db);
+    const startedAt = new Date().toISOString();
+
+    // Accumulators for the Telegram summary
+    const discoverData: FarmRunSummary['discover'] = {
+      discovered: 0,
+      skippedDuplicates: 0,
+      enriched: 0,
+      errors: [],
+      topTargets: [],
+    };
+    const generateData: FarmRunSummary['generate'] = {
+      targetsProcessed: 0,
+      totalAttempts: 0,
+      totalFiltered: 0,
+      perTarget: [],
+    };
+    const evaluateData: FarmRunSummary['evaluate'] = {
+      evaluated: 0,
+      promoted: 0,
+      discarded: 0,
+      duplicates: 0,
+      threshold: 4.0,
+      results: [],
+    };
+    const newStockpile: FarmRunSummary['newStockpile'] = [];
+
     try {
       const provider = createProviderFrom(db, logger);
       const concurrency = parseInt(opts.concurrency, 10);
@@ -487,10 +517,24 @@ program
         logger,
       });
 
-      const { result: discoverResult } = await discoverer.discover({
+      const { targets: discoveredTargets, result: discoverResult } = await discoverer.discover({
         limit: discoverLimit,
         sources,
       });
+
+      discoverData.discovered = discoverResult.discovered;
+      discoverData.skippedDuplicates = discoverResult.skippedDuplicates;
+      discoverData.enriched = discoverResult.enriched;
+      discoverData.errors = discoverResult.errors;
+      discoverData.topTargets = discoveredTargets
+        .sort((a, b) => b.priorityScore - a.priorityScore)
+        .slice(0, 8)
+        .map((t) => ({
+          name: t.name,
+          type: t.type,
+          priorityScore: t.priorityScore,
+          reason: t.reason,
+        }));
 
       console.log(`Discovered ${String(discoverResult.discovered)} targets, ${String(discoverResult.skippedDuplicates)} duplicates skipped`);
       if (discoverResult.errors.length > 0) {
@@ -532,6 +576,17 @@ program
         const failedTargetNames = new Set<string>();
         for (const result of genResults) {
           totalAttempts += result.attempts;
+          generateData.totalFiltered += result.filtered;
+
+          const perTarget: GenerateTargetStats = {
+            name: result.targetName,
+            type: result.strategy,
+            attempts: result.attempts,
+            filtered: result.filtered,
+            errors: result.errors,
+          };
+          generateData.perTarget.push(perTarget);
+
           if (result.errors.length > 0) {
             failedTargetNames.add(result.targetName);
             console.log(`  ✗ ${result.targetName}: ${result.errors[0]}`);
@@ -539,6 +594,9 @@ program
             console.log(`  ✓ ${result.targetName}: ${String(result.attempts)} attempts`);
           }
         }
+
+        generateData.targetsProcessed = pending.length;
+        generateData.totalAttempts = totalAttempts;
 
         // Mark successful targets as completed, failed ones back to pending
         for (const t of pending) {
@@ -553,6 +611,7 @@ program
 
       const evalLimit = parseInt(opts.evalLimit, 10);
       const threshold = parseFloat(opts.threshold);
+      evaluateData.threshold = threshold;
 
       const unevaluated = farmAttempt.getUnevaluated(evalLimit);
       if (unevaluated.length === 0) {
@@ -563,8 +622,7 @@ program
         const evaluator = new SelfEvaluator({ provider, logger, threshold });
         const evalResults = await evaluator.evaluateBatch(unevaluated, concurrency);
 
-        let promoted = 0;
-        let discarded = 0;
+        evaluateData.evaluated = evalResults.length;
 
         for (const result of evalResults) {
           const evalJson = JSON.stringify(result.evaluations);
@@ -574,7 +632,13 @@ program
             const attempt = farmAttempt.getById(result.attemptId);
             if (!attempt) continue;
             if (stockpile.isDuplicate(attempt.tweetText, attempt.targetName)) {
-              discarded++;
+              evaluateData.duplicates++;
+              const evalEntry: EvaluateAttemptResult = {
+                targetName: attempt.targetName,
+                score: result.compositeScore,
+                verdict: 'duplicate',
+              };
+              evaluateData.results.push(evalEntry);
             } else {
               stockpile.insert({
                 attemptId: attempt.id,
@@ -588,21 +652,68 @@ program
                 freshnessType: 'evergreen',
               });
               farmAttempt.markPromoted(attempt.id);
-              promoted++;
+              evaluateData.promoted++;
+              const evalEntry: EvaluateAttemptResult = {
+                targetName: attempt.targetName,
+                score: result.compositeScore,
+                verdict: 'stockpile',
+              };
+              evaluateData.results.push(evalEntry);
+              newStockpile.push({
+                targetName: attempt.targetName,
+                tweetText: attempt.tweetText,
+                angle: attempt.angle,
+                qualityScore: result.compositeScore,
+              });
               console.log(`  ✓ ${attempt.targetName}: ${result.compositeScore.toFixed(1)} → stockpile`);
             }
           } else {
-            discarded++;
+            evaluateData.discarded++;
+            const attempt = farmAttempt.getById(result.attemptId);
+            const evalEntry: EvaluateAttemptResult = {
+              targetName: attempt?.targetName ?? `#${String(result.attemptId)}`,
+              score: result.compositeScore,
+              verdict: 'discard',
+            };
+            evaluateData.results.push(evalEntry);
           }
         }
 
-        console.log(`\nEvaluated: ${String(promoted)} promoted, ${String(discarded)} discarded`);
+        console.log(`\nEvaluated: ${String(evaluateData.promoted)} promoted, ${String(evaluateData.discarded)} discarded`);
       }
 
       // --- Summary ---
       const stats = buildStats(farmTarget, farmAttempt, stockpile);
       console.log('\n=== Pipeline Complete ===');
       console.log(`Stockpile: ${String(stats.stockpile.available)} available (${String(stats.stockpile.total)} total)`);
+
+      // --- Telegram Notification ---
+      if (opts.notify) {
+        const botToken = process.env['TELEGRAM_BOT_TOKEN'];
+        const chatId = process.env['TELEGRAM_CHAT_ID'];
+
+        if (!botToken || !chatId) {
+          logger.warn('TELEGRAM_BOT_TOKEN or TELEGRAM_CHAT_ID not set — skipping notification');
+        } else {
+          const summary: FarmRunSummary = {
+            startedAt,
+            finishedAt: new Date().toISOString(),
+            discover: discoverData,
+            generate: generateData,
+            evaluate: evaluateData,
+            newStockpile,
+            stockpileTotals: {
+              available: stats.stockpile.available,
+              total: stats.stockpile.total,
+              avgScore: stats.stockpile.avgScore,
+            },
+          };
+
+          const message = formatFarmSummary(summary);
+          await sendFarmNotification(botToken, chatId, message);
+          logger.info({ chatId }, 'Farm run notification sent');
+        }
+      }
     } finally {
       db.close();
     }
