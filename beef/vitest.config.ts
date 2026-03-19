@@ -23,6 +23,8 @@ export default defineConfig({
       '@storage': new URL('./src/storage/', import.meta.url).pathname,
       '@queue': new URL('./src/queue/', import.meta.url).pathname,
       '@scheduler': new URL('./src/scheduler/', import.meta.url).pathname,
+      '@admin': new URL('./src/admin/', import.meta.url).pathname,
+      '@learning': new URL('./src/learning/', import.meta.url).pathname,
       '@farm': new URL('./src/farm/', import.meta.url).pathname,
     },
   },

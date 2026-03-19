@@ -27,6 +27,10 @@ export interface PollResult {
 const ROAST_KEYWORDS = ['roast', 'beef', 'cook', 'destroy', 'grill', 'flame', 'burn'];
 const CHALLENGE_KEYWORDS = ['challenge', 'cap', 'false', 'wrong', 'lie', 'fake', 'proof'];
 
+function escapeRegExp(str: string): string {
+  return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
 export class MentionHandler {
   private readonly twitter: ITwitterClient;
   private readonly mentionRepo: MentionRepository;
@@ -34,6 +38,7 @@ export class MentionHandler {
   private readonly configRepo: ConfigRepository;
   private readonly queueRepo: QueueRepository;
   private readonly logger: Logger;
+  private readonly botUsername: string;
   private isPolling = false;
 
   constructor(opts: {
@@ -43,6 +48,7 @@ export class MentionHandler {
     configRepo: ConfigRepository;
     queueRepo: QueueRepository;
     logger: Logger;
+    botUsername?: string;
   }) {
     this.twitter = opts.twitter;
     this.mentionRepo = opts.mentionRepo;
@@ -50,6 +56,7 @@ export class MentionHandler {
     this.configRepo = opts.configRepo;
     this.queueRepo = opts.queueRepo;
     this.logger = opts.logger;
+    this.botUsername = opts.botUsername?.trim() || 'BeefThis';
   }
 
   async poll(): Promise<PollResult> {
@@ -93,7 +100,7 @@ export class MentionHandler {
 
       if (this.mentionRepo.exists(m.tweetId)) continue;
 
-      const requestType = classifyMention(m.text);
+      const requestType = classifyMention(m.text, this.botUsername);
 
       this.mentionRepo.insert({
         tweetId: m.tweetId,
@@ -115,12 +122,13 @@ export class MentionHandler {
       if (requestType === 'roast_request') {
         const target = extractTarget(m.text);
         if (target) {
+          // Scenario 1: explicit "roast @X" / "roast $TOKEN"
           this.queueRepo.enqueue({
             targetName: target,
             targetType: 'project',
             source: 'mention',
             priority: 3,
-            context: `reply_to:${m.tweetId}|by:@${m.authorName}|${m.text}`,
+            context: `reply_to:${m.tweetId}|by:@${m.authorName}`,
           });
           queued = true;
           queueTarget = target;
@@ -128,15 +136,29 @@ export class MentionHandler {
             { tweetId: m.tweetId, target, author: m.authorName },
             'Roast request queued from mention',
           );
-        } else if (m.inReplyToTweetId) {
-          // "roast" keyword but no explicit target, under a tweet → roast parent tweet
+        } else {
+          const tagged = extractTaggedHandle(m.text, this.botUsername);
+          if (tagged) {
+            // Scenario 3: roast keyword + tagged handle (non-adjacent)
+            queueTarget = this.enqueueHandleRoast(m, tagged);
+            queued = true;
+          } else if (m.inReplyToTweetId) {
+            // Scenario 2: roast keyword under someone's tweet
+            queueTarget = this.enqueueParentTweetRoast(m);
+            queued = true;
+          }
+        }
+      } else {
+        const tagged = extractTaggedHandle(m.text, this.botUsername);
+        if (tagged) {
+          // Scenario 3: "@BeefThis @elonmusk" or "@BeefThis check this @user"
+          queueTarget = this.enqueueHandleRoast(m, tagged);
+          queued = true;
+        } else if (isBareOrSimpleMention(m.text) && m.inReplyToTweetId) {
+          // Scenario 2: bare "@BeefThis" under a tweet
           queueTarget = this.enqueueParentTweetRoast(m);
           queued = true;
         }
-      } else if (isBareOrSimpleMention(m.text) && m.inReplyToTweetId) {
-        // Bare mention under a tweet → roast that tweet
-        queueTarget = this.enqueueParentTweetRoast(m);
-        queued = true;
       }
 
       summaries.push({
@@ -190,10 +212,29 @@ export class MentionHandler {
     );
     return targetName;
   }
+
+  private enqueueHandleRoast(m: MentionData, handle: string): string {
+    const targetName = `@${handle}`;
+    this.queueRepo.enqueue({
+      targetName,
+      targetType: 'project',
+      source: 'mention',
+      priority: 3,
+      context: `reply_to:${m.tweetId}|by:@${m.authorName}|handle:@${handle}`,
+    });
+    this.logger.info(
+      { tweetId: m.tweetId, handle, author: m.authorName },
+      'Handle roast queued from mention',
+    );
+    return targetName;
+  }
 }
 
-export function classifyMention(text: string): MentionRequestType {
-  const lower = text.toLowerCase();
+export function classifyMention(text: string, botUsername = 'BeefThis'): MentionRequestType {
+  // Strip bot's own mention so that "BeefThis" containing "beef" doesn't
+  // force every mention into roast_request.
+  const stripped = text.replace(new RegExp(`@${escapeRegExp(botUsername)}`, 'gi'), '');
+  const lower = stripped.toLowerCase();
 
   if (ROAST_KEYWORDS.some((kw) => lower.includes(kw))) {
     return 'roast_request';
@@ -210,7 +251,7 @@ export function classifyMention(text: string): MentionRequestType {
  * Detect "bare" mentions — just @handle with no meaningful text.
  * Examples: "@BeefThis", "@BeefThis 🔥", "@BeefThis pls"
  */
-function isBareOrSimpleMention(text: string): boolean {
+export function isBareOrSimpleMention(text: string): boolean {
   // Strip all @mentions, emojis (common Unicode ranges), and whitespace
   const stripped = text
     .replace(/@\w+/g, '')
@@ -221,7 +262,14 @@ function isBareOrSimpleMention(text: string): boolean {
   return stripped.length < 10;
 }
 
-function extractTarget(text: string): string | null {
+export function extractTaggedHandle(text: string, botUsername: string): string | null {
+  // Strip bot's own mention (case-insensitive), then find first remaining @handle
+  const stripped = text.replace(new RegExp(`@${escapeRegExp(botUsername)}`, 'gi'), '');
+  const match = stripped.match(/@(\w+)/);
+  return match?.[1] ?? null;
+}
+
+export function extractTarget(text: string): string | null {
   // Match "roast @handle" or "roast $TOKEN" or "roast ProjectName"
   const patterns = [
     /(?:roast|beef|cook|destroy|grill|flame|burn)\s+@(\w+)/i,

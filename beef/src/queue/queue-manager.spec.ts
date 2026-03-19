@@ -1,0 +1,89 @@
+import { describe, it, expect } from 'vitest';
+import {
+  extractReplyToId,
+  extractHandleFromContext,
+  extractParentAuthorFromTarget,
+  extractMediaUrls,
+} from './queue-manager.js';
+
+describe('extractReplyToId', () => {
+  it.each([
+    ['reply_to:123456789|by:@user', '123456789'],
+    ['reply_to:999|by:@a|handle:@b', '999'],
+    ['reply_to:1', '1'],
+  ])('extracts id from "%s" → "%s"', (ctx, expected) => {
+    expect(extractReplyToId(ctx)).toBe(expected);
+  });
+
+  it.each([
+    [null],
+    [''],
+    ['no_reply_to_here'],
+    ['by:@user|reply_to:123'],
+  ])('returns undefined for %s', (ctx) => {
+    expect(extractReplyToId(ctx)).toBeUndefined();
+  });
+});
+
+describe('extractHandleFromContext', () => {
+  it.each([
+    ['reply_to:1|by:@user|handle:@elonmusk', 'elonmusk'],
+    ['reply_to:1|by:@a|handle:@user_123', 'user_123'],
+  ])('extracts handle from "%s" → "%s"', (ctx, expected) => {
+    expect(extractHandleFromContext(ctx)).toBe(expected);
+  });
+
+  it.each([
+    [null],
+    [''],
+    ['reply_to:1|by:@user'],
+    ['reply_to:1|by:@user|parent:456'],
+  ])('returns undefined for %s', (ctx) => {
+    expect(extractHandleFromContext(ctx)).toBeUndefined();
+  });
+});
+
+describe('extractParentAuthorFromTarget', () => {
+  it.each([
+    ['tweet by @solana: "they launched again"', 'solana'],
+    ['tweet by @vitalik', 'vitalik'],
+    ['tweet by @user_name: "text"', 'user_name'],
+  ])('extracts author from "%s" → "%s"', (target, expected) => {
+    expect(extractParentAuthorFromTarget(target)).toBe(expected);
+  });
+
+  it.each([
+    ['@elonmusk'],
+    ['Ethereum'],
+    ['$SOL'],
+    [''],
+  ])('returns undefined for "%s"', (target) => {
+    expect(extractParentAuthorFromTarget(target)).toBeUndefined();
+  });
+});
+
+describe('extractMediaUrls', () => {
+  it('extracts single URL', () => {
+    expect(extractMediaUrls('reply_to:1|by:@a|media:https://pbs.twimg.com/a.jpg'))
+      .toEqual(['https://pbs.twimg.com/a.jpg']);
+  });
+
+  it('extracts multiple URLs', () => {
+    expect(extractMediaUrls('reply_to:1|by:@a|media:https://a.com/1.jpg,https://b.com/2.jpg'))
+      .toEqual(['https://a.com/1.jpg', 'https://b.com/2.jpg']);
+  });
+
+  it('filters non-http entries', () => {
+    expect(extractMediaUrls('reply_to:1|media:https://a.com/1.jpg,notaurl,https://b.com/2.jpg'))
+      .toEqual(['https://a.com/1.jpg', 'https://b.com/2.jpg']);
+  });
+
+  it.each([
+    [null],
+    [''],
+    ['reply_to:1|by:@user'],
+    ['reply_to:1|media:'],
+  ])('returns empty array for %s', (ctx) => {
+    expect(extractMediaUrls(ctx)).toEqual([]);
+  });
+});

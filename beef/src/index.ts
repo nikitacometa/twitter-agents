@@ -12,13 +12,14 @@ import { MentionRepository } from './storage/repositories/mention.repository.js'
 import { UserRepository } from './storage/repositories/user.repository.js';
 import { ExternalExampleRepository } from './storage/repositories/external-example.repository.js';
 import { RoastPatternRepository } from './storage/repositories/roast-pattern.repository.js';
+import { StockpileRepository } from './storage/repositories/stockpile.repository.js';
 import { ClaudeCodeProvider } from './agent/claude-code.provider.js';
 import {
   createAnthropicSDKProvider,
 } from './agent/anthropic-sdk.provider.js';
 import { ProviderManager } from './agent/provider-manager.js';
 import { createBot } from './admin/bot.js';
-import type { ITwitterClient } from './twitter/twitter-client.interface.js';
+import type { ITwitterClient, IProfileFetcher } from './twitter/twitter-client.interface.js';
 import { TwitterClient } from './twitter/twitter-client.js';
 import { ScraperTwitterClient } from './twitter/scraper-twitter-client.js';
 import { MentionHandler } from './twitter/mention-handler.js';
@@ -42,6 +43,7 @@ const mentionRepo = new MentionRepository(db);
 const userRepo = new UserRepository(db);
 const exampleRepo = new ExternalExampleRepository(db);
 const patternRepo = new RoastPatternRepository(db);
+const stockpileRepo = new StockpileRepository(db);
 
 // --- Recover stuck queue items from previous crash ---
 const resetCount = queueRepo.resetProcessing();
@@ -103,6 +105,10 @@ if (config.TWITTER_CLIENT_MODE === 'scraper' && config.TWITTER_USERNAME && confi
   logger.info('Twitter client: API mode');
 }
 
+// --- Profile Fetcher (scraper mode only) ---
+const profileFetcher: IProfileFetcher | undefined =
+  twitter instanceof ScraperTwitterClient ? twitter : undefined;
+
 // --- Queue Manager ---
 let queueManager: QueueManager | null = null;
 if (provider) {
@@ -113,6 +119,8 @@ if (provider) {
     feedbackRepo,
     provider,
     twitter,
+    profileFetcher,
+    stockpile: stockpileRepo,
     logger,
     dailyLimit: config.ROASTS_PER_DAY,
     mentionReplyLimit: config.MENTION_REPLIES_PER_DAY,
@@ -130,6 +138,7 @@ const mentionHandler = new MentionHandler({
   configRepo,
   queueRepo,
   logger,
+  botUsername: config.TWITTER_USERNAME,
 });
 
 // --- Engagement Tracker ---
@@ -202,6 +211,7 @@ if (config.TELEGRAM_BOT_TOKEN) {
     configRepo,
     exampleRepo,
     patternRepo,
+    stockpileRepo,
     postingMode: {
       autonomous: config.ENABLE_AUTONOMOUS_POSTING,
       mentionReplies: config.ENABLE_MENTION_REPLIES,

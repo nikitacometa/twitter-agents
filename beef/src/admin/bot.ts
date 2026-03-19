@@ -10,6 +10,7 @@ import type { QueueManager } from '@queue/queue-manager.js';
 import type { ConfigRepository } from '@storage/repositories/config.repository.js';
 import type { ExternalExampleRepository } from '@storage/repositories/external-example.repository.js';
 import type { RoastPatternRepository } from '@storage/repositories/roast-pattern.repository.js';
+import type { StockpileRepository } from '@storage/repositories/stockpile.repository.js';
 import { computeStyleSupplement } from '@learning/style-analyzer.js';
 import { ratingKeyboard, sessionDoneKeyboard } from './keyboards.js';
 import { SessionStore } from './session-store.js';
@@ -43,10 +44,11 @@ export function createBot(opts: {
   configRepo?: ConfigRepository;
   exampleRepo?: ExternalExampleRepository;
   patternRepo?: RoastPatternRepository;
+  stockpileRepo?: StockpileRepository;
   postingMode?: { autonomous: boolean; mentionReplies: boolean };
   pollMentions?: () => Promise<PollResult>;
 }): Bot {
-  const { token, adminIds, openAccess, feedbackRepo, provider, logger, queueManager, configRepo, exampleRepo, patternRepo, postingMode, pollMentions } = opts;
+  const { token, adminIds, openAccess, feedbackRepo, provider, logger, queueManager, configRepo, exampleRepo, patternRepo, stockpileRepo, postingMode, pollMentions } = opts;
   const bot = new Bot(token);
 
   const sessions = new SessionStore();
@@ -89,6 +91,7 @@ export function createBot(opts: {
         '/analyze — compute style from feedback',
         '/evolution — quality trends + angle stats',
         '/stats — feedback statistics',
+        '/promote &lt;id&gt; — promote stockpiled roast to CreativeMemory',
         '/status — bot health',
         '/help — full command list',
         groupNote,
@@ -131,6 +134,7 @@ export function createBot(opts: {
         '<code>/queue &lt;target&gt;</code> — add target to posting queue',
         '<code>/poll</code> — check for new mentions now',
         '<code>/trigger</code> — force-process next queue item',
+        '<code>/promote &lt;id&gt;</code> — promote stockpiled roast to CreativeMemory',
         '<code>/pause</code> / <code>/resume</code> — toggle autonomous posting',
         '',
         isGroupChat(ctx)
@@ -295,6 +299,16 @@ export function createBot(opts: {
     const postingStr = postingMode
       ? `Posting: autonomous=<b>${String(postingMode.autonomous)}</b>, replies=<b>${String(postingMode.mentionReplies)}</b>`
       : '';
+
+    let stockpileStr = '';
+    if (stockpileRepo) {
+      const sStats = stockpileRepo.getStats();
+      const available = sStats.byStatus['available'] ?? 0;
+      const served = (sStats.byStatus['served_bot'] ?? 0) + (sStats.byStatus['served_landing'] ?? 0);
+      const avgStr = sStats.avgScore !== null ? ` (avg ${sStats.avgScore.toFixed(1)})` : '';
+      stockpileStr = `Stockpile: <b>${String(available)}</b> available, ${String(served)} served, ${String(sStats.total)} total${avgStr}`;
+    }
+
     await ctx.reply(
       [
         '<b>🤖 Bot Status</b>',
@@ -302,6 +316,7 @@ export function createBot(opts: {
         providerStatus,
         `Total ratings: <b>${String(stats.total)}</b>`,
         `Queue: <b>${String(queueCount)}</b> pending`,
+        stockpileStr,
         runtime ? `Paused: <b>${String(runtime.paused)}</b>` : '',
         postingStr,
         `Access: ${adminStr}`,
@@ -420,6 +435,76 @@ export function createBot(opts: {
     }
     configRepo.setPaused(false);
     await ctx.reply('▶️ Autonomous posting resumed.');
+  });
+
+  bot.command('promote', async (ctx) => {
+    if (!stockpileRepo) {
+      await ctx.reply('⚠️ Stockpile not configured.');
+      return;
+    }
+
+    const idStr = ctx.match?.trim();
+    if (!idStr) {
+      await ctx.reply('Usage: <code>/promote &lt;stockpile_id&gt;</code>', { parse_mode: 'HTML' });
+      return;
+    }
+
+    if (!/^\d+$/.test(idStr)) {
+      await ctx.reply('⚠️ Invalid stockpile ID — must be a positive integer.');
+      return;
+    }
+    const stockpileId = Number(idStr);
+    if (stockpileId <= 0) {
+      await ctx.reply('⚠️ Invalid stockpile ID.');
+      return;
+    }
+
+    const roast = stockpileRepo.getById(stockpileId);
+    if (!roast) {
+      await ctx.reply(`⚠️ Stockpile roast #${String(stockpileId)} not found.`);
+      return;
+    }
+
+    if (roast.status === 'promoted') {
+      await ctx.reply(`ℹ️ Stockpile #${String(stockpileId)} is already promoted.`);
+      return;
+    }
+
+    try {
+      const evaluatorId = ctx.from!.id;
+      const evaluatorName = ctx.from!.username ?? ctx.from!.first_name;
+
+      feedbackRepo.insert({
+        sessionId: `farm-promote-${String(stockpileId)}`,
+        variantIndex: 0,
+        roastText: roast.tweetText,
+        targetName: roast.targetName,
+        angle: roast.angle ?? 'unknown',
+        evaluatorTelegramId: evaluatorId,
+        evaluatorName: `farm-promote:${evaluatorName}`,
+        verdict: 'fire',
+        notes: `promoted from stockpile #${String(stockpileId)}, score=${String(roast.qualityScore)}`,
+      });
+
+      stockpileRepo.updateStatus(stockpileId, 'promoted');
+    } catch (err) {
+      logger.error({ err, stockpileId }, 'Failed to promote stockpile roast');
+      await ctx.reply('⚠️ Failed to promote — check logs.');
+      return;
+    }
+
+    await ctx.reply(
+      [
+        `✅ <b>Promoted stockpile #${String(stockpileId)}</b>`,
+        '',
+        `Target: <b>${escapeHtml(roast.targetName)}</b>`,
+        `Score: ${String(roast.qualityScore)}`,
+        `<code>${escapeHtml(roast.tweetText.slice(0, 200))}</code>`,
+        '',
+        '<i>Added to CreativeMemory as fire example. Will influence future generation.</i>',
+      ].join('\n'),
+      { parse_mode: 'HTML' },
+    );
   });
 
   bot.command('analyze', async (ctx) => {

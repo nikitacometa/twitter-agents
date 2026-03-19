@@ -6,7 +6,7 @@ const CHROME_USER_AGENT =
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36';
 import type { Logger } from 'pino';
 import type { TweetMetrics } from '@common/types/index.js';
-import type { ITwitterClient, PostResult, MentionData } from './twitter-client.interface.js';
+import type { ITwitterClient, IProfileFetcher, TwitterProfile, PostResult, MentionData } from './twitter-client.interface.js';
 import { CookieStore } from './cookie-store.js';
 import { retryWithBackoff, NonRetryableError } from '@common/utils/error.util.js';
 
@@ -17,7 +17,7 @@ export interface ScraperCredentials {
   twoFactorSecret?: string;
 }
 
-export class ScraperTwitterClient implements ITwitterClient {
+export class ScraperTwitterClient implements ITwitterClient, IProfileFetcher {
   private readonly scraper: Scraper;
   private readonly credentials: ScraperCredentials;
   private readonly cookieStore: CookieStore;
@@ -316,6 +316,54 @@ export class ScraperTwitterClient implements ITwitterClient {
     }
 
     return tweetId;
+  }
+
+  async getProfile(username: string): Promise<TwitterProfile | null> {
+    if (!(await this.ensureLoggedIn())) return null;
+
+    let timerId: ReturnType<typeof setTimeout> | undefined;
+    let cancelled = false;
+    const timeout = new Promise<null>((resolve) => {
+      timerId = setTimeout(() => { cancelled = true; resolve(null); }, 10_000);
+    });
+
+    try {
+      const result = await Promise.race([this.fetchProfile(username, () => cancelled), timeout]);
+      return result;
+    } catch (error) {
+      this.logger.debug({ err: error, username }, 'Failed to fetch profile');
+      return null;
+    } finally {
+      if (timerId) clearTimeout(timerId);
+    }
+  }
+
+  private async fetchProfile(username: string, isCancelled?: () => boolean): Promise<TwitterProfile | null> {
+    const profile = await this.scraper.getProfile(username);
+    if (!profile || isCancelled?.()) return null;
+
+    const recentTweets: string[] = [];
+    try {
+      const tweets = this.scraper.getTweets(username, 5);
+      for await (const tweet of tweets) {
+        if (isCancelled?.()) break;
+        if (tweet.text) recentTweets.push(tweet.text);
+        if (recentTweets.length >= 5) break;
+      }
+    } catch (err) {
+      this.logger.debug({ err, username }, 'Failed to fetch recent tweets for profile');
+    }
+
+    if (isCancelled?.()) return null;
+
+    return {
+      username: profile.username ?? username,
+      biography: profile.biography ?? null,
+      followersCount: profile.followersCount ?? null,
+      isVerified: profile.isVerified ?? false,
+      website: profile.website ?? null,
+      recentTweets,
+    };
   }
 
   async getMentions(sinceId?: string): Promise<MentionData[]> {

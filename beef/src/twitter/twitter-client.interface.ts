@@ -27,3 +27,16 @@ export interface ITwitterClient {
   getTweetMetrics(tweetIds: string[]): Promise<Map<string, TweetMetrics>>;
   shutdown?(): Promise<void>;
 }
+
+export interface TwitterProfile {
+  username: string;
+  biography: string | null;
+  followersCount: number | null;
+  isVerified: boolean;
+  website: string | null;
+  recentTweets: string[];
+}
+
+export interface IProfileFetcher {
+  getProfile(username: string): Promise<TwitterProfile | null>;
+}

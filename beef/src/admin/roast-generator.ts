@@ -106,10 +106,16 @@ export async function generateRoasts(
   exampleRepo?: ExternalExampleRepository,
   patternRepo?: RoastPatternRepository,
   imagePaths?: string[],
+  profileContext?: string,
 ): Promise<AgentRoastOutput> {
   const engine = getEngine(provider, logger);
 
-  const memory = feedbackRepo ? buildCreativeMemory(targetName, feedbackRepo, configRepo, exampleRepo, patternRepo) : undefined;
+  let memory = feedbackRepo ? buildCreativeMemory(targetName, feedbackRepo, configRepo, exampleRepo, patternRepo) : undefined;
+  if (profileContext && memory) {
+    memory = { ...memory, profileContext };
+  } else if (profileContext) {
+    memory = { fireExamples: [], profileContext };
+  }
 
   if (memory && (memory.fireExamples.length > 0 || memory.angleWeights || memory.rejectExamples || memory.externalExamples)) {
     logger.info(

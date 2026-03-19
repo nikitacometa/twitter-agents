@@ -3,8 +3,10 @@ import type { QueueRepository } from '@storage/repositories/queue.repository.js'
 import type { RoastRepository } from '@storage/repositories/roast.repository.js';
 import type { ConfigRepository } from '@storage/repositories/config.repository.js';
 import type { FeedbackRepository } from '@storage/repositories/feedback.repository.js';
+import type { StockpileRepository } from '@storage/repositories/stockpile.repository.js';
 import type { ProviderManager } from '@agent/provider-manager.js';
 import type { ITwitterClient } from '@twitter/twitter-client.interface.js';
+import type { IProfileFetcher } from '@twitter/twitter-client.interface.js';
 import { generateRoasts } from '@admin/roast-generator.js';
 import { getErrorMessage } from '@common/utils/error.util.js';
 import { isQuietHour } from '@scheduler/scheduler.js';
@@ -25,6 +27,8 @@ export class QueueManager {
   private readonly feedbackRepo: FeedbackRepository;
   private readonly provider: ProviderManager;
   private readonly twitter: ITwitterClient;
+  private readonly profileFetcher?: IProfileFetcher;
+  private readonly stockpile?: StockpileRepository;
   private readonly logger: Logger;
   private readonly dailyLimit: number;
   private readonly mentionReplyLimit: number;
@@ -38,6 +42,8 @@ export class QueueManager {
     feedbackRepo: FeedbackRepository;
     provider: ProviderManager;
     twitter: ITwitterClient;
+    profileFetcher?: IProfileFetcher;
+    stockpile?: StockpileRepository;
     logger: Logger;
     dailyLimit: number;
     mentionReplyLimit?: number;
@@ -50,6 +56,8 @@ export class QueueManager {
     this.feedbackRepo = opts.feedbackRepo;
     this.provider = opts.provider;
     this.twitter = opts.twitter;
+    this.profileFetcher = opts.profileFetcher;
+    this.stockpile = opts.stockpile;
     this.logger = opts.logger;
     this.dailyLimit = opts.dailyLimit;
     this.mentionReplyLimit = opts.mentionReplyLimit ?? 20;
@@ -120,10 +128,11 @@ export class QueueManager {
       return { dequeued: true, posted: true, tweetId: existing.tweetId, target: item.targetName };
     }
 
-    // Check posting mode before generating roast (force bypasses for Telegram /trigger)
+    // Determine reply context early — used by posting mode checks, stockpile, and generation
     const replyToId = extractReplyToId(item.context);
     const isReply = !!replyToId;
 
+    // Check posting mode before serving stockpile or generating (force bypasses for Telegram /trigger)
     if (!force) {
       if (isReply && !this.enableMentionReplies) {
         this.logger.info({ queueId: item.id, target: item.targetName }, 'Mention reply skipped — ENABLE_MENTION_REPLIES=false');
@@ -150,6 +159,53 @@ export class QueueManager {
       }
     }
 
+    // Check stockpile before generating — use pre-made roast if available
+    if (this.stockpile) {
+      try {
+        const stockpiled = this.stockpile.findBest(item.targetName);
+        if (stockpiled) {
+          this.logger.info(
+            { queueId: item.id, stockpileId: stockpiled.id, target: item.targetName, score: stockpiled.qualityScore },
+            'Using stockpiled roast instead of generating',
+          );
+
+          const roastId = this.roastRepo.insert({
+            targetName: item.targetName,
+            targetType: item.targetType,
+            tweetText: stockpiled.tweetText,
+            source: item.source,
+            status: 'pending_approval',
+            factChecked: true,
+            contextData: stockpiled.researchNotes ?? undefined,
+          });
+
+          const postResult = replyToId
+            ? await this.twitter.replyToTweet(stockpiled.tweetText, replyToId)
+            : await this.twitter.postTweet(stockpiled.tweetText);
+
+          if (postResult) {
+            this.stockpile.markServed(stockpiled.id, 'bot');
+            this.roastRepo.updateStatus(roastId, 'posted', postResult.tweetId);
+            this.queueRepo.complete(item.id);
+            this.logger.info(
+              { queueId: item.id, roastId, tweetId: postResult.tweetId, target: item.targetName, fromStockpile: true },
+              'Stockpiled roast posted',
+            );
+            return { dequeued: true, posted: true, tweetId: postResult.tweetId, target: item.targetName };
+          }
+
+          this.roastRepo.updateStatus(roastId, 'failed');
+          this.queueRepo.fail(item.id, 'Twitter post returned null (stockpile)');
+          return { dequeued: true, posted: false, target: item.targetName, error: 'Twitter post returned null' };
+        }
+      } catch (error) {
+        this.logger.error(
+          { err: error, queueId: item.id, target: item.targetName },
+          'Stockpile check failed — falling through to generation',
+        );
+      }
+    }
+
     const mediaUrls = extractMediaUrls(item.context);
     let downloaded: { paths: string[]; cleanup: () => Promise<void> } | undefined;
 
@@ -163,9 +219,21 @@ export class QueueManager {
       }
 
       const imagePaths = downloaded?.paths.length ? downloaded.paths : undefined;
+
+      // Profile enrichment for Scenario 2 (parent tweet) and Scenario 3 (tagged handle)
+      let profileContext: string | undefined;
+      if (this.profileFetcher) {
+        const handle = extractHandleFromContext(item.context);
+        const parentAuthor = extractParentAuthorFromTarget(item.targetName);
+        const username = handle ?? parentAuthor;
+        if (username && username !== 'anon') {
+          profileContext = await this.buildProfileContext(username);
+        }
+      }
+
       const output = await generateRoasts(
         item.targetName, this.provider, this.logger, this.feedbackRepo,
-        undefined, undefined, undefined, undefined, undefined, imagePaths,
+        undefined, undefined, undefined, undefined, undefined, imagePaths, profileContext,
       );
 
       if (output.variants.length === 0) {
@@ -221,15 +289,49 @@ export class QueueManager {
   getPendingCount(): number {
     return this.queueRepo.getPendingCount();
   }
+
+  private async buildProfileContext(username: string): Promise<string | undefined> {
+    try {
+      const profile = await this.profileFetcher!.getProfile(username);
+      if (!profile) return undefined;
+
+      const lines: string[] = [`@${profile.username}`];
+      if (profile.biography) lines.push(`Bio: ${profile.biography}`);
+      if (profile.followersCount !== null) lines.push(`Followers: ${profile.followersCount.toLocaleString()}`);
+      if (profile.isVerified) lines.push('Verified: Yes');
+      if (profile.website) lines.push(`Website: ${profile.website}`);
+      if (profile.recentTweets.length > 0) {
+        lines.push('\nRecent tweets:');
+        for (const tweet of profile.recentTweets) {
+          lines.push(`- ${tweet.slice(0, 200)}`);
+        }
+      }
+      return lines.join('\n');
+    } catch (error) {
+      this.logger.debug({ err: error, username }, 'Profile enrichment failed');
+      return undefined;
+    }
+  }
 }
 
-function extractReplyToId(context: string | null): string | undefined {
+export function extractReplyToId(context: string | null): string | undefined {
   if (!context) return undefined;
   const match = context.match(/^reply_to:(\d+)/);
   return match?.[1];
 }
 
-function extractMediaUrls(context: string | null): string[] {
+export function extractHandleFromContext(context: string | null): string | undefined {
+  if (!context) return undefined;
+  const match = context.match(/\|handle:@(\w+)/);
+  return match?.[1];
+}
+
+export function extractParentAuthorFromTarget(targetName: string): string | undefined {
+  const match = targetName.match(/^tweet by @(\w+)/);
+  return match?.[1];
+}
+
+export function extractMediaUrls(context: string | null): string[] {
   if (!context) return [];
   const match = context.match(/\|media:(.+?)(?:\||$)/);
   if (!match?.[1]) return [];

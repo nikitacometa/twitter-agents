@@ -185,6 +185,7 @@ export interface CreativeMemory {
   angleWeights?: AngleWeight[];
   externalExamples?: FireExample[];
   learnedTechniques?: string[];
+  profileContext?: string;
 }
 
 // --- External examples ---
