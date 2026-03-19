@@ -208,12 +208,15 @@ if (config.TELEGRAM_BOT_TOKEN) {
   });
 
   void bot.start({
+    drop_pending_updates: true,
     onStart: () => {
       logger.info(
         { admins: config.TELEGRAM_ADMIN_IDS, openAccess: config.TELEGRAM_OPEN_ACCESS },
         'Telegram bot started',
       );
     },
+  }).catch((err) => {
+    logger.error({ err }, 'Telegram bot polling failed — bot continues without Telegram');
   });
 } else {
   logger.warn('TELEGRAM_BOT_TOKEN not set — Telegram bot disabled');
