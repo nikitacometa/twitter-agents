@@ -111,7 +111,7 @@ const DEFAULT_PRESETS: Record<TaskProfile, TaskPreset> = {
     timeoutMs: 120_000,
   },
   'farm-evaluate': {
-    model: 'sonnet',
+    model: 'opus',
     effort: 'medium',
     tools: [],
     maxTurns: 1,
