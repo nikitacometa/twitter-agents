@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   getPersona,
+  pickJudges,
   pickJudgePair,
   buildEvaluationPrompt,
   parseEvaluationOutput,
@@ -24,7 +25,7 @@ describe('getPersona', () => {
     const p = getPersona('data_hawk');
     expect(p.id).toBe('data_hawk');
     expect(p.name).toBe('Data Hawk');
-    expect(p.systemPrompt).toContain('fact-checks');
+    expect(p.systemPrompt).toContain('forensic researcher');
   });
 });
 
@@ -44,12 +45,24 @@ describe('pickJudgePair', () => {
 
   it('all three personas appear over many picks', () => {
     const seen = new Set<string>();
+    // pickJudgePair is deprecated — only returns first 2 of pickJudges
     for (let i = 0; i < 100; i++) {
       const [a, b] = pickJudgePair();
       seen.add(a.id);
       seen.add(b.id);
     }
-    expect(seen.size).toBe(3);
+    expect(seen.size).toBe(2);
+  });
+});
+
+describe('pickJudges', () => {
+  it('returns all 3 content judges', () => {
+    const judges = pickJudges();
+    expect(judges).toHaveLength(3);
+    const ids = judges.map((j) => j.id);
+    expect(ids).toContain('ct_degen');
+    expect(ids).toContain('comedy_writer');
+    expect(ids).toContain('data_hawk');
   });
 });
 
@@ -77,7 +90,7 @@ describe('buildEvaluationPrompt', () => {
     expect(prompt).toContain('No research context available');
   });
 
-  it('includes all 6 scoring criteria', () => {
+  it('includes all 8 scoring criteria', () => {
     const prompt = buildEvaluationPrompt(persona, 'X', 'roast', null);
     expect(prompt).toContain('SAVAGE');
     expect(prompt).toContain('FACTUAL');
@@ -85,6 +98,8 @@ describe('buildEvaluationPrompt', () => {
     expect(prompt).toContain('ORIGINAL');
     expect(prompt).toContain('SHAREABLE');
     expect(prompt).toContain('CRYPTO_NATIVE');
+    expect(prompt).toContain('DEGEN');
+    expect(prompt).toContain('TIMELY');
   });
 
   it('requests JSON output format', () => {
@@ -92,7 +107,7 @@ describe('buildEvaluationPrompt', () => {
     expect(prompt).toContain('Respond with ONLY valid JSON');
     expect(prompt).toContain('"reasoning"');
     expect(prompt).toContain('"scores"');
-    expect(prompt).toContain('"composite"');
+    expect(prompt).toContain('"one_line_why"');
   });
 });
 

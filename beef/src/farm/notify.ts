@@ -382,6 +382,62 @@ export function formatFarmSummary(data: FarmRunSummary): string {
 }
 
 // ---------------------------------------------------------------------------
+// Evaluate-only formatter (for standalone `farm evaluate` runs)
+// ---------------------------------------------------------------------------
+
+export interface EvaluateSummaryData {
+  evaluated: number;
+  promoted: number;
+  discarded: number;
+  threshold: number;
+  newStockpile: Pick<StockpiledRoast, 'targetName' | 'tweetText' | 'qualityScore' | 'angle'>[];
+  stockpileTotals: {
+    available: number;
+    total: number;
+    avgScore: number | null;
+  };
+}
+
+/**
+ * Formats a standalone evaluate run into a Telegram HTML message.
+ * Lighter than formatFarmSummary — no discover/generate sections.
+ */
+export function formatEvaluateSummary(data: EvaluateSummaryData): string {
+  const lines: string[] = [];
+
+  const date = new Date().toISOString().slice(0, 10);
+  lines.push(line(`🥩 ${bold('Roast Farm — Evaluate Run')}`));
+  lines.push(line());
+  lines.push(line(`📅 ${bold(date)}`));
+  lines.push(divider());
+
+  lines.push(line(`⚖️ ${bold('EVALUATE')}`));
+  lines.push(line());
+  lines.push(line(
+    `Evaluated: ${bold(String(data.evaluated))}  |  Threshold: ${code(String(data.threshold))}`,
+  ));
+  lines.push(line());
+  lines.push(line(
+    `✅ Promoted: ${bold(String(data.promoted))}  ❌ Discarded: ${code(String(data.discarded))}`,
+  ));
+
+  if (data.promoted > 0 && data.evaluated > 0) {
+    const rate = Math.round((data.promoted / data.evaluated) * 100);
+    lines.push(line(`Promotion rate: ${italic(`${String(rate)}%`)}`));
+  }
+
+  lines.push(line());
+  lines.push(
+    buildStockpileSection(data.newStockpile, data.stockpileTotals),
+  );
+
+  lines.push(line());
+  lines.push(italic('#BeefFarm #evaluate'));
+
+  return lines.join('');
+}
+
+// ---------------------------------------------------------------------------
 // Telegram sender
 // ---------------------------------------------------------------------------
 

@@ -1,19 +1,106 @@
 import type { Logger } from 'pino';
 import type { ProviderManager } from '@agent/provider-manager.js';
-import type { FarmAttempt, EvaluationResult, JudgeEvaluation } from './types.js';
+import type { FarmAttempt, EvaluationResult, EvaluationScores, JudgeEvaluation } from './types.js';
 import {
-  pickJudgePair,
+  pickJudges,
   buildEvaluationPrompt,
   parseEvaluationOutput,
 } from './judge-personas.js';
 import type { JudgePersonaConfig } from './judge-personas.js';
 import { getErrorMessage } from '@common/utils/error.util.js';
 
+// ---------------------------------------------------------------------------
+// Weighted scoring — FUNNY is king, TIMELY is tiebreaker
+// ---------------------------------------------------------------------------
+
+const DIMENSION_WEIGHTS: Record<keyof EvaluationScores, number> = {
+  funny: 0.20,
+  savage: 0.15,
+  shareable: 0.15,
+  original: 0.15,
+  factual: 0.10,
+  crypto_native: 0.10,
+  degen: 0.10,
+  timely: 0.05,
+};
+
+export function calculateWeightedComposite(scores: EvaluationScores): number {
+  let sum = 0;
+  for (const [dim, weight] of Object.entries(DIMENSION_WEIGHTS)) {
+    sum += (scores[dim as keyof EvaluationScores] ?? 0) * weight;
+  }
+  return sum;
+}
+
+function checkHardVetoes(scores: EvaluationScores): string | null {
+  if (scores.factual < 2) return 'FACTUAL < 2 (invented claims)';
+  if (scores.funny < 2) return 'FUNNY < 2 (not a roast, just commentary)';
+  return null;
+}
+
+// ---------------------------------------------------------------------------
+// Pre-filter — reject before expensive LLM calls
+// ---------------------------------------------------------------------------
+
+export interface PreFilterResult {
+  pass: boolean;
+  reason?: string;
+}
+
+const GENERIC_PATTERNS = [
+  /this is fine/i,
+  /probably nothing/i,
+  /few understand/i,
+  /most .+ could never/i,
+  /that's not .+, that's .+/i,
+];
+
+const TELEGRAPHED_PATTERNS = [
+  /i want to frame this/i,
+  /you have to respect the/i,
+  /i have nothing to add/i,
+];
+
+export function preFilter(tweetText: string): PreFilterResult {
+  // 1. Sentence count > 2 → auto-reject
+  const sentences = tweetText.split(/[.!?]+/).filter((s) => s.trim().length > 0);
+  if (sentences.length > 2) {
+    return { pass: false, reason: `exceeds 2 sentences (${String(sentences.length)} found)` };
+  }
+
+  // 2. Character count > 280 → auto-reject
+  if (tweetText.length > 280) {
+    return { pass: false, reason: `exceeds 280 chars (${String(tweetText.length)})` };
+  }
+
+  // 3. Generic punchline patterns → auto-reject
+  for (const p of GENERIC_PATTERNS) {
+    if (p.test(tweetText)) {
+      return { pass: false, reason: `generic pattern: ${p.source}` };
+    }
+  }
+
+  // 4. Telegraphed punchline patterns → auto-reject
+  for (const p of TELEGRAPHED_PATTERNS) {
+    if (p.test(tweetText)) {
+      return { pass: false, reason: `telegraphed pattern: ${p.source}` };
+    }
+  }
+
+  return { pass: true };
+}
+
+// ---------------------------------------------------------------------------
+// Evaluator
+// ---------------------------------------------------------------------------
+
 export interface EvaluationOutput {
   attemptId: number;
   compositeScore: number;
   evaluations: JudgeEvaluation[];
   verdict: 'stockpile' | 'discard';
+  vetoReasons?: string[];
+  preFilterReason?: string;
 }
 
 export class SelfEvaluator {
@@ -28,25 +115,41 @@ export class SelfEvaluator {
   }) {
     this.provider = opts.provider;
     this.logger = opts.logger;
-    this.threshold = opts.threshold ?? 4.0;
+    this.threshold = opts.threshold ?? 3.5;
   }
 
   async evaluate(attempt: FarmAttempt): Promise<EvaluationOutput> {
-    const [judge1, judge2] = pickJudgePair();
+    // Pre-filter: reject before expensive LLM calls
+    const preCheck = preFilter(attempt.tweetText);
+    if (!preCheck.pass) {
+      this.logger.info(
+        { attemptId: attempt.id, reason: preCheck.reason, target: attempt.targetName },
+        'Pre-filtered: skipping LLM evaluation',
+      );
+      return {
+        attemptId: attempt.id,
+        compositeScore: 0,
+        evaluations: [],
+        verdict: 'discard',
+        preFilterReason: preCheck.reason,
+      };
+    }
+
+    // Use all 3 content judges to eliminate complementary bias
+    const judges = pickJudges();
     this.logger.info(
-      { attemptId: attempt.id, judges: [judge1.id, judge2.id], target: attempt.targetName },
-      'Evaluating attempt with judge pair',
+      { attemptId: attempt.id, judges: judges.map((j) => j.id), target: attempt.targetName },
+      'Evaluating attempt with judge panel',
     );
 
-    const evaluations = await Promise.allSettled([
-      this.runSingleJudge(judge1, attempt),
-      this.runSingleJudge(judge2, attempt),
-    ]);
+    const evaluations = await Promise.allSettled(
+      judges.map((judge) => this.runSingleJudge(judge, attempt)),
+    );
 
     const results: JudgeEvaluation[] = [];
     for (let i = 0; i < evaluations.length; i++) {
       const evaluation = evaluations[i]!;
-      const judge = i === 0 ? judge1 : judge2;
+      const judge = judges[i]!;
       if (evaluation.status === 'fulfilled') {
         results.push({ persona: judge.id, result: evaluation.value });
       } else {
@@ -61,9 +164,30 @@ export class SelfEvaluator {
       throw new Error(`All judges failed for attempt ${String(attempt.id)}`);
     }
 
-    const compositeScore = results.reduce((sum, r) => sum + r.result.composite, 0) / results.length;
-    const roundedScore = Math.round(compositeScore * 10) / 10;
-    const verdict = roundedScore >= this.threshold ? 'stockpile' : 'discard';
+    // Weighted composite per judge, then average across judges
+    const composites = results.map((r) => calculateWeightedComposite(r.result.scores));
+    const avgComposite = composites.reduce((a, b) => a + b, 0) / composites.length;
+    const roundedScore = Math.round(avgComposite * 10) / 10;
+
+    // Hard vetoes: if ANY judge flags a critical dimension, auto-discard
+    const vetoReasons: string[] = [];
+    for (const r of results) {
+      const veto = checkHardVetoes(r.result.scores);
+      if (veto) vetoReasons.push(`${r.persona}: ${veto}`);
+    }
+
+    const verdict = vetoReasons.length > 0
+      ? 'discard'
+      : roundedScore >= this.threshold
+        ? 'stockpile'
+        : 'discard';
+
+    if (vetoReasons.length > 0) {
+      this.logger.info(
+        { attemptId: attempt.id, target: attempt.targetName, vetoReasons },
+        'Hard veto triggered',
+      );
+    }
 
     this.logger.info(
       {
@@ -71,7 +195,11 @@ export class SelfEvaluator {
         target: attempt.targetName,
         compositeScore: roundedScore,
         verdict,
-        judgeScores: results.map((r) => ({ judge: r.persona, score: r.result.composite })),
+        judgeScores: results.map((r) => ({
+          judge: r.persona,
+          weighted: Math.round(calculateWeightedComposite(r.result.scores) * 10) / 10,
+          scores: r.result.scores,
+        })),
       },
       'Evaluation complete',
     );
@@ -81,6 +209,7 @@ export class SelfEvaluator {
       compositeScore: roundedScore,
       evaluations: results,
       verdict,
+      vetoReasons: vetoReasons.length > 0 ? vetoReasons : undefined,
     };
   }
 

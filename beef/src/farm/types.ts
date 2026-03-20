@@ -100,7 +100,7 @@ export interface InsertStockpileRoast {
 
 // --- Evaluation ---
 
-export type JudgePersona = 'ct_degen' | 'comedy_writer' | 'data_hawk';
+export type JudgePersona = 'ct_degen' | 'comedy_writer' | 'data_hawk' | 'brand_guardian';
 
 export interface EvaluationScores {
   savage: number;
@@ -109,6 +109,8 @@ export interface EvaluationScores {
   original: number;
   shareable: number;
   crypto_native: number;
+  degen: number;
+  timely: number;
 }
 
 export interface EvaluationResult {

@@ -8,7 +8,7 @@
  *   pnpm farm pipeline --count 10
  *   pnpm farm discover --limit 20
  *   pnpm farm generate --targets "Uniswap,Aave"
- *   pnpm farm evaluate --threshold 4.0
+ *   pnpm farm evaluate --threshold 3.5
  *   pnpm farm export --top 50 --output data/landing.json
  *   pnpm farm sync --export data/stockpile.ndjson
  *   pnpm farm sync --import data/stockpile.ndjson
@@ -33,9 +33,9 @@ import { BatchGenerator } from './batch-generator.js';
 import { TargetDiscoverer } from './target-discoverer.js';
 import { createFarmLogger } from './logger.js';
 import { exportNdjson, importNdjson, exportLandingJson } from './sync.js';
-import { formatFarmSummary, sendFarmNotification } from './notify.js';
+import { formatFarmSummary, formatEvaluateSummary, sendFarmNotification } from './notify.js';
 import type { FarmRunSummary, GenerateTargetStats, EvaluateAttemptResult } from './notify.js';
-import type { FarmStats } from './types.js';
+import type { FarmStats, StockpiledRoast } from './types.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const DEFAULT_DB_PATH = resolve(__dirname, '../../data/beef.db');
@@ -305,10 +305,11 @@ program
   .description('Evaluate unevaluated farm attempts with judge panel')
   .option('--db <path>', 'Database path', DEFAULT_DB_PATH)
   .option('--limit <n>', 'Max attempts to evaluate', '20')
-  .option('--threshold <score>', 'Minimum composite score for stockpile', '4.0')
+  .option('--threshold <score>', 'Minimum composite score for stockpile', '3.5')
   .option('--concurrency <n>', 'Parallel evaluations', '3')
-  .action(async (opts: { db: string; limit: string; threshold: string; concurrency: string }) => {
-    const { db, farmAttempt, stockpile, logger } = createRepos(opts.db);
+  .option('--no-notify', 'Disable Telegram notification')
+  .action(async (opts: { db: string; limit: string; threshold: string; concurrency: string; notify: boolean }) => {
+    const { db, farmTarget, farmAttempt, stockpile, logger } = createRepos(opts.db);
     const provider = createProviderFrom(db, logger);
 
     const limit = parseInt(opts.limit, 10);
@@ -329,6 +330,7 @@ program
 
     let promoted = 0;
     let discarded = 0;
+    const newStockpile: Pick<StockpiledRoast, 'targetName' | 'tweetText' | 'qualityScore' | 'angle'>[] = [];
 
     for (const result of results) {
       const evalJson = JSON.stringify(result.evaluations);
@@ -358,6 +360,12 @@ program
           });
           farmAttempt.markPromoted(attempt.id);
           promoted++;
+          newStockpile.push({
+            targetName: attempt.targetName,
+            tweetText: attempt.tweetText,
+            qualityScore: result.compositeScore,
+            angle: attempt.angle,
+          });
           console.log(`  ✓ ${attempt.targetName}: ${result.compositeScore.toFixed(1)} → stockpile`);
         }
       } else {
@@ -369,6 +377,33 @@ program
     }
 
     console.log(`\nDone: ${String(promoted)} promoted, ${String(discarded)} discarded`);
+
+    // --- Telegram Notification ---
+    if (opts.notify) {
+      const botToken = process.env['TELEGRAM_BOT_TOKEN'];
+      const chatId = process.env['TELEGRAM_CHAT_ID'];
+
+      if (!botToken || !chatId) {
+        logger.warn('TELEGRAM_BOT_TOKEN or TELEGRAM_CHAT_ID not set — skipping notification');
+      } else {
+        const stats = buildStats(farmTarget, farmAttempt, stockpile);
+        const message = formatEvaluateSummary({
+          evaluated: results.length,
+          promoted,
+          discarded,
+          threshold,
+          newStockpile,
+          stockpileTotals: {
+            available: stats.stockpile.available,
+            total: stats.stockpile.total,
+            avgScore: stats.stockpile.avgScore,
+          },
+        });
+        await sendFarmNotification(botToken, chatId, message);
+        logger.info({ chatId }, 'Evaluate notification sent');
+      }
+    }
+
     db.close();
   });
 
@@ -452,11 +487,11 @@ program
   .option('--variants <n>', 'Variants per target', '3')
   .option('--mutations <n>', 'Mutations per target', '2')
   .option('--eval-limit <n>', 'Max attempts to evaluate', '20')
-  .option('--threshold <score>', 'Minimum score for stockpile', '4.0')
+  .option('--threshold <score>', 'Minimum score for stockpile', '3.5')
   .option('--concurrency <n>', 'Parallel tasks', '2')
   .option('--enrich', 'Enrich top candidates via Perplexity')
   .option('--max-enrich <n>', 'Max Perplexity enrichment calls', '5')
-  .option('--notify', 'Send Telegram notification on completion')
+  .option('--no-notify', 'Disable Telegram notification')
   .action(async (opts: {
     db: string;
     discoverLimit: string;
@@ -469,7 +504,7 @@ program
     concurrency: string;
     enrich?: boolean;
     maxEnrich: string;
-    notify?: boolean;
+    notify: boolean;
   }) => {
     const { db, farmTarget, farmAttempt, stockpile, logger } = createRepos(opts.db);
     const startedAt = new Date().toISOString();
@@ -493,7 +528,7 @@ program
       promoted: 0,
       discarded: 0,
       duplicates: 0,
-      threshold: 4.0,
+      threshold: 3.5,
       results: [],
     };
     const newStockpile: FarmRunSummary['newStockpile'] = [];
