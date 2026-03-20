@@ -226,7 +226,7 @@ program
     mutations: string;
     concurrency: string;
   }) => {
-    const { db, farmTarget, farmAttempt, logger } = createRepos(opts.db);
+    const { db, farmTarget, farmAttempt, stockpile, logger } = createRepos(opts.db);
     const provider = createProviderFrom(db, logger);
 
     let targets: Array<{ name: string; type: string }> = [];
@@ -261,6 +261,7 @@ program
     const generator = new BatchGenerator({
       provider,
       farmAttempt,
+      stockpile,
       logger,
       variantsPerTarget,
       mutationCount,
@@ -279,10 +280,11 @@ program
         ? ` [${result.mutations.map((m) => m.id).join(', ')}]`
         : '';
 
+      const strategyLabel = result.strategies.join('+') || 'none';
       if (result.errors.length > 0) {
-        console.log(`  ✗ ${result.targetName} (${result.strategy}${mutationLabel}): ${result.errors[0]}`);
+        console.log(`  ✗ ${result.targetName} (${strategyLabel}${mutationLabel}): ${result.errors[0]}`);
       } else {
-        console.log(`  ✓ ${result.targetName} (${result.strategy}${mutationLabel}): ${String(result.attempts)} stored, ${String(result.filtered)} filtered`);
+        console.log(`  ✓ ${result.targetName} (${strategyLabel}${mutationLabel}): ${String(result.attempts)} stored, ${String(result.filtered)} filtered`);
       }
     }
 
@@ -608,6 +610,7 @@ program
         const generator = new BatchGenerator({
           provider,
           farmAttempt,
+          stockpile,
           logger,
           variantsPerTarget,
           mutationCount,
@@ -624,7 +627,7 @@ program
 
           const perTarget: GenerateTargetStats = {
             name: result.targetName,
-            type: result.strategy,
+            type: result.strategies.join('+') || 'none',
             attempts: result.attempts,
             filtered: result.filtered,
             errors: result.errors,

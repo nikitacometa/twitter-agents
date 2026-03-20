@@ -1,6 +1,6 @@
 # $BEEF — AI Crypto Roast Bot
 
-Single AI bot that roasts crypto projects, tokens, and narratives on Twitter. Community interacts via burn-to-roast requests and fact-checking challenges.
+Single AI bot that roasts crypto projects, tokens, KOLs, founders, and influencers on Twitter. Community interacts via burn-to-roast requests and fact-checking challenges.
 
 **One-liner:** "AI that roasts your bags. Burn $BEEF to aim it."
 
@@ -8,8 +8,8 @@ Single AI bot that roasts crypto projects, tokens, and narratives on Twitter. Co
 
 ```
 1. Bot autonomously monitors crypto news, launches, and narratives
-2. Posts savage roasts of projects, tokens, trends (5-10/day + 40-60 replies)
-3. Users burn $BEEF to submit roast requests (target a specific project)
+2. Posts savage roasts of projects, tokens, KOLs, founders (5-10/day + 40-60 replies)
+3. Users burn $BEEF to submit roast requests (target a project, KOL, or influencer)
 4. If bot roasts with false info → community challenges via Snapshot vote
 5. Valid challenge → challenger rewarded from treasury
 6. Invalid challenge → challenger's stake burned
@@ -222,6 +222,8 @@ Single bot: **$BEEF** — aggressive degen roaster, crypto-native, meme-fluent.
 
 **Anti-patterns:**
 - No generic insults ("you're dumb") — always specific ("your TVL dropped 94% and you're tweeting about partnerships")
+- Roast KOLs, founders, VCs, influencers — people with power and platform. Use their tweets, on-chain activity, promotion history as ammunition
+- Never punch down — retail investors who got rekt are NOT targets
 - No doxxing, slurs, threats
 - No coordinated brigading
 - No financial advice (even sarcastically)

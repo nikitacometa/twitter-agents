@@ -124,12 +124,6 @@ function formatTime(iso: string): string {
   return `${hh}:${mm} UTC`;
 }
 
-/** Renders a score bar: filled squares proportional to score out of 10. */
-function scoreBar(score: number, max = 10, width = 8): string {
-  const filled = Math.round((score / max) * width);
-  return '█'.repeat(filled) + '░'.repeat(width - filled);
-}
-
 /** Truncates text to maxLen with ellipsis. Preserves whole words when possible. */
 function truncate(text: string, maxLen: number): string {
   if (text.length <= maxLen) return text;
@@ -272,17 +266,17 @@ function buildEvaluateSection(evaluate: FarmRunSummary['evaluate']): string {
 
   if (promoted.length > 0) {
     lines.push(line());
-    lines.push(line(italic('Top promoted:')));
+    lines.push(line(italic('Promoted:')));
     for (const r of promoted) {
-      lines.push(line(`  ✓ ${bold(r.targetName)}  ${code(r.score.toFixed(1))}  ${italic(scoreBar(r.score))}`));
+      lines.push(line(`  ✓ ${bold(r.targetName)}`));
     }
   }
 
   if (discarded.length > 0) {
     lines.push(line());
-    lines.push(line(italic('Lowest discarded:')));
+    lines.push(line(italic('Discarded:')));
     for (const r of discarded) {
-      lines.push(line(`  ✗ ${italic(r.targetName)}  ${code(r.score.toFixed(1))}`));
+      lines.push(line(`  ✗ ${italic(r.targetName)}`));
     }
   }
 
@@ -317,15 +311,15 @@ function buildStockpileSection(
   const sorted = [...newStockpile].sort((a, b) => b.qualityScore - a.qualityScore);
 
   for (const roast of sorted) {
-    const angle = roast.angle ? ` ${italic(`[${roast.angle}]`)}` : '';
-    const scoreStr = roast.qualityScore.toFixed(1);
-
     lines.push(line());
-    lines.push(line(`${bold(roast.targetName)}${angle}  ${code(scoreStr)}`));
+    lines.push(line(`${bold(roast.targetName)}  AI: ${code('?')}`));
 
     // Roast text in a pre block for fixed-width readability, truncated to ~220 chars
     const text = truncate(roast.tweetText, 220);
     lines.push(`<pre>${escapeHtml(text)}</pre>\n`);
+
+    // Human rating prompt (blind evaluation)
+    lines.push(line(`Rate: ${code('1')}  ${code('2')}  ${code('3')}  ${code('4')}  ${code('5')}`));
   }
 
   return lines.join('');

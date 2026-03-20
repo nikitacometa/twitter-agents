@@ -79,15 +79,45 @@ const PERSONAS: Record<JudgePersona, JudgePersonaConfig> = {
       '- Newsletter voice: "It\'s worth noting...", "The data suggests..."\n' +
       '- No forensic or AI angle whatsoever',
   },
+  deflation_hawk: {
+    id: 'deflation_hawk',
+    name: 'Deflation Hawk',
+    systemPrompt:
+      'You are the harshest judge on the panel. Your DEFAULT stance is that this roast ' +
+      'is mid — you need to be CONVINCED otherwise. You fight score inflation.\n\n' +
+      'YOUR JOB: find the reason this roast should NOT be published.\n\n' +
+      'HIGH marks (4-5) — you almost never give these:\n' +
+      '- You genuinely laughed or felt a pang of "oh shit"\n' +
+      '- You cannot find anything generic, borrowed, or filler\n' +
+      '- The roast would stand out on a timeline of 200 CT tweets\n' +
+      '- You tried to find a flaw and couldn\'t\n\n' +
+      'LOW marks (1-2) — your natural habitat:\n' +
+      '- You\'ve seen this structure before, even if the details differ\n' +
+      '- The data point is real but the framing is boring\n' +
+      '- Setup telegraphs the punchline — you knew where it was going\n' +
+      '- It\'s "fine" but nobody would screenshot it\n' +
+      '- Swap the project name and the roast still works (= generic)\n\n' +
+      'SCORING POLICY:\n' +
+      '- Start every dimension at 2 and require evidence to raise it\n' +
+      '- If your gut says "this is okay" — score it 3, not 4\n' +
+      '- Only give 5 if you\'d bet money this tweet goes viral\n' +
+      '- When in doubt, round DOWN',
+  },
 };
 
 export function getPersona(id: JudgePersona): JudgePersonaConfig {
   return PERSONAS[id];
 }
 
-/** Returns all 3 content judges for evaluation. */
+/** Returns all 5 judges for evaluation (3 content + brand + deflation hawk). */
 export function pickJudges(): JudgePersonaConfig[] {
-  return [PERSONAS.ct_degen, PERSONAS.comedy_writer, PERSONAS.data_hawk];
+  return [
+    PERSONAS.ct_degen,
+    PERSONAS.comedy_writer,
+    PERSONAS.data_hawk,
+    PERSONAS.brand_guardian,
+    PERSONAS.deflation_hawk,
+  ];
 }
 
 /** @deprecated Use pickJudges() — kept for backward compatibility. */

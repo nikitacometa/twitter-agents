@@ -641,7 +641,7 @@ At 0.684% creator fee: **$8/mo ÷ 0.00684 = $1,170 monthly trading volume needed
 
 1. **New token vs existing token vs anonymous?** → Recommendation: new token, launched by bot account (not personal)
 2. **Twitter API Basic — buy today?** → $200/mo, enables reliable operation. Yes
-3. **Bot Twitter handle?** → Must check availability: @BeefRoastBot, @BeefRoasts, @beef_agent, @0xBEEF
+3. **Bot Twitter handle?** → Decided: **@BeefThis** (CTA-style — tagging = command "beef this")
 
 ### Must decide before Phase 2
 

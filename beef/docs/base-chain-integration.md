@@ -22,9 +22,9 @@ Content-Type: application/json
   "tokenSymbol": "BEEF",
   "description": "AI that roasts your bags. Burn $BEEF to aim it.",
   "image": "https://ipfs.io/ipfs/<cid>",
-  "tweetUrl": "https://x.com/beefroastbot/status/...",
+  "tweetUrl": "https://x.com/BeefThis/status/...",
   "feeRecipient": {
-    "xHandle": "beefroastbot"
+    "xHandle": "BeefThis"
   },
   "simulateOnly": false
 }
@@ -296,7 +296,7 @@ const agentId = BigInt(transferLog?.topics[3] ?? '0x0');
   "description": "AI that roasts crypto projects. Burn $BEEF to aim it.",
   "version": "1.0.0",
   "agent_type": "roast_bot",
-  "twitter": "https://x.com/beefroastbot",
+  "twitter": "https://x.com/BeefThis",
   "token": "0x...",
   "chain": "eip155:8453",
   "capabilities": ["roast_generation", "burn_to_request", "accountability_voting"]

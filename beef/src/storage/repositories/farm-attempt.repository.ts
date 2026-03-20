@@ -30,6 +30,7 @@ export class FarmAttemptRepository {
   private readonly countEvaluatedStmt: Database.Statement;
   private readonly countPromotedStmt: Database.Statement;
   private readonly avgScoreStmt: Database.Statement;
+  private readonly worstEvaluatedStmt: Database.Statement;
 
   constructor(db: Database.Database) {
     this.insertStmt = db.prepare(`
@@ -77,6 +78,15 @@ export class FarmAttemptRepository {
     this.avgScoreStmt = db.prepare(
       'SELECT AVG(evaluator_score) as avg FROM farm_attempts WHERE evaluator_score IS NOT NULL',
     );
+
+    this.worstEvaluatedStmt = db.prepare(`
+      SELECT * FROM farm_attempts
+      WHERE evaluator_score IS NOT NULL
+      AND promoted = 0
+      AND evaluator_score <= ?
+      ORDER BY evaluator_score ASC
+      LIMIT ?
+    `);
   }
 
   insert(attempt: InsertFarmAttempt): number {
@@ -115,6 +125,10 @@ export class FarmAttemptRepository {
   pruneOld(ttlDays: number): number {
     const result = this.pruneOldStmt.run(`-${String(ttlDays)} days`);
     return result.changes;
+  }
+
+  getWorstEvaluated(maxScore: number, limit: number): FarmAttempt[] {
+    return (this.worstEvaluatedStmt.all(maxScore, limit) as FarmAttemptRow[]).map(mapRow);
   }
 
   getStats(): { total: number; evaluated: number; promoted: number; avgScore: number | null } {

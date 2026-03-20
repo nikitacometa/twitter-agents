@@ -18,9 +18,9 @@ const DIMENSION_WEIGHTS: Record<keyof EvaluationScores, number> = {
   savage: 0.15,
   shareable: 0.15,
   original: 0.15,
+  degen: 0.15,
   factual: 0.10,
-  crypto_native: 0.10,
-  degen: 0.10,
+  crypto_native: 0.05,
   timely: 0.05,
 };
 
@@ -35,6 +35,8 @@ export function calculateWeightedComposite(scores: EvaluationScores): number {
 function checkHardVetoes(scores: EvaluationScores): string | null {
   if (scores.factual < 2) return 'FACTUAL < 2 (invented claims)';
   if (scores.funny < 2) return 'FUNNY < 2 (not a roast, just commentary)';
+  if (scores.original < 2) return 'ORIGINAL < 2 (completely generic)';
+  if (scores.degen < 1) return 'DEGEN < 1 (zero brand voice)';
   return null;
 }
 
@@ -62,10 +64,10 @@ const TELEGRAPHED_PATTERNS = [
 ];
 
 export function preFilter(tweetText: string): PreFilterResult {
-  // 1. Sentence count > 2 → auto-reject
+  // 1. Sentence count > 3 → auto-reject (setup → context → punchline is fine)
   const sentences = tweetText.split(/[.!?]+/).filter((s) => s.trim().length > 0);
-  if (sentences.length > 2) {
-    return { pass: false, reason: `exceeds 2 sentences (${String(sentences.length)} found)` };
+  if (sentences.length > 3) {
+    return { pass: false, reason: `exceeds 3 sentences (${String(sentences.length)} found)` };
   }
 
   // 2. Character count > 280 → auto-reject
@@ -97,6 +99,7 @@ export function preFilter(tweetText: string): PreFilterResult {
 export interface EvaluationOutput {
   attemptId: number;
   compositeScore: number;
+  judgeVariance: number;
   evaluations: JudgeEvaluation[];
   verdict: 'stockpile' | 'discard';
   vetoReasons?: string[];
@@ -129,13 +132,14 @@ export class SelfEvaluator {
       return {
         attemptId: attempt.id,
         compositeScore: 0,
+        judgeVariance: 0,
         evaluations: [],
         verdict: 'discard',
         preFilterReason: preCheck.reason,
       };
     }
 
-    // Use all 3 content judges to eliminate complementary bias
+    // Use all 5 judges to eliminate complementary bias
     const judges = pickJudges();
     this.logger.info(
       { attemptId: attempt.id, judges: judges.map((j) => j.id), target: attempt.targetName },
@@ -169,11 +173,24 @@ export class SelfEvaluator {
     const avgComposite = composites.reduce((a, b) => a + b, 0) / composites.length;
     const roundedScore = Math.round(avgComposite * 10) / 10;
 
+    // Inter-judge variance (standard deviation of composites)
+    const variance = composites.length > 1
+      ? Math.sqrt(composites.reduce((sum, c) => sum + (c - avgComposite) ** 2, 0) / composites.length)
+      : 0;
+    const roundedVariance = Math.round(variance * 100) / 100;
+
     // Hard vetoes: if ANY judge flags a critical dimension, auto-discard
     const vetoReasons: string[] = [];
     for (const r of results) {
       const veto = checkHardVetoes(r.result.scores);
       if (veto) vetoReasons.push(`${r.persona}: ${veto}`);
+    }
+
+    // Consensus veto: if majority of judges give composite < 3.0, auto-discard
+    const lowJudgeCount = composites.filter((c) => c < 3.0).length;
+    const majorityThreshold = Math.ceil(results.length / 2);
+    if (lowJudgeCount >= majorityThreshold) {
+      vetoReasons.push(`CONSENSUS: ${String(lowJudgeCount)}/${String(results.length)} judges scored < 3.0`);
     }
 
     const verdict = vetoReasons.length > 0
@@ -194,6 +211,7 @@ export class SelfEvaluator {
         attemptId: attempt.id,
         target: attempt.targetName,
         compositeScore: roundedScore,
+        judgeVariance: roundedVariance,
         verdict,
         judgeScores: results.map((r) => ({
           judge: r.persona,
@@ -207,6 +225,7 @@ export class SelfEvaluator {
     return {
       attemptId: attempt.id,
       compositeScore: roundedScore,
+      judgeVariance: roundedVariance,
       evaluations: results,
       verdict,
       vetoReasons: vetoReasons.length > 0 ? vetoReasons : undefined,

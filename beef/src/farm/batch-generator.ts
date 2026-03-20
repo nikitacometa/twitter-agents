@@ -14,10 +14,12 @@ import {
 import type { PromptStrategy } from '@roast/prompt-builder.js';
 import { filterRoast } from '@content/content-filter.js';
 import type { FarmAttemptRepository } from '@storage/repositories/farm-attempt.repository.js';
+import type { StockpileRepository } from '@storage/repositories/stockpile.repository.js';
 import { pickMutations, formatMutationSection } from './mutations.js';
 import { classifyFreshness, calculateExpiry } from './freshness.js';
 import type { Mutation, InsertFarmAttempt } from './types.js';
 import { getErrorMessage } from '@common/utils/error.util.js';
+import type { CreativeMemory, FireExample, RejectExample, AngleWeight } from '@common/types/index.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const DEFAULT_CHARACTER_PATH = resolve(__dirname, '../../characters/beef-bot.json');
@@ -25,6 +27,7 @@ const DEFAULT_CHARACTER_PATH = resolve(__dirname, '../../characters/beef-bot.jso
 export interface BatchGeneratorOptions {
   provider: ProviderManager;
   farmAttempt: FarmAttemptRepository;
+  stockpile?: StockpileRepository;
   logger: Logger;
   characterPath?: string;
   variantsPerTarget?: number;
@@ -33,7 +36,7 @@ export interface BatchGeneratorOptions {
 
 export interface GenerationResult {
   targetName: string;
-  strategy: PromptStrategy;
+  strategies: PromptStrategy[];
   mutations: Mutation[];
   attempts: number;
   filtered: number;
@@ -43,6 +46,7 @@ export interface GenerationResult {
 export class BatchGenerator {
   private readonly provider: ProviderManager;
   private readonly farmAttempt: FarmAttemptRepository;
+  private readonly stockpile: StockpileRepository | null;
   private readonly logger: Logger;
   private readonly character: CharacterConfig;
   private readonly variantsPerTarget: number;
@@ -51,6 +55,7 @@ export class BatchGenerator {
   constructor(opts: BatchGeneratorOptions) {
     this.provider = opts.provider;
     this.farmAttempt = opts.farmAttempt;
+    this.stockpile = opts.stockpile ?? null;
     this.logger = opts.logger;
     this.variantsPerTarget = opts.variantsPerTarget ?? 3;
     this.mutationCount = opts.mutationCount ?? 2;
@@ -68,11 +73,7 @@ export class BatchGenerator {
     for (let i = 0; i < targets.length; i += concurrency) {
       const chunk = targets.slice(i, i + concurrency);
       const chunkResults = await Promise.allSettled(
-        chunk.map((target, idx) => {
-          const globalIdx = i + idx;
-          const strategy = PROMPT_STRATEGIES[globalIdx % PROMPT_STRATEGIES.length]!;
-          return this.generateForTarget(target.name, target.type, strategy);
-        }),
+        chunk.map((target) => this.generateMultiStrategy(target.name, target.type)),
       );
 
       for (let j = 0; j < chunkResults.length; j++) {
@@ -87,7 +88,7 @@ export class BatchGenerator {
           );
           results.push({
             targetName: target.name,
-            strategy: PROMPT_STRATEGIES[(i + j) % PROMPT_STRATEGIES.length]!,
+            strategies: [],
             mutations: [],
             attempts: 0,
             filtered: 0,
@@ -98,6 +99,54 @@ export class BatchGenerator {
     }
 
     return results;
+  }
+
+  /**
+   * Run all 3 strategies for a single target, each with its own mutations.
+   * Merges results into one GenerationResult.
+   */
+  private async generateMultiStrategy(
+    targetName: string,
+    targetType: string,
+  ): Promise<GenerationResult> {
+    const strategyResults = await Promise.allSettled(
+      PROMPT_STRATEGIES.map((strategy) =>
+        this.generateForTarget(targetName, targetType, strategy),
+      ),
+    );
+
+    let totalAttempts = 0;
+    let totalFiltered = 0;
+    const allMutations: Mutation[] = [];
+    const succeededStrategies: PromptStrategy[] = [];
+    const errors: string[] = [];
+
+    for (let i = 0; i < strategyResults.length; i++) {
+      const result = strategyResults[i]!;
+      const strategy = PROMPT_STRATEGIES[i]!;
+      if (result.status === 'fulfilled') {
+        totalAttempts += result.value.attempts;
+        totalFiltered += result.value.filtered;
+        allMutations.push(...result.value.mutations);
+        succeededStrategies.push(strategy);
+        errors.push(...result.value.errors);
+      } else {
+        this.logger.warn(
+          { target: targetName, strategy, err: result.reason },
+          'Strategy failed, continuing with others',
+        );
+        errors.push(`${strategy}: ${getErrorMessage(result.reason)}`);
+      }
+    }
+
+    return {
+      targetName,
+      strategies: succeededStrategies,
+      mutations: allMutations,
+      attempts: totalAttempts,
+      filtered: totalFiltered,
+      errors,
+    };
   }
 
   private async generateForTarget(
@@ -168,7 +217,7 @@ export class BatchGenerator {
 
     return {
       targetName,
-      strategy,
+      strategies: [strategy],
       mutations,
       attempts: storedCount,
       filtered: filteredCount,
@@ -177,14 +226,87 @@ export class BatchGenerator {
   }
 
   private buildStrategyPrompt(strategy: PromptStrategy, targetName: string): string {
+    const memory = this.buildCreativeMemory();
     switch (strategy) {
       case 'rubric':
-        return buildRoastPrompt(targetName, this.character, this.variantsPerTarget);
+        return buildRoastPrompt(targetName, this.character, this.variantsPerTarget, memory);
       case 'persona':
-        return buildPersonaPrompt(targetName, this.character, this.variantsPerTarget);
+        return buildPersonaPrompt(targetName, this.character, this.variantsPerTarget, memory);
       case 'adversarial':
-        return buildAdversarialPrompt(targetName, this.character, this.variantsPerTarget);
+        return buildAdversarialPrompt(targetName, this.character, this.variantsPerTarget, memory);
     }
+  }
+
+  /**
+   * Build CreativeMemory from past stockpile/attempt data.
+   * Provides fire examples, reject patterns, and angle weights to prompt builders.
+   */
+  private buildCreativeMemory(): CreativeMemory | undefined {
+    if (!this.stockpile) return undefined;
+
+    try {
+      // Fire examples: top-scoring roasts from stockpile (score >= 4.0)
+      const topRoasts = this.stockpile.getTopScored(4.0, 5);
+      const fireExamples: FireExample[] = topRoasts.map((r) => ({
+        text: r.tweetText,
+        angle: r.angle ?? 'UNKNOWN',
+        target: r.targetName,
+      }));
+
+      // Reject examples: worst evaluated attempts (score <= 2.5)
+      const worstAttempts = this.farmAttempt.getWorstEvaluated(2.5, 3);
+      const rejectExamples: RejectExample[] = worstAttempts.map((a) => ({
+        text: a.tweetText,
+        angle: a.angle ?? 'UNKNOWN',
+        target: a.targetName,
+      }));
+
+      // Angle weights: boost underused angles
+      const angleDist = this.stockpile.getAngleDistribution();
+      const angleWeights = this.computeAngleWeights(angleDist);
+
+      if (fireExamples.length === 0 && rejectExamples.length === 0) {
+        return undefined;
+      }
+
+      return {
+        fireExamples,
+        rejectExamples,
+        angleWeights,
+      };
+    } catch (err) {
+      this.logger.warn({ err }, 'Failed to build creative memory from past data');
+      return undefined;
+    }
+  }
+
+  /**
+   * Compute angle weights: underused angles get higher weight (inverse frequency).
+   * Ensures variety in generated roasts.
+   */
+  private computeAngleWeights(
+    angleDist: Array<{ angle: string; count: number }>,
+  ): AngleWeight[] {
+    if (angleDist.length === 0) return [];
+
+    const maxCount = Math.max(...angleDist.map((a) => a.count));
+    const usedAngles = new Set(angleDist.map((a) => a.angle));
+
+    // Known angles from ANGLES constant
+    const allAngles = [
+      'DATA_BOMB', 'TIMELINE', 'COMPARISON', 'FAKE_COMPLIMENT',
+      'RHETORICAL', 'SELF_AWARE', 'QUOTE_FLIP', 'UNDERSTATEMENT', 'RULE_OF_THREE',
+    ];
+
+    return allAngles.map((angle) => {
+      if (!usedAngles.has(angle)) {
+        // Never used → max boost
+        return { angle, weight: 2.0 };
+      }
+      const count = angleDist.find((a) => a.angle === angle)?.count ?? 0;
+      // Inverse frequency: less used → higher weight
+      return { angle, weight: 1 + (maxCount - count) / maxCount };
+    });
   }
 
   private parseOutput(data: unknown, taskId: string): AgentRoastOutput {

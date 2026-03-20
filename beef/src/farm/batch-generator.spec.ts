@@ -6,6 +6,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { createDatabase } from '@storage/database.js';
 import { FarmAttemptRepository } from '@storage/repositories/farm-attempt.repository.js';
 import { BatchGenerator } from './batch-generator.js';
+import { StockpileRepository } from '@storage/repositories/stockpile.repository.js';
 import type { ProviderManager } from '@agent/provider-manager.js';
 import { logger } from '@common/utils/logger.js';
 
@@ -46,7 +47,7 @@ describe('BatchGenerator', () => {
     rmSync(tmpDir, { recursive: true, force: true });
   });
 
-  it('generates and stores attempts for a single target', async () => {
+  it('generates and stores attempts for a single target (all strategies)', async () => {
     const provider = makeMockProvider();
     const generator = new BatchGenerator({
       provider,
@@ -62,16 +63,18 @@ describe('BatchGenerator', () => {
 
     expect(results).toHaveLength(1);
     expect(results[0]!.targetName).toBe('TestProject');
-    expect(results[0]!.attempts).toBe(3);
+    // 3 strategies × 3 variants = 9 stored
+    expect(results[0]!.attempts).toBe(9);
     expect(results[0]!.filtered).toBe(0);
     expect(results[0]!.errors).toHaveLength(0);
+    expect(results[0]!.strategies).toHaveLength(3);
 
     const stats = farmAttempt.getStats();
-    expect(stats.total).toBe(3);
+    expect(stats.total).toBe(9);
   });
 
-  it('rotates strategies across batch targets', async () => {
-    const provider = makeMockProvider();
+  it('runs all 3 strategies per target', async () => {
+    const provider = makeMockProvider(['strategy test']);
     const generator = new BatchGenerator({
       provider,
       farmAttempt,
@@ -82,12 +85,17 @@ describe('BatchGenerator', () => {
 
     const results = await generator.generateBatch([
       { name: 'T1', type: 'project' },
-      { name: 'T2', type: 'project' },
-      { name: 'T3', type: 'project' },
-    ], 3);
+    ]);
 
-    const strategies = results.map((r) => r.strategy);
-    expect(strategies).toEqual(['rubric', 'persona', 'adversarial']);
+    expect(results[0]!.strategies).toEqual(
+      expect.arrayContaining(['rubric', 'persona', 'adversarial']),
+    );
+    expect(results[0]!.strategies).toHaveLength(3);
+
+    // Provider called 3 times (once per strategy)
+    // eslint-disable-next-line @typescript-eslint/unbound-method
+    const runMock = vi.mocked(provider.run);
+    expect(runMock).toHaveBeenCalledTimes(3);
   });
 
   it('applies mutations to each target', async () => {
@@ -104,7 +112,8 @@ describe('BatchGenerator', () => {
       { name: 'Mutated', type: 'token' },
     ]);
 
-    expect(results[0]!.mutations).toHaveLength(2);
+    // 3 strategies × 2 mutations each = 6 total
+    expect(results[0]!.mutations).toHaveLength(6);
 
     // Check the prompt included mutation text
     // eslint-disable-next-line @typescript-eslint/unbound-method
@@ -132,8 +141,9 @@ describe('BatchGenerator', () => {
       { name: 'Filtered', type: 'project' },
     ]);
 
-    expect(results[0]!.attempts).toBe(2);
-    expect(results[0]!.filtered).toBe(1);
+    // 3 strategies × (2 passed + 1 filtered) = 6 stored, 3 filtered
+    expect(results[0]!.attempts).toBe(6);
+    expect(results[0]!.filtered).toBe(3);
   });
 
   it('stores mutation seed in attempt', async () => {
@@ -149,7 +159,8 @@ describe('BatchGenerator', () => {
     await generator.generateBatch([{ name: 'Seeded', type: 'token' }]);
 
     const attempts = farmAttempt.getUnevaluated(10);
-    expect(attempts).toHaveLength(1);
+    // 3 strategies × 1 variant = 3 attempts
+    expect(attempts).toHaveLength(3);
     expect(attempts[0]!.mutationSeed).toBeTruthy();
     expect(attempts[0]!.mutationSeed!.split(',').length).toBe(2);
   });
@@ -167,6 +178,8 @@ describe('BatchGenerator', () => {
     await generator.generateBatch([{ name: 'DataRoast', type: 'project' }]);
 
     const attempts = farmAttempt.getUnevaluated(10);
+    // 3 strategies × 1 variant
+    expect(attempts.length).toBeGreaterThanOrEqual(1);
     expect(attempts[0]!.agentOutput).toBeTruthy();
     const meta = JSON.parse(attempts[0]!.agentOutput!) as { freshness: string };
     expect(meta.freshness).toBe('data_dependent');
@@ -190,11 +203,12 @@ describe('BatchGenerator', () => {
     ]);
 
     expect(results).toHaveLength(1);
-    expect(results[0]!.errors).toHaveLength(1);
+    // All 3 strategies fail → 3 error messages
+    expect(results[0]!.errors).toHaveLength(3);
     expect(results[0]!.attempts).toBe(0);
   });
 
-  it('continues batch when one target fails', async () => {
+  it('continues other strategies when one fails for a target', async () => {
     let callCount = 0;
     const provider = {
       run: vi.fn().mockImplementation(() => {
@@ -222,13 +236,18 @@ describe('BatchGenerator', () => {
     });
 
     const results = await generator.generateBatch([
-      { name: 'Fail', type: 'project' },
+      { name: 'Partial', type: 'project' },
       { name: 'Success', type: 'project' },
     ], 1);
 
     expect(results).toHaveLength(2);
-    expect(results[0]!.errors).toHaveLength(1);
-    expect(results[1]!.attempts).toBe(1);
+    // First target: 1 strategy fails, 2 succeed → 2 attempts, 1 error
+    expect(results[0]!.errors.length).toBeGreaterThanOrEqual(1);
+    expect(results[0]!.attempts).toBe(2);
+    expect(results[0]!.strategies).toHaveLength(2);
+    // Second target: all 3 strategies succeed → 3 attempts
+    expect(results[1]!.attempts).toBe(3);
+    expect(results[1]!.strategies).toHaveLength(3);
   });
 
   it('uses farm-generate profile', async () => {
@@ -272,6 +291,67 @@ describe('BatchGenerator', () => {
     });
 
     const results = await generator.generateBatch([{ name: 'StringParse', type: 'project' }]);
-    expect(results[0]!.attempts).toBe(1);
+    // 3 strategies × 1 variant
+    expect(results[0]!.attempts).toBe(3);
+  });
+
+  it('passes creative memory to prompts when stockpile has data', async () => {
+    const stockpile = new StockpileRepository(db);
+
+    // Insert a high-scoring roast as fire example
+    stockpile.insert({
+      targetName: 'OldTarget',
+      targetType: 'project',
+      tweetText: 'ser your TVL is a rounding error on Aave deposits',
+      angle: 'DATA_BOMB',
+      qualityScore: 4.5,
+      freshnessType: 'evergreen',
+    });
+
+    // Insert a low-scored attempt as reject example
+    const attemptId = farmAttempt.insert({
+      targetName: 'OldTarget',
+      targetType: 'project',
+      tweetText: 'lol this project is bad',
+      angle: 'FAKE_COMPLIMENT',
+      strategy: 'rubric',
+      llmSelfScore: 2.0,
+      factCheckPassed: true,
+    });
+    farmAttempt.updateScore(attemptId, 1.5, 'generic and boring');
+
+    const provider = makeMockProvider(['creative memory roast']);
+    const generator = new BatchGenerator({
+      provider,
+      farmAttempt,
+      stockpile,
+      logger,
+      variantsPerTarget: 1,
+      mutationCount: 0,
+    });
+
+    await generator.generateBatch([{ name: 'NewTarget', type: 'project' }]);
+
+    // The prompt should contain fire example text from stockpile
+    // eslint-disable-next-line @typescript-eslint/unbound-method
+    const runMock = vi.mocked(provider.run);
+    const firstPrompt = runMock.mock.calls[0]![1].prompt;
+    expect(firstPrompt).toContain('rounding error on Aave');
+  });
+
+  it('works without stockpile (creative memory is undefined)', async () => {
+    const provider = makeMockProvider(['no memory roast']);
+    const generator = new BatchGenerator({
+      provider,
+      farmAttempt,
+      logger,
+      variantsPerTarget: 1,
+      mutationCount: 0,
+    });
+
+    const results = await generator.generateBatch([{ name: 'NoMem', type: 'project' }]);
+    // Should still work, just no creative memory in prompt
+    expect(results[0]!.attempts).toBe(3);
+    expect(results[0]!.errors).toHaveLength(0);
   });
 });

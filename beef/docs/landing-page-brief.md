@@ -197,15 +197,9 @@ Top candidates (research done, likely available on Porkbun):
 
 | Domain | Why | Price |
 |--------|-----|-------|
-| **beef.lol** | Perfect for CT virality, TLD is the punchline | ~$2 first year |
-| **beef.fun** | pump.fun pattern recognition, degen-coded | ~$3 first year |
-| **welldone.wtf** | Double meaning (well-done steak + wtf), clever | ~$4 first year |
-| **burnbeef.xyz** | Mechanic in the domain name | ~$2 first year |
-| **gotbeef.xyz** | American slang "got beef?" = conflict/challenge | ~$2 first year |
-| **beef.degen** | TLD literally says the target audience | ~$12/year |
-| **beef.wtf** | Currently taken, expires June 2026 — set backorder | — |
+| **beefthis.wtf** | Matches @BeefThis handle + .wtf fits roast-bot tone | ~$4 first year |
 
-**Recommendation:** `beef.lol` as primary, `burnbeef.xyz` as mechanic-focused secondary.
+**Decision:** `beefthis.wtf` — matches the Twitter handle @BeefThis. The .wtf TLD reinforces the roast-bot personality.
 
 ---
 

@@ -661,7 +661,7 @@ export async function getVoteResult(proposalId: string) {
 
 ```env
 # === Twitter (cookie auth — primary) ===
-TWITTER_USERNAME=BeefRoastBot
+TWITTER_USERNAME=BeefThis
 TWITTER_PASSWORD=***
 TWITTER_EMAIL=beef@example.com
 TWITTER_2FA_SECRET=BASE32_TOTP_SECRET

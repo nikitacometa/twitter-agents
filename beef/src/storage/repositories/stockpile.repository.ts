@@ -37,6 +37,8 @@ export class StockpileRepository {
   private readonly topTargetsStmt: Database.Statement;
   private readonly ftsDupeStmt: Database.Statement;
   private readonly exportStmt: Database.Statement;
+  private readonly topScoredStmt: Database.Statement;
+  private readonly angleDistStmt: Database.Statement;
 
   constructor(db: Database.Database) {
     this.insertStmt = db.prepare(`
@@ -119,6 +121,20 @@ export class StockpileRepository {
       AND (expires_at IS NULL OR expires_at > datetime('now'))
       ORDER BY quality_score DESC
       LIMIT ?
+    `);
+
+    this.topScoredStmt = db.prepare(`
+      SELECT * FROM roast_stockpile
+      WHERE quality_score >= ?
+      ORDER BY quality_score DESC
+      LIMIT ?
+    `);
+
+    this.angleDistStmt = db.prepare(`
+      SELECT angle, COUNT(*) as count
+      FROM roast_stockpile
+      WHERE angle IS NOT NULL AND status = 'available'
+      GROUP BY angle
     `);
   }
 
@@ -217,6 +233,14 @@ export class StockpileRepository {
       // FTS query can fail on certain inputs — treat as non-duplicate
       return false;
     }
+  }
+
+  getTopScored(minScore: number, limit: number): StockpiledRoast[] {
+    return (this.topScoredStmt.all(minScore, limit) as StockpileRow[]).map(mapRow);
+  }
+
+  getAngleDistribution(): Array<{ angle: string; count: number }> {
+    return this.angleDistStmt.all() as Array<{ angle: string; count: number }>;
   }
 
   getStats(): {

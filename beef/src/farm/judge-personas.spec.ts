@@ -27,6 +27,19 @@ describe('getPersona', () => {
     expect(p.name).toBe('Data Hawk');
     expect(p.systemPrompt).toContain('forensic researcher');
   });
+
+  it('returns brand_guardian persona', () => {
+    const p = getPersona('brand_guardian');
+    expect(p.id).toBe('brand_guardian');
+    expect(p.name).toBe('Brand Guardian');
+  });
+
+  it('returns deflation_hawk persona', () => {
+    const p = getPersona('deflation_hawk');
+    expect(p.id).toBe('deflation_hawk');
+    expect(p.name).toBe('Deflation Hawk');
+    expect(p.systemPrompt).toContain('harshest judge');
+  });
 });
 
 describe('pickJudgePair', () => {
@@ -56,13 +69,29 @@ describe('pickJudgePair', () => {
 });
 
 describe('pickJudges', () => {
-  it('returns all 3 content judges', () => {
+  it('returns all 5 judges', () => {
     const judges = pickJudges();
-    expect(judges).toHaveLength(3);
+    expect(judges).toHaveLength(5);
     const ids = judges.map((j) => j.id);
     expect(ids).toContain('ct_degen');
     expect(ids).toContain('comedy_writer');
     expect(ids).toContain('data_hawk');
+    expect(ids).toContain('brand_guardian');
+    expect(ids).toContain('deflation_hawk');
+  });
+
+  it('includes brand_guardian for voice authenticity', () => {
+    const judges = pickJudges();
+    const guardian = judges.find((j) => j.id === 'brand_guardian');
+    expect(guardian).toBeDefined();
+    expect(guardian!.systemPrompt).toContain('brand manager');
+  });
+
+  it('includes deflation_hawk for score inflation control', () => {
+    const judges = pickJudges();
+    const hawk = judges.find((j) => j.id === 'deflation_hawk');
+    expect(hawk).toBeDefined();
+    expect(hawk!.systemPrompt).toContain('harshest judge');
   });
 });
 

@@ -619,4 +619,4 @@ Cartoon bull skull with glowing red eyes. Wearing a small green accountant's vis
 
 ---
 
-*All examples are ≤280 characters and do not name real living people as direct targets. Projects, tokens, and protocols are fair game. Examples marked with "[project]" should be filled with real research data before posting.*
+*All examples are ≤280 characters. Projects, tokens, protocols, KOLs, founders, and influencers are fair game — but never punch down on retail users. Examples marked with "[project]" should be filled with real research data before posting.*
