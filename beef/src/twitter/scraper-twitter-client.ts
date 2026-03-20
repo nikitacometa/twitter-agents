@@ -374,8 +374,16 @@ export class ScraperTwitterClient implements ITwitterClient, IProfileFetcher {
 
     try {
       const results = await this.fetchMentionsViaNotifications(sinceId);
-      this.logger.info({ count: results.length, sinceId }, 'Mentions fetched (notifications endpoint)');
-      return results;
+      if (results.length > 0) {
+        this.logger.info({ count: results.length, sinceId }, 'Mentions fetched (notifications endpoint)');
+        return results;
+      }
+
+      // Fallback: search for @botUsername (notifications API returns 0 for new/inactive accounts)
+      this.logger.debug({ sinceId }, 'Notifications returned 0 — trying search fallback');
+      const searchResults = await this.fetchMentionsViaSearch(sinceId);
+      this.logger.info({ count: searchResults.length, sinceId }, 'Mentions fetched (search fallback)');
+      return searchResults;
     } catch (error) {
       this.logger.error({ err: error }, 'Failed to fetch mentions (scraper)');
       return [];
@@ -532,6 +540,151 @@ export class ScraperTwitterClient implements ITwitterClient, IProfileFetcher {
           if (photos && photos.length > 0) {
             mention.parentMediaUrls = photos;
           }
+        }
+      } catch (err) {
+        this.logger.debug({ err, parentId: mention.inReplyToTweetId }, 'Failed to fetch parent tweet');
+      }
+    }
+
+    return results;
+  }
+
+  /**
+   * Fallback mention fetcher: search Twitter for @botUsername via adaptive search API.
+   * Used when the notifications endpoint returns 0 (new/inactive accounts).
+   */
+  private async fetchMentionsViaSearch(sinceId?: string): Promise<MentionData[]> {
+    const cookies = await this.scraper.getCookies();
+    const ct0Cookie = cookies.find((c: { key: string }) => c.key === 'ct0') as
+      | { key: string; value: string }
+      | undefined;
+    const cookieStr = cookies
+      .map((c: { key: string; value: string }) => `${c.key}=${c.value}`)
+      .join('; ');
+
+    const bearerToken =
+      'AAAAAAAAAAAAAAAAAAAAANRILgAAAAAAnNwIzUejRCOuH5E6I8xnZz4puTs%3D1Zv7ttfk8LF81IUq16cHjhLTvJu4FA33AGWWjCpTnA';
+
+    const params = new URLSearchParams({
+      q: `@${this.botUsername}`,
+      result_filter: 'Latest',
+      tweet_search_mode: 'live',
+      query_source: 'typed_query',
+      count: '20',
+      include_profile_interstitial_type: '1',
+      include_blocking: '1',
+      include_blocked_by: '1',
+      include_followed_by: '1',
+      include_want_retweets: '1',
+      include_mute_edge: '1',
+      include_can_dm: '1',
+      include_can_media_tag: '1',
+      include_ext_is_blue_verified: '1',
+      include_ext_verified_type: '1',
+      skip_status: '1',
+      cards_platform: 'Web-12',
+      include_cards: '1',
+      include_ext_alt_text: 'true',
+      include_quote_count: 'true',
+      include_reply_count: '1',
+      tweet_mode: 'extended',
+      include_ext_views: 'true',
+      include_entities: 'true',
+      include_user_entities: 'true',
+      send_error_codes: 'true',
+      simple_quoted_tweet: 'true',
+      ext: 'mediaStats,highlightedLabel,voiceInfo,superFollowMetadata,unmentionInfo,editControl',
+    });
+
+    const resp = await fetch(
+      `https://x.com/i/api/2/search/adaptive.json?${params.toString()}`,
+      {
+        headers: {
+          authorization: `Bearer ${bearerToken}`,
+          cookie: cookieStr,
+          'x-csrf-token': ct0Cookie?.value ?? '',
+          'x-twitter-auth-type': 'OAuth2Session',
+          'x-twitter-active-user': 'yes',
+          'x-twitter-client-language': 'en',
+          'user-agent': CHROME_USER_AGENT,
+          accept: '*/*',
+          referer: 'https://x.com/search?q=%40' + this.botUsername,
+        },
+      },
+    );
+
+    const bodyText = await resp.text();
+    if (!resp.ok || !bodyText) {
+      this.logger.debug({ status: resp.status, bodyLength: bodyText.length }, 'Search adaptive API failed');
+      return [];
+    }
+
+    interface SearchTweet {
+      id_str: string;
+      user_id_str: string;
+      full_text?: string;
+      in_reply_to_status_id_str?: string;
+      entities?: { media?: Array<{ media_url_https?: string; type?: string }> };
+      extended_entities?: { media?: Array<{ media_url_https?: string; type?: string }> };
+    }
+
+    const data = JSON.parse(bodyText) as {
+      globalObjects?: {
+        tweets?: Record<string, SearchTweet>;
+        users?: Record<string, { id_str: string; screen_name: string }>;
+      };
+    };
+
+    const tweets = data.globalObjects?.tweets ?? {};
+    const users = data.globalObjects?.users ?? {};
+    const results: MentionData[] = [];
+    const botLower = this.botUsername.toLowerCase();
+
+    for (const [tweetId, tweet] of Object.entries(tweets)) {
+      const user = users[tweet.user_id_str];
+      if (user?.screen_name?.toLowerCase() === botLower) continue;
+      if (sinceId && BigInt(tweetId) <= BigInt(sinceId)) continue;
+      if (!tweet.full_text) continue;
+      if (!tweet.full_text.toLowerCase().includes(`@${botLower}`)) continue;
+
+      const mention: MentionData = {
+        tweetId,
+        authorId: tweet.user_id_str,
+        authorName: user?.screen_name ?? 'unknown',
+        text: tweet.full_text,
+      };
+
+      const parentId = tweet.in_reply_to_status_id_str;
+      if (parentId) {
+        mention.inReplyToTweetId = parentId;
+        const parentTweet = tweets[parentId];
+        if (parentTweet?.full_text) {
+          mention.parentTweetText = parentTweet.full_text;
+          const parentUser = users[parentTweet.user_id_str];
+          if (parentUser) mention.parentAuthorName = parentUser.screen_name;
+          const media = parentTweet.extended_entities?.media ?? parentTweet.entities?.media;
+          if (media) {
+            const imageUrls = media
+              .filter((m) => m.type === 'photo' && m.media_url_https)
+              .map((m) => m.media_url_https!);
+            if (imageUrls.length > 0) mention.parentMediaUrls = imageUrls;
+          }
+        }
+      }
+
+      results.push(mention);
+    }
+
+    // Enrich replies missing parent data
+    const needsParent = results.filter((m) => m.inReplyToTweetId && !m.parentTweetText);
+    for (const mention of needsParent.slice(0, 5)) {
+      try {
+        const parentTweet = await this.scraper.getTweet(mention.inReplyToTweetId!);
+        if (parentTweet) {
+          mention.parentTweetText = parentTweet.text ?? undefined;
+          mention.parentAuthorName = parentTweet.username ?? undefined;
+          const photos = parentTweet.photos?.map((p) => p.url).filter(Boolean);
+          if (photos && photos.length > 0) mention.parentMediaUrls = photos;
         }
       } catch (err) {
         this.logger.debug({ err, parentId: mention.inReplyToTweetId }, 'Failed to fetch parent tweet');
