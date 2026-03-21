@@ -271,6 +271,20 @@ if (mentionHandler) {
           }
         }
       }
+
+      // Immediately trigger queue processing for newly queued mentions
+      if (queueManager && result.processed > 0) {
+        const qm = queueManager;
+        const queuedCount = result.mentions.filter((m) => m.queued).length;
+        if (queuedCount > 0) {
+          logger.info({ queuedCount }, 'Triggering immediate queue processing for new mentions');
+          void (async () => {
+            for (let i = 0; i < queuedCount; i++) {
+              await qm.processNext();
+            }
+          })();
+        }
+      }
     },
   });
 }
