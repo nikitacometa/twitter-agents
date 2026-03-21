@@ -11,14 +11,14 @@ Status: `[ ]` pending, `[~]` in progress, `[x]` done, `[!]` blocked
 ## Current Iteration (I1)
 
 [x] #I1-1 — Set TELEGRAM_ADMIN_IDS (<admin_id_1>, <admin_id_2>)
-[ ] #I1-2 — Fix generate command race condition
-[ ] #I1-3 — Prompt injection input sanitization
-[ ] #I1-4 — Extract shared evaluation module
-[ ] #I1-5 — Integrate evaluation into RoastEngine (quick/serious modes)
-[ ] #I1-6 — Fix single-judge FUNNY veto (majority-based)
-[ ] #I1-7 — Add forced CoT to prompt strategies
-[ ] #I1-8 — Differentiate rubric/persona/adversarial strategies
-[ ] #I1-9 — Replace 4 few-shot examples with top-rated from DB
+[x] #I1-2 — Fix generate command race condition
+[x] #I1-3 — Prompt injection input sanitization
+[x] #I1-4 — Extract shared evaluation module
+[x] #I1-5 — Integrate evaluation into RoastEngine (quick/serious modes)
+[x] #I1-6 — Fix single-judge FUNNY veto (majority-based)
+[x] #I1-7 — Add forced CoT to prompt strategies
+[x] #I1-8 — Differentiate rubric/persona/adversarial strategies
+[x] #I1-9 — Replace 4 few-shot examples with top-rated from DB
 
 ---
 
