@@ -1,4 +1,5 @@
 import type { Logger } from 'pino';
+import type { TargetType, RoastSource } from '@common/types/index.js';
 import type { QueueRepository } from '@storage/repositories/queue.repository.js';
 import type { RoastRepository } from '@storage/repositories/roast.repository.js';
 import type { ConfigRepository } from '@storage/repositories/config.repository.js';
@@ -8,7 +9,11 @@ import type { ProviderManager } from '@agent/provider-manager.js';
 import type { ITwitterClient } from '@twitter/twitter-client.interface.js';
 import type { IProfileFetcher } from '@twitter/twitter-client.interface.js';
 import { generateRoasts } from '@admin/roast-generator.js';
+import type { GenerateRoastsResult } from '@admin/roast-generator.js';
 import { RoastEngine } from '@roast/roast-engine.js';
+import { SelfEvaluator } from '@farm/self-evaluator.js';
+import type { FarmAttempt } from '@farm/types.js';
+import { classifyFreshness, calculateExpiry } from '@farm/freshness.js';
 import { getErrorMessage } from '@common/utils/error.util.js';
 import { isQuietHour } from '@scheduler/scheduler.js';
 import { downloadTweetMedia } from '@common/utils/media-downloader.js';
@@ -20,6 +25,9 @@ export interface QueueProcessResult {
   tweetId?: string;
   target?: string;
   error?: string;
+  fromStockpile?: boolean;
+  evaluationScore?: number;
+  newStockpileCount?: number;
 }
 
 export class QueueManager {
@@ -37,7 +45,9 @@ export class QueueManager {
   private readonly enableAutonomousPosting: boolean;
   private readonly enableMentionReplies: boolean;
   private readonly casualReplyLimit: number;
+  private readonly evaluationThreshold: number;
   private cachedRoastEngine: RoastEngine | null = null;
+  private cachedEvaluator: SelfEvaluator | null = null;
 
   constructor(opts: {
     queueRepo: QueueRepository;
@@ -54,6 +64,7 @@ export class QueueManager {
     casualReplyLimit?: number;
     enableAutonomousPosting: boolean;
     enableMentionReplies: boolean;
+    evaluationThreshold?: number;
   }) {
     this.queueRepo = opts.queueRepo;
     this.roastRepo = opts.roastRepo;
@@ -68,6 +79,7 @@ export class QueueManager {
     this.mentionReplyLimit = opts.mentionReplyLimit ?? 20;
     this.casualReplyLimit = opts.casualReplyLimit ?? 40;
     this.enableAutonomousPosting = opts.enableAutonomousPosting;
+    this.evaluationThreshold = opts.evaluationThreshold ?? 3.5;
     this.enableMentionReplies = opts.enableMentionReplies;
   }
 
@@ -78,18 +90,18 @@ export class QueueManager {
     const runtime = this.configRepo.getRuntime();
     if (runtime.paused) {
       this.logger.debug('Queue paused — skipping');
-      return { dequeued: false };
+      return { dequeued: false, error: 'Bot is paused' };
     }
 
     if (isQuietHour()) {
       this.logger.debug('Quiet hours — skipping queue processing');
-      return { dequeued: false };
+      return { dequeued: false, error: 'Quiet hours (2-7 UTC)' };
     }
 
     const todayCount = this.roastRepo.getTodayCount('autonomous');
     if (todayCount >= this.dailyLimit) {
       this.logger.info({ todayCount, dailyLimit: this.dailyLimit }, 'Daily limit reached');
-      return { dequeued: false };
+      return { dequeued: false, error: `Daily limit reached (${String(todayCount)}/${String(this.dailyLimit)})` };
     }
 
     return this.dequeueAndProcess();
@@ -207,7 +219,7 @@ export class QueueManager {
               { queueId: item.id, roastId, target: item.targetName, fromStockpile: true },
               'Stockpiled roast ready (no Twitter — saved only)',
             );
-            return { dequeued: true, posted: false, savedOnly: true, target: item.targetName };
+            return { dequeued: true, posted: false, savedOnly: true, target: item.targetName, fromStockpile: true };
           }
 
           if (postResult) {
@@ -218,7 +230,7 @@ export class QueueManager {
               { queueId: item.id, roastId, tweetId: postResult.tweetId, target: item.targetName, fromStockpile: true },
               'Stockpiled roast posted',
             );
-            return { dequeued: true, posted: true, tweetId: postResult.tweetId, target: item.targetName };
+            return { dequeued: true, posted: true, tweetId: postResult.tweetId, target: item.targetName, fromStockpile: true };
           }
 
           this.roastRepo.updateStatus(roastId, 'failed');
@@ -258,9 +270,11 @@ export class QueueManager {
         }
       }
 
+      // Full farm flow: generate (3 strategies × 2 variants + mutations) → evaluate → stockpile → post best
       const output = await generateRoasts(
         item.targetName, this.provider, this.logger, this.feedbackRepo,
-        undefined, undefined, undefined, undefined, undefined, imagePaths, profileContext,
+        'farm-generate', 2, undefined, undefined, undefined, imagePaths, profileContext,
+        undefined, this.stockpile, 2,
       );
 
       if (output.variants.length === 0) {
@@ -268,45 +282,26 @@ export class QueueManager {
         return { dequeued: true, posted: false, target: item.targetName, error: 'No variants generated' };
       }
 
-      const best = output.variants[output.bestIndex] ?? output.variants[0]!;
+      // Evaluate all variants through 5-judge panel and collect passing ones
+      const { best, newStockpileCount, bestScore } = await this.evaluateAndStockpile(
+        output, item.targetName, item.targetType,
+      );
 
-      const roastId = this.roastRepo.insert({
-        targetName: item.targetName,
-        targetType: item.targetType,
-        tweetText: best.text,
-        source: item.source,
-        status: 'pending_approval',
-        factChecked: output.factCheckPassed,
-        contextData: output.researchNotes ?? undefined,
-        agentOutput: JSON.stringify(output),
-      });
-
-      // Reply if triggered by a mention, standalone tweet otherwise
-      const postResult = await this.postOrSkip(best.text, replyToId);
-
-      if (postResult === 'no_twitter') {
-        this.roastRepo.updateStatus(roastId, 'pending_approval');
-        this.queueRepo.complete(item.id);
-        this.logger.info(
-          { queueId: item.id, roastId, target: item.targetName },
-          'Roast generated (no Twitter — saved only)',
+      if (!best) {
+        // All variants discarded by judges — still try posting the top self-scored variant
+        this.logger.warn(
+          { queueId: item.id, target: item.targetName, variantCount: output.variants.length },
+          'All variants discarded by evaluation — using top self-scored',
         );
-        return { dequeued: true, posted: false, savedOnly: true, target: item.targetName };
+        const fallback = output.variants[output.bestIndex] ?? output.variants[0]!;
+        return await this.postGeneratedRoast(
+          item, fallback.text, output, replyToId, undefined, 0,
+        );
       }
 
-      if (postResult) {
-        this.roastRepo.updateStatus(roastId, 'posted', postResult.tweetId);
-        this.queueRepo.complete(item.id);
-        this.logger.info(
-          { queueId: item.id, roastId, tweetId: postResult.tweetId, target: item.targetName, isReply: !!replyToId },
-          'Roast posted successfully',
-        );
-        return { dequeued: true, posted: true, tweetId: postResult.tweetId, target: item.targetName };
-      } else {
-        this.roastRepo.updateStatus(roastId, 'failed');
-        this.queueRepo.fail(item.id, 'Twitter post returned null');
-        return { dequeued: true, posted: false, target: item.targetName, error: 'Twitter post returned null' };
-      }
+      return await this.postGeneratedRoast(
+        item, best.text, output, replyToId, bestScore, newStockpileCount,
+      );
     } catch (error) {
       const msg = getErrorMessage(error);
       this.logger.error({ err: error, queueId: item.id, target: item.targetName }, 'Queue processing failed');
@@ -330,6 +325,211 @@ export class QueueManager {
       });
     }
     return this.cachedRoastEngine;
+  }
+
+  private getEvaluator(): SelfEvaluator {
+    if (!this.cachedEvaluator) {
+      this.cachedEvaluator = new SelfEvaluator({
+        provider: this.provider,
+        logger: this.logger,
+        threshold: this.evaluationThreshold,
+      });
+    }
+    return this.cachedEvaluator;
+  }
+
+  /**
+   * Evaluate all generated variants through 5-judge panel.
+   * Variants passing threshold are saved to stockpile.
+   * Returns the best passing variant (or undefined if all discarded).
+   */
+  private async evaluateAndStockpile(
+    output: GenerateRoastsResult,
+    targetName: string,
+    targetType: string,
+  ): Promise<{
+    best: { text: string; score: number; angle: string } | undefined;
+    bestScore: number | undefined;
+    newStockpileCount: number;
+  }> {
+    const evaluator = this.getEvaluator();
+    let newStockpileCount = 0;
+    let bestVariant: { text: string; score: number; angle: string } | undefined;
+    let bestComposite = 0;
+
+    // Build FarmAttempt-compatible objects for the evaluator
+    const fakeAttempts: Array<{ attempt: FarmAttempt; variant: { text: string; score: number; angle: string } }> = [];
+    for (let i = 0; i < output.variants.length; i++) {
+      const v = output.variants[i]!;
+      fakeAttempts.push({
+        attempt: {
+          id: -(i + 1), // negative IDs to distinguish from real farm attempts
+          targetName,
+          targetType,
+          tweetText: v.text,
+          angle: v.angle,
+          strategy: null,
+          mutationSeed: null,
+          llmSelfScore: v.score,
+          evaluatorScore: null,
+          evaluatorOutput: null,
+          researchNotes: output.researchNotes ?? null,
+          factCheckPassed: output.factCheckPassed,
+          agentOutput: null,
+          promoted: false,
+          createdAt: new Date().toISOString(),
+        },
+        variant: v,
+      });
+    }
+
+    // Evaluate all variants concurrently (max 3 at a time to avoid overload)
+    const concurrency = 3;
+    for (let i = 0; i < fakeAttempts.length; i += concurrency) {
+      const chunk = fakeAttempts.slice(i, i + concurrency);
+      const results = await Promise.allSettled(
+        chunk.map(({ attempt }) => evaluator.evaluate(attempt)),
+      );
+
+      for (let j = 0; j < results.length; j++) {
+        const result = results[j]!;
+        const { variant } = chunk[j]!;
+
+        if (result.status !== 'fulfilled') {
+          this.logger.warn(
+            { target: targetName, text: variant.text.slice(0, 80), err: result.reason },
+            'Variant evaluation failed',
+          );
+          continue;
+        }
+
+        const evalResult = result.value;
+        this.logger.info(
+          {
+            target: targetName,
+            score: evalResult.compositeScore,
+            verdict: evalResult.verdict,
+            angle: variant.angle,
+            text: variant.text.slice(0, 80),
+          },
+          'Variant evaluated',
+        );
+
+        if (evalResult.verdict === 'stockpile' && this.stockpile) {
+          // Check for duplicates before adding to stockpile
+          if (!this.stockpile.isDuplicate(variant.text, targetName)) {
+            const freshness = classifyFreshness(variant.text, output.researchNotes ?? null);
+            this.stockpile.insert({
+              targetName,
+              targetType,
+              tweetText: variant.text,
+              angle: variant.angle,
+              qualityScore: evalResult.compositeScore,
+              evaluatorOutput: JSON.stringify(evalResult.evaluations),
+              researchNotes: output.researchNotes ?? undefined,
+              freshnessType: freshness,
+              expiresAt: calculateExpiry(freshness) ?? undefined,
+            });
+            newStockpileCount++;
+            this.logger.info(
+              { target: targetName, score: evalResult.compositeScore, angle: variant.angle },
+              'Variant added to stockpile',
+            );
+          }
+        }
+
+        // Track the best passing variant
+        if (evalResult.verdict === 'stockpile' && evalResult.compositeScore > bestComposite) {
+          bestComposite = evalResult.compositeScore;
+          bestVariant = variant;
+        }
+      }
+    }
+
+    this.logger.info(
+      {
+        target: targetName,
+        totalVariants: output.variants.length,
+        newStockpile: newStockpileCount,
+        bestScore: bestComposite || undefined,
+      },
+      'Farm-quality evaluation complete',
+    );
+
+    return {
+      best: bestVariant,
+      bestScore: bestComposite || undefined,
+      newStockpileCount,
+    };
+  }
+
+  /**
+   * Save roast to DB and post to Twitter (or save-only if no Twitter).
+   */
+  private async postGeneratedRoast(
+    item: { id: number; targetName: string; targetType: TargetType; source: RoastSource; context: string | null },
+    tweetText: string,
+    output: GenerateRoastsResult,
+    replyToId: string | undefined,
+    evaluationScore: number | undefined,
+    newStockpileCount: number,
+  ): Promise<QueueProcessResult> {
+    const roastId = this.roastRepo.insert({
+      targetName: item.targetName,
+      targetType: item.targetType,
+      tweetText,
+      source: item.source,
+      status: 'pending_approval',
+      factChecked: output.factCheckPassed,
+      contextData: output.researchNotes ?? undefined,
+      agentOutput: JSON.stringify(output),
+    });
+
+    const postResult = await this.postOrSkip(tweetText, replyToId);
+
+    if (postResult === 'no_twitter') {
+      this.roastRepo.updateStatus(roastId, 'pending_approval');
+      this.queueRepo.complete(item.id);
+      this.logger.info(
+        { queueId: item.id, roastId, target: item.targetName, evaluationScore, newStockpileCount },
+        'Roast generated (no Twitter — saved only)',
+      );
+      return {
+        dequeued: true, posted: false, savedOnly: true, target: item.targetName,
+        evaluationScore, newStockpileCount,
+      };
+    }
+
+    if (postResult) {
+      this.roastRepo.updateStatus(roastId, 'posted', postResult.tweetId);
+      this.queueRepo.complete(item.id);
+
+      // Mark the posted roast in stockpile as served if it was just added
+      if (this.stockpile && newStockpileCount > 0) {
+        const available = this.stockpile.getAvailable(item.targetName, 1);
+        const match = available.find((s) => s.tweetText === tweetText);
+        if (match) {
+          this.stockpile.markServed(match.id, 'bot');
+        }
+      }
+
+      this.logger.info(
+        {
+          queueId: item.id, roastId, tweetId: postResult.tweetId,
+          target: item.targetName, isReply: !!replyToId,
+          evaluationScore, newStockpileCount,
+        },
+        'Roast posted successfully',
+      );
+      return {
+        dequeued: true, posted: true, tweetId: postResult.tweetId, target: item.targetName,
+        evaluationScore, newStockpileCount,
+      };
+    }
+
+    this.roastRepo.updateStatus(roastId, 'failed');
+    this.queueRepo.fail(item.id, 'Twitter post returned null');
+    return { dequeued: true, posted: false, target: item.targetName, error: 'Twitter post returned null' };
   }
 
   private async processCasualReply(

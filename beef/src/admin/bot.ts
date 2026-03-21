@@ -429,33 +429,88 @@ export function createBot(opts: {
       return;
     }
 
-    await ctx.reply('⚡ Force-processing next queue item...');
+    const chatId = ctx.chat?.id;
+    if (!chatId) return;
+    const api = ctx.api;
+    const qm = queueManager;
 
-    try {
-      const result = await queueManager.processNextForce();
-      if (!result.dequeued) {
-        await ctx.reply('⚠️ Queue is empty.');
-      } else if (result.posted) {
-        await ctx.reply(
-          `✅ Posted! Target: <b>${escapeHtml(result.target ?? '?')}</b>\nTweet ID: <code>${escapeHtml(result.tweetId ?? '?')}</code>`,
-          { parse_mode: 'HTML' },
-        );
-      } else if (result.savedOnly) {
-        await ctx.reply(
-          `📝 Generated & saved (Twitter disabled). Target: <b>${escapeHtml(result.target ?? '?')}</b>`,
-          { parse_mode: 'HTML' },
-        );
-      } else {
-        await ctx.reply(
-          `❌ Posting failed for <b>${escapeHtml(result.target ?? '?')}</b>\n${escapeHtml(result.error ?? 'Unknown error')}`,
-          { parse_mode: 'HTML' },
-        );
+    const statusMsg = await ctx.reply('⚡ Processing next queue item...');
+
+    // Fire-and-forget: don't block grammY's update loop during generation
+    void (async () => {
+      const startTime = Date.now();
+      const progressInterval = setInterval(() => {
+        const elapsed = Math.round((Date.now() - startTime) / 1000);
+        api
+          .editMessageText(
+            chatId,
+            statusMsg.message_id,
+            `⚡ Processing queue item... <i>(${String(elapsed)}s)</i>`,
+            { parse_mode: 'HTML' },
+          )
+          .catch(() => {});
+      }, 15_000);
+
+      try {
+        const result = await qm.processNext();
+        clearInterval(progressInterval);
+        const elapsed = Math.round((Date.now() - startTime) / 1000);
+
+        if (!result.dequeued) {
+          const reason = result.error ?? 'Queue empty or daily limit reached';
+          await api.editMessageText(
+            chatId,
+            statusMsg.message_id,
+            `⚠️ ${escapeHtml(reason)}`,
+            { parse_mode: 'HTML' },
+          );
+        } else if (result.posted) {
+          const stockpileInfo = result.fromStockpile ? ' (from stockpile)' : '';
+          const evalInfo = result.evaluationScore
+            ? `\nEval: <b>${result.evaluationScore.toFixed(1)}</b>/5`
+            : '';
+          const newStockpileInfo = result.newStockpileCount
+            ? `\nNew stockpile: <b>${String(result.newStockpileCount)}</b> added`
+            : '';
+          await api.editMessageText(
+            chatId,
+            statusMsg.message_id,
+            `✅ Posted in ${String(elapsed)}s${stockpileInfo}\nTarget: <b>${escapeHtml(result.target ?? '?')}</b>\nTweet ID: <code>${escapeHtml(result.tweetId ?? '?')}</code>${evalInfo}${newStockpileInfo}`,
+            { parse_mode: 'HTML' },
+          );
+        } else if (result.savedOnly) {
+          const evalInfo = result.evaluationScore
+            ? `\nEval: <b>${result.evaluationScore.toFixed(1)}</b>/5`
+            : '';
+          const newStockpileInfo = result.newStockpileCount
+            ? `\nNew stockpile: <b>${String(result.newStockpileCount)}</b> added`
+            : '';
+          await api.editMessageText(
+            chatId,
+            statusMsg.message_id,
+            `📝 Generated in ${String(elapsed)}s (Twitter disabled)\nTarget: <b>${escapeHtml(result.target ?? '?')}</b>${evalInfo}${newStockpileInfo}`,
+            { parse_mode: 'HTML' },
+          );
+        } else {
+          await api.editMessageText(
+            chatId,
+            statusMsg.message_id,
+            `❌ Failed for <b>${escapeHtml(result.target ?? '?')}</b>\n${escapeHtml(result.error ?? 'Unknown error')}`,
+            { parse_mode: 'HTML' },
+          );
+        }
+      } catch (error) {
+        clearInterval(progressInterval);
+        await api
+          .editMessageText(
+            chatId,
+            statusMsg.message_id,
+            `❌ Processing failed: ${escapeHtml(getErrorMessage(error).slice(0, 200))}`,
+            { parse_mode: 'HTML' },
+          )
+          .catch(() => {});
       }
-    } catch (error) {
-      await ctx.reply(`❌ Processing failed: ${escapeHtml(getErrorMessage(error).slice(0, 200))}`, {
-        parse_mode: 'HTML',
-      });
-    }
+    })();
   });
 
   bot.command('pause', async (ctx) => {

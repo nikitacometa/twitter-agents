@@ -6,8 +6,13 @@ module.exports = {
       args: 'src/index.ts',
       interpreter: 'none',
       cwd: __dirname,
+      env: {
+        BEEF_ENV: 'test',
+        DRY_RUN: 'false',
+      },
       env_production: {
-        NODE_ENV: 'production',
+        BEEF_ENV: 'production',
+        DRY_RUN: 'false',
       },
       max_memory_restart: '2G',
       exp_backoff_restart_delay: 100,
