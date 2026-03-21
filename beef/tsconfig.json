@@ -33,7 +33,8 @@
       "@scheduler/*": ["./src/scheduler/*"],
       "@admin/*": ["./src/admin/*"],
       "@learning/*": ["./src/learning/*"],
-      "@farm/*": ["./src/farm/*"]
+      "@farm/*": ["./src/farm/*"],
+      "@evaluation/*": ["./src/evaluation/*"]
     },
     "baseUrl": "."
   },

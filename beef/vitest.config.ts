@@ -26,6 +26,7 @@ export default defineConfig({
       '@admin': new URL('./src/admin/', import.meta.url).pathname,
       '@learning': new URL('./src/learning/', import.meta.url).pathname,
       '@farm': new URL('./src/farm/', import.meta.url).pathname,
+      '@evaluation': new URL('./src/evaluation/', import.meta.url).pathname,
     },
   },
 });
