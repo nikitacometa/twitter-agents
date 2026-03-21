@@ -16,6 +16,7 @@ import { ratingKeyboard, sessionDoneKeyboard } from './keyboards.js';
 import { SessionStore } from './session-store.js';
 import type { RoastSession } from './types.js';
 import { generateRoasts } from './roast-generator.js';
+import type { EvaluationMode } from '@roast/roast-engine.js';
 import { registerExampleFlow } from './example-flow.js';
 import type { PollResult } from '@twitter/mention-handler.js';
 import {
@@ -28,6 +29,13 @@ import {
 } from './formatters.js';
 
 const VALID_VERDICTS = new Set<HumanVerdict>(['fire', 'post', 'iterate', 'reject']);
+
+function parseRoastFlags(input: string): { target: string; eval: boolean; mutate: boolean } {
+  const hasEval = /\s--eval\b/.test(input);
+  const hasMutate = /\s--mutate\b/.test(input);
+  const target = input.replace(/\s--(?:eval|mutate)\b/g, '').trim();
+  return { target, eval: hasEval, mutate: hasMutate };
+}
 
 function isGroupChat(ctx: Context): boolean {
   return ctx.chat?.type === 'group' || ctx.chat?.type === 'supergroup';
@@ -85,8 +93,9 @@ export function createBot(opts: {
       [
         '<b>🥩 $BEEF Roast Evaluator</b>',
         '',
-        '/roast &lt;target&gt; — generate roast variants',
-        '/power &lt;target&gt; — Opus-quality roast (5 variants)',
+        '/roast &lt;target&gt; [--eval] [--mutate] — generate roasts',
+        '/power &lt;target&gt; — Opus + quick eval (5 variants)',
+        '/farm &lt;target&gt; — farm-quality (serious eval, mutations)',
         '/example — add external roast example for learning',
         '/examples — example library stats',
         '/analyze — compute style from feedback',
@@ -108,11 +117,10 @@ export function createBot(opts: {
         '',
         '<b>Generate roasts:</b>',
         '<code>/roast hyperliquid</code> — Sonnet, 3 variants',
-        '<code>/power hyperliquid</code> — Opus, 5 variants, 10min timeout',
-        '',
-        '<b>Examples:</b>',
-        '<code>/roast pump.fun</code> · <code>/roast opensea</code>',
-        '<code>/roast virtuals protocol</code> · <code>/roast worldcoin</code>',
+        '<code>/roast hyper --eval</code> — + quick AI evaluation',
+        '<code>/roast hyper --mutate</code> — + creative mutations',
+        '<code>/power hyperliquid</code> — Opus, 5 variants, quick eval',
+        '<code>/farm hyperliquid</code> — farm-quality (serious eval, mutations)',
         '',
         '<b>Manual evaluation:</b>',
         'Paste any roast text (50-280 chars) → rate it with buttons',
@@ -153,6 +161,8 @@ export function createBot(opts: {
     variantCount: number,
     progressEmoji: string,
     progressLabel: string,
+    evaluationMode?: EvaluationMode,
+    mutationCount?: number,
   ): void {
     const chatId = ctx.chat!.id;
     const api = ctx.api;
@@ -179,7 +189,11 @@ export function createBot(opts: {
       }, 10_000);
 
       try {
-        const output = await generateRoasts(target, provider!, logger, feedbackRepo, profile, variantCount, configRepo, exampleRepo, patternRepo);
+        const output = await generateRoasts(
+          target, provider!, logger, feedbackRepo, profile, variantCount,
+          configRepo, exampleRepo, patternRepo,
+          undefined, undefined, evaluationMode, stockpileRepo, mutationCount,
+        );
 
         // Create session
         const session = sessions.createSession(
@@ -199,10 +213,13 @@ export function createBot(opts: {
         const researchNote = output.researchNotes
           ? `\n\n<i>📝 ${escapeHtml(output.researchNotes.slice(0, 200))}</i>`
           : '';
+        const evalNote = output.evaluation
+          ? `\n🤖 AI eval: composite <b>${output.evaluation.compositeScore.toFixed(1)}</b>/5 · verdict: <b>${output.evaluation.verdict}</b>`
+          : '';
         await api.editMessageText(
           chatId,
           statusMsg.message_id,
-          `✅ Generated ${String(output.variants.length)} variants for <b>${escapeHtml(target)}</b>${researchNote}\n\n<i>${RATING_LEGEND}</i>`,
+          `✅ Generated ${String(output.variants.length)} variants for <b>${escapeHtml(target)}</b>${researchNote}${evalNote}\n\n<i>${RATING_LEGEND}</i>`,
           { parse_mode: 'HTML' },
         );
 
@@ -247,9 +264,9 @@ export function createBot(opts: {
   }
 
   bot.command('roast', async (ctx) => {
-    const target = ctx.match?.trim();
-    if (!target) {
-      await ctx.reply('Usage: /roast &lt;target name&gt;\nExample: /roast hyperliquid', {
+    const raw = ctx.match?.trim();
+    if (!raw) {
+      await ctx.reply('Usage: /roast &lt;target&gt; [--eval] [--mutate]\nExample: /roast hyperliquid --eval', {
         parse_mode: 'HTML',
       });
       return;
@@ -260,13 +277,24 @@ export function createBot(opts: {
       return;
     }
 
-    handleRoastCommand(ctx, target, 'roast-research', 3, '🔍', 'Researching');
+    const flags = parseRoastFlags(raw);
+    if (!flags.target) {
+      await ctx.reply('Usage: /roast &lt;target&gt; [--eval] [--mutate]\nExample: /roast hyperliquid --eval', {
+        parse_mode: 'HTML',
+      });
+      return;
+    }
+    handleRoastCommand(
+      ctx, flags.target, 'roast-research', 3, '🔍', 'Researching',
+      flags.eval ? 'quick' : undefined,
+      flags.mutate ? 1 : undefined,
+    );
   });
 
   bot.command('power', async (ctx) => {
-    const target = ctx.match?.trim();
-    if (!target) {
-      await ctx.reply('Usage: /power &lt;target name&gt;\nExample: /power hyperliquid', {
+    const raw = ctx.match?.trim();
+    if (!raw) {
+      await ctx.reply('Usage: /power &lt;target&gt; [--mutate]\nExample: /power hyperliquid', {
         parse_mode: 'HTML',
       });
       return;
@@ -277,7 +305,35 @@ export function createBot(opts: {
       return;
     }
 
-    handleRoastCommand(ctx, target, 'roast-power', 5, '⚡', 'Power mode (Opus) —');
+    const flags = parseRoastFlags(raw);
+    if (!flags.target) {
+      await ctx.reply('Usage: /power &lt;target&gt; [--mutate]\nExample: /power hyperliquid', {
+        parse_mode: 'HTML',
+      });
+      return;
+    }
+    handleRoastCommand(
+      ctx, flags.target, 'roast-power', 5, '⚡', 'Power mode (Opus) —',
+      'quick',
+      flags.mutate ? 1 : undefined,
+    );
+  });
+
+  bot.command('farm', async (ctx) => {
+    const target = ctx.match?.trim();
+    if (!target) {
+      await ctx.reply('Usage: /farm &lt;target&gt;\nFarm-quality: 3 strategies, mutations, serious eval.', {
+        parse_mode: 'HTML',
+      });
+      return;
+    }
+
+    if (!provider) {
+      await ctx.reply('⚠️ LLM provider not configured.');
+      return;
+    }
+
+    handleRoastCommand(ctx, target, 'farm-generate', 2, '🌾', 'Farm-quality generation —', 'serious', 2);
   });
 
   bot.command('stats', async (ctx) => {
@@ -704,6 +760,42 @@ export function createBot(opts: {
         { parse_mode: 'HTML' },
       );
 
+      return;
+    }
+
+    // --- Callback: STOCKPILE button ---
+    if (data.startsWith('stockpile:')) {
+      const parts = data.split(':');
+      if (parts.length !== 3) {
+        try { await ctx.answerCallbackQuery({ text: 'Invalid stockpile data' }); } catch { /* expired */ }
+        return;
+      }
+      const sessionId = parts[1]!;
+      const variantIdx = parseInt(parts[2]!, 10);
+
+      const session = sessions.get(sessionId);
+      if (!session) {
+        try { await ctx.answerCallbackQuery({ text: 'Session expired' }); } catch { /* expired */ }
+        return;
+      }
+
+      const variant = session.variants[variantIdx];
+      if (!variant || !stockpileRepo) {
+        try { await ctx.answerCallbackQuery({ text: stockpileRepo ? 'Invalid variant' : 'Stockpile not configured' }); } catch { /* expired */ }
+        return;
+      }
+
+      stockpileRepo.insert({
+        targetName: session.targetName,
+        targetType: 'project',
+        tweetText: variant.text,
+        angle: variant.angle,
+        qualityScore: variant.score ?? 3.0,
+        freshnessType: 'evergreen',
+      });
+
+      const available = stockpileRepo.getStats().byStatus['available'] ?? 0;
+      try { await ctx.answerCallbackQuery({ text: `Added to stockpile (${String(available)} available)` }); } catch { /* expired */ }
       return;
     }
 

@@ -6,7 +6,8 @@ export function ratingKeyboard(sessionId: string, variantIdx: number): InlineKey
     .text('✅ GOOD', `rate:${sessionId}:${String(variantIdx)}:post`)
     .text('❌ BAD', `rate:${sessionId}:${String(variantIdx)}:reject`)
     .row()
-    .text('✏️ EDIT', `edit:${sessionId}:${String(variantIdx)}`);
+    .text('✏️ EDIT', `edit:${sessionId}:${String(variantIdx)}`)
+    .text('📦 STOCKPILE', `stockpile:${sessionId}:${String(variantIdx)}`);
 }
 
 export function sessionDoneKeyboard(sessionId: string): InlineKeyboard {
