@@ -2,7 +2,7 @@ import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { Logger } from 'pino';
 import type { ProviderManager } from '@agent/provider-manager.js';
-import type { AgentRoastOutput, TaskProfile } from '@agent/agent.types.js';
+import type { AgentRoastOutput, AgentReplyOutput, TaskProfile } from '@agent/agent.types.js';
 import type { RoastDraft, RoastVariant, CreativeMemory } from '@common/types/index.js';
 import { loadCharacter } from './character.loader.js';
 import type { CharacterConfig } from './character.loader.js';
@@ -13,6 +13,7 @@ import {
   buildNoResearchPersonaPrompt,
   buildAdversarialPrompt,
   buildNoResearchAdversarialPrompt,
+  buildCasualReplyPrompt,
   PROMPT_STRATEGIES,
 } from './prompt-builder.js';
 import type { PromptStrategy } from './prompt-builder.js';
@@ -41,6 +42,14 @@ export interface RoastResult {
   durationMs: number;
   provider: string;
   evaluation?: EvaluationOutput;
+}
+
+export interface CasualReplyResult {
+  text: string;
+  tone: string;
+  mentionsBeef: boolean;
+  durationMs: number;
+  provider: string;
 }
 
 export class RoastEngine {
@@ -251,6 +260,70 @@ export class RoastEngine {
       provider: strategyResults.provider,
       evaluation: bestEvaluation,
     };
+  }
+
+  async generateCasualReply(
+    triggerText: string,
+    authorUsername: string,
+    profileContext?: string,
+  ): Promise<CasualReplyResult> {
+    const taskId = `casual-${authorUsername}-${Date.now()}`;
+    this.logger.info({ taskId, author: authorUsername }, 'Generating casual reply');
+
+    const prompt = buildCasualReplyPrompt(
+      this.character,
+      triggerText,
+      authorUsername,
+      profileContext,
+    );
+
+    const result = await this.provider.run<AgentReplyOutput>(taskId, {
+      prompt,
+      profile: 'reply',
+      requiresResearch: false,
+    });
+
+    const data = this.parseCasualReplyOutput(result.data, taskId);
+
+    if (data.text.length > 280) {
+      this.logger.warn({ taskId, len: data.text.length }, 'Casual reply too long, truncating');
+      data.text = data.text.slice(0, 277) + '...';
+    }
+
+    this.logger.info(
+      { taskId, author: authorUsername, tone: data.tone, len: data.text.length, durationMs: result.durationMs },
+      'Casual reply generated',
+    );
+
+    return {
+      text: data.text,
+      tone: data.tone,
+      mentionsBeef: data.mentionsBeef,
+      durationMs: result.durationMs,
+      provider: result.provider,
+    };
+  }
+
+  private parseCasualReplyOutput(data: unknown, taskId: string): AgentReplyOutput {
+    if (typeof data === 'string') {
+      const cleaned = data.replace(/^```(?:json)?\s*\n?/m, '').replace(/\n?```\s*$/m, '').trim();
+      const jsonMatch = cleaned.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        return JSON.parse(jsonMatch[0]) as AgentReplyOutput;
+      }
+      throw new Error(`[${taskId}] Failed to parse casual reply output as JSON`);
+    }
+
+    const obj = data as Record<string, unknown>;
+    if (typeof obj['text'] === 'string' && typeof obj['tone'] === 'string') {
+      return {
+        text: obj['text'],
+        tone: obj['tone'],
+        mentionsBeef: (obj['mentionsBeef'] as boolean) ?? false,
+      };
+    }
+
+    throw new Error(`[${taskId}] Invalid casual reply output structure`);
   }
 
   private buildStrategyPrompt(

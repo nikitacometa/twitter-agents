@@ -1,11 +1,10 @@
 import dotenv from 'dotenv';
 import { resolve } from 'node:path';
 
-// Load base .env, then overlay environment-specific .env.{BEEF_ENV}
-dotenv.config();
+// Load order: CLI env vars > .env.{BEEF_ENV} > .env (dotenv never overrides existing)
 const beefEnv = process.env.BEEF_ENV || 'test';
-const envFile = resolve(process.cwd(), `.env.${beefEnv}`);
-dotenv.config({ path: envFile, override: true });
+dotenv.config({ path: resolve(process.cwd(), `.env.${beefEnv}`) });
+dotenv.config();
 
 import { validateEnv } from './common/config/env.validation.js';
 import { logger } from './common/utils/logger.js';
@@ -20,6 +19,8 @@ import { UserRepository } from './storage/repositories/user.repository.js';
 import { ExternalExampleRepository } from './storage/repositories/external-example.repository.js';
 import { RoastPatternRepository } from './storage/repositories/roast-pattern.repository.js';
 import { StockpileRepository } from './storage/repositories/stockpile.repository.js';
+import { TweetRepository } from './storage/repositories/tweet.repository.js';
+import { TargetRepository } from './storage/repositories/target.repository.js';
 import { ClaudeCodeProvider } from './agent/claude-code.provider.js';
 import {
   createAnthropicSDKProvider,
@@ -34,6 +35,7 @@ import { Scheduler } from './scheduler/scheduler.js';
 import { QueueManager } from './queue/queue-manager.js';
 import { EngagementTracker } from './learning/engagement-tracker.js';
 import { HealthMonitor } from './health/health-monitor.js';
+import { CachedProfileFetcher } from './twitter/cached-profile-fetcher.js';
 
 const config = validateEnv();
 
@@ -64,6 +66,8 @@ const userRepo = new UserRepository(db);
 const exampleRepo = new ExternalExampleRepository(db);
 const patternRepo = new RoastPatternRepository(db);
 const stockpileRepo = new StockpileRepository(db);
+const tweetRepo = new TweetRepository(db);
+const targetRepo = new TargetRepository(db);
 
 // --- Recover stuck queue items from previous crash ---
 const resetCount = queueRepo.resetProcessing();
@@ -125,7 +129,12 @@ if (config.ENABLE_TWITTER) {
     try {
       await scraperClient.initialize();
       twitter = scraperClient;
-      profileFetcher = scraperClient;
+      profileFetcher = new CachedProfileFetcher({
+        inner: scraperClient,
+        targetRepo,
+        userRepo,
+        logger,
+      });
       logger.info('Twitter client: scraper mode (cookie auth)');
     } catch (error) {
       logger.error({ err: error }, 'Scraper login failed — falling back to API mode');
@@ -148,7 +157,12 @@ if (config.ENABLE_TWITTER) {
       logger,
     });
     twitter = apiClient;
-    profileFetcher = apiClient;
+    profileFetcher = new CachedProfileFetcher({
+      inner: apiClient,
+      targetRepo,
+      userRepo,
+      logger,
+    });
     logger.info('Twitter client: API mode');
   }
 
@@ -158,6 +172,7 @@ if (config.ENABLE_TWITTER) {
     userRepo,
     configRepo,
     queueRepo,
+    tweetRepo,
     logger,
     botUsername,
   });

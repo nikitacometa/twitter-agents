@@ -8,6 +8,7 @@ import type { ProviderManager } from '@agent/provider-manager.js';
 import type { ITwitterClient } from '@twitter/twitter-client.interface.js';
 import type { IProfileFetcher } from '@twitter/twitter-client.interface.js';
 import { generateRoasts } from '@admin/roast-generator.js';
+import { RoastEngine } from '@roast/roast-engine.js';
 import { getErrorMessage } from '@common/utils/error.util.js';
 import { isQuietHour } from '@scheduler/scheduler.js';
 import { downloadTweetMedia } from '@common/utils/media-downloader.js';
@@ -35,6 +36,8 @@ export class QueueManager {
   private readonly mentionReplyLimit: number;
   private readonly enableAutonomousPosting: boolean;
   private readonly enableMentionReplies: boolean;
+  private readonly casualReplyLimit: number;
+  private cachedRoastEngine: RoastEngine | null = null;
 
   constructor(opts: {
     queueRepo: QueueRepository;
@@ -48,6 +51,7 @@ export class QueueManager {
     logger: Logger;
     dailyLimit: number;
     mentionReplyLimit?: number;
+    casualReplyLimit?: number;
     enableAutonomousPosting: boolean;
     enableMentionReplies: boolean;
   }) {
@@ -62,6 +66,7 @@ export class QueueManager {
     this.logger = opts.logger;
     this.dailyLimit = opts.dailyLimit;
     this.mentionReplyLimit = opts.mentionReplyLimit ?? 20;
+    this.casualReplyLimit = opts.casualReplyLimit ?? 40;
     this.enableAutonomousPosting = opts.enableAutonomousPosting;
     this.enableMentionReplies = opts.enableMentionReplies;
   }
@@ -127,6 +132,18 @@ export class QueueManager {
       );
       this.queueRepo.complete(item.id);
       return { dequeued: true, posted: true, tweetId: existing.tweetId, target: item.targetName };
+    }
+
+    // Casual replies use a separate lightweight pipeline
+    if (item.source === 'casual_reply') {
+      try {
+        return await this.processCasualReply(item);
+      } catch (error) {
+        const msg = getErrorMessage(error);
+        this.logger.error({ err: error, queueId: item.id, target: item.targetName }, 'Casual reply failed');
+        this.queueRepo.fail(item.id, msg.slice(0, 500));
+        return { dequeued: true, posted: false, target: item.targetName, error: msg.slice(0, 200) };
+      }
     }
 
     // Determine reply context early — used by posting mode checks, stockpile, and generation
@@ -304,6 +321,92 @@ export class QueueManager {
     }
   }
 
+  private getRoastEngine(): RoastEngine {
+    if (!this.cachedRoastEngine) {
+      this.cachedRoastEngine = new RoastEngine({
+        provider: this.provider,
+        logger: this.logger,
+        evaluationMode: 'none',
+      });
+    }
+    return this.cachedRoastEngine;
+  }
+
+  private async processCasualReply(
+    item: { id: number; targetName: string; targetType: string; source: string; context: string | null },
+  ): Promise<QueueProcessResult> {
+    const replyToId = extractReplyToId(item.context);
+    if (!replyToId) {
+      this.queueRepo.fail(item.id, 'Casual reply has no reply_to context');
+      return { dequeued: true, posted: false, target: item.targetName, error: 'No reply_to context' };
+    }
+
+    // Daily limit for casual replies (separate from mention roasts)
+    const casualToday = this.roastRepo.getTodayCount('casual_reply');
+    if (casualToday >= this.casualReplyLimit) {
+      this.logger.info(
+        { casualToday, limit: this.casualReplyLimit, queueId: item.id },
+        'Casual reply daily limit reached',
+      );
+      this.queueRepo.fail(item.id, 'Daily casual reply limit reached');
+      return { dequeued: true, posted: false, target: item.targetName, error: 'Casual reply limit reached' };
+    }
+
+    // Extract trigger text and author from context
+    const triggerText = extractTriggerText(item.context);
+    const authorUsername = item.targetName.replace(/^@/, '');
+
+    // Optional profile enrichment
+    let profileContext: string | undefined;
+    if (this.profileFetcher) {
+      profileContext = await this.buildProfileContext(authorUsername);
+    }
+
+    const engine = this.getRoastEngine();
+    const result = await engine.generateCasualReply(
+      triggerText ?? item.targetName,
+      authorUsername,
+      profileContext,
+    );
+
+    // Save to roasts table for tracking
+    const roastId = this.roastRepo.insert({
+      targetName: item.targetName,
+      targetType: 'person',
+      tweetText: result.text,
+      source: 'casual_reply',
+      status: 'pending_approval',
+      factChecked: true,
+      agentOutput: JSON.stringify(result),
+    });
+
+    const postResult = await this.postOrSkip(result.text, replyToId);
+
+    if (postResult === 'no_twitter') {
+      this.roastRepo.updateStatus(roastId, 'pending_approval');
+      this.queueRepo.complete(item.id);
+      this.logger.info(
+        { queueId: item.id, roastId, target: item.targetName, tone: result.tone },
+        'Casual reply generated (no Twitter — saved only)',
+      );
+      return { dequeued: true, posted: false, savedOnly: true, target: item.targetName };
+    }
+
+    if (postResult) {
+      this.roastRepo.updateStatus(roastId, 'posted', postResult.tweetId);
+      this.queueRepo.complete(item.id);
+      this.logger.info(
+        { queueId: item.id, roastId, tweetId: postResult.tweetId, target: item.targetName, tone: result.tone },
+        'Casual reply posted',
+      );
+      return { dequeued: true, posted: true, tweetId: postResult.tweetId, target: item.targetName };
+    }
+
+    this.roastRepo.updateStatus(roastId, 'failed');
+    this.queueRepo.fail(item.id, 'Twitter post returned null (casual reply)');
+    return { dequeued: true, posted: false, target: item.targetName, error: 'Twitter post returned null' };
+  }
+
   private async postOrSkip(
     text: string,
     replyToId?: string,
@@ -356,6 +459,12 @@ export function extractHandleFromContext(context: string | null): string | undef
 
 export function extractParentAuthorFromTarget(targetName: string): string | undefined {
   const match = targetName.match(/^tweet by @(\w+)/);
+  return match?.[1];
+}
+
+export function extractTriggerText(context: string | null): string | undefined {
+  if (!context) return undefined;
+  const match = context.match(/\|text:(.+?)(?:\||$)/);
   return match?.[1];
 }
 

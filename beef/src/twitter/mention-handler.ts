@@ -4,6 +4,7 @@ import type { MentionRepository } from '@storage/repositories/mention.repository
 import type { UserRepository } from '@storage/repositories/user.repository.js';
 import type { ConfigRepository } from '@storage/repositories/config.repository.js';
 import type { QueueRepository } from '@storage/repositories/queue.repository.js';
+import type { TweetRepository } from '@storage/repositories/tweet.repository.js';
 import type { MentionRequestType } from '@common/types/index.js';
 import type { MentionData } from './twitter-client.interface.js';
 
@@ -37,6 +38,7 @@ export class MentionHandler {
   private readonly userRepo: UserRepository;
   private readonly configRepo: ConfigRepository;
   private readonly queueRepo: QueueRepository;
+  private readonly tweetRepo?: TweetRepository;
   private readonly logger: Logger;
   private readonly botUsername: string;
   private isPolling = false;
@@ -47,6 +49,7 @@ export class MentionHandler {
     userRepo: UserRepository;
     configRepo: ConfigRepository;
     queueRepo: QueueRepository;
+    tweetRepo?: TweetRepository;
     logger: Logger;
     botUsername?: string;
   }) {
@@ -55,6 +58,7 @@ export class MentionHandler {
     this.userRepo = opts.userRepo;
     this.configRepo = opts.configRepo;
     this.queueRepo = opts.queueRepo;
+    this.tweetRepo = opts.tweetRepo;
     this.logger = opts.logger;
     this.botUsername = opts.botUsername?.trim() || '0xBeefer';
   }
@@ -116,6 +120,28 @@ export class MentionHandler {
       });
       this.userRepo.incrementInteraction(m.authorId);
 
+      // Persist observed tweets for corpus building
+      if (this.tweetRepo) {
+        this.tweetRepo.insert({
+          tweetId: m.tweetId,
+          authorId: m.authorId,
+          authorName: m.authorName,
+          text: m.text,
+          source: 'mention_poll',
+          createdAt: new Date().toISOString(),
+        });
+        if (m.inReplyToTweetId && m.parentTweetText && m.parentAuthorName) {
+          this.tweetRepo.insert({
+            tweetId: m.inReplyToTweetId,
+            authorId: 'unknown',
+            authorName: m.parentAuthorName,
+            text: m.parentTweetText,
+            source: 'mention_poll',
+            createdAt: new Date().toISOString(),
+          });
+        }
+      }
+
       let queued = false;
       let queueTarget: string | undefined;
 
@@ -146,6 +172,10 @@ export class MentionHandler {
             // Scenario 2: roast keyword under someone's tweet
             queueTarget = this.enqueueParentTweetRoast(m);
             queued = true;
+          } else {
+            // Roast request but no identifiable target — casual reply instead
+            queueTarget = this.enqueueCasualReply(m);
+            queued = true;
           }
         }
       } else {
@@ -157,6 +187,10 @@ export class MentionHandler {
         } else if (isBareOrSimpleMention(m.text) && m.inReplyToTweetId) {
           // Scenario 2: bare "@BeefThis" under a tweet
           queueTarget = this.enqueueParentTweetRoast(m);
+          queued = true;
+        } else {
+          // Casual reply — bot was mentioned but no roast target identifiable
+          queueTarget = this.enqueueCasualReply(m);
           queued = true;
         }
       }
@@ -209,6 +243,23 @@ export class MentionHandler {
         mediaCount: m.parentMediaUrls?.length ?? 0,
       },
       'Parent tweet roast queued from mention',
+    );
+    return targetName;
+  }
+
+  private enqueueCasualReply(m: MentionData): string {
+    const targetName = `@${m.authorName}`;
+    const textSnippet = m.text.slice(0, 200);
+    this.queueRepo.enqueue({
+      targetName,
+      targetType: 'person',
+      source: 'casual_reply',
+      priority: 5,
+      context: `reply_to:${m.tweetId}|by:@${m.authorName}|text:${textSnippet}`,
+    });
+    this.logger.info(
+      { tweetId: m.tweetId, author: m.authorName },
+      'Casual reply queued from mention',
     );
     return targetName;
   }

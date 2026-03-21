@@ -4,6 +4,7 @@ import {
   extractHandleFromContext,
   extractParentAuthorFromTarget,
   extractMediaUrls,
+  extractTriggerText,
 } from './queue-manager.js';
 
 describe('extractReplyToId', () => {
@@ -85,5 +86,27 @@ describe('extractMediaUrls', () => {
     ['reply_to:1|media:'],
   ])('returns empty array for %s', (ctx) => {
     expect(extractMediaUrls(ctx)).toEqual([]);
+  });
+});
+
+describe('extractTriggerText', () => {
+  it.each([
+    ['reply_to:1|by:@user|text:hello world', 'hello world'],
+    ['reply_to:1|by:@user|text:@0xBeefer what is this', '@0xBeefer what is this'],
+    ['reply_to:1|by:@user|text:short', 'short'],
+  ])('extracts text from "%s"', (ctx, expected) => {
+    expect(extractTriggerText(ctx)).toBe(expected);
+  });
+
+  it('extracts text before next pipe delimiter', () => {
+    expect(extractTriggerText('reply_to:1|text:hello|extra:data')).toBe('hello');
+  });
+
+  it.each([
+    [null],
+    [''],
+    ['reply_to:1|by:@user'],
+  ])('returns undefined for %s', (ctx) => {
+    expect(extractTriggerText(ctx)).toBeUndefined();
   });
 });

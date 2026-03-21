@@ -4,7 +4,7 @@
 
 export type TargetType = 'project' | 'token' | 'trend' | 'person';
 
-export type RoastSource = 'autonomous' | 'mention' | 'burn_request' | 'reply_guy';
+export type RoastSource = 'autonomous' | 'mention' | 'burn_request' | 'reply_guy' | 'casual_reply';
 
 export type RoastStatus = 'posted' | 'failed' | 'dry_run' | 'pending_approval';
 

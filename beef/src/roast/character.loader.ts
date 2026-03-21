@@ -103,3 +103,14 @@ export function getRandomExamples(character: CharacterConfig, count: number): Ch
   const shuffled = [...all].sort(() => Math.random() - 0.5);
   return shuffled.slice(0, count);
 }
+
+export function getExamplesBySection(
+  character: CharacterConfig,
+  section: string,
+  count?: number,
+): CharacterExample[] {
+  const examples = character.examples[section] ?? [];
+  if (!count || count >= examples.length) return examples;
+  const shuffled = [...examples].sort(() => Math.random() - 0.5);
+  return shuffled.slice(0, count);
+}
