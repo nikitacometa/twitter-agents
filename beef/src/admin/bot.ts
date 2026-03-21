@@ -11,17 +11,14 @@ import type { ConfigRepository } from '@storage/repositories/config.repository.j
 import type { ExternalExampleRepository } from '@storage/repositories/external-example.repository.js';
 import type { RoastPatternRepository } from '@storage/repositories/roast-pattern.repository.js';
 import type { StockpileRepository } from '@storage/repositories/stockpile.repository.js';
-import { computeStyleSupplement } from '@learning/style-analyzer.js';
 import { ratingKeyboard, sessionDoneKeyboard } from './keyboards.js';
 import { SessionStore } from './session-store.js';
 import type { RoastSession } from './types.js';
 import { generateRoasts } from './roast-generator.js';
 import type { EvaluationMode } from '@roast/roast-engine.js';
-import { registerExampleFlow } from './example-flow.js';
 import type { PollResult } from '@twitter/mention-handler.js';
 import {
   escapeHtml,
-  formatManualEvalMessage,
   formatSessionSummary,
   formatStatsMessage,
   formatVariantMessage,
@@ -86,9 +83,6 @@ export function createBot(opts: {
   // --- Commands ---
 
   bot.command('start', async (ctx) => {
-    const groupNote = isGroupChat(ctx)
-      ? '\n\nIn group chat: paste text as a <b>reply to my message</b> to evaluate it.'
-      : '\nOr just <b>paste any text</b> to evaluate it as a roast.';
     await ctx.reply(
       [
         '<b>🥩 $BEEF Roast Evaluator</b>',
@@ -96,15 +90,10 @@ export function createBot(opts: {
         '/roast &lt;target&gt; [--eval] [--mutate] — generate roasts',
         '/power &lt;target&gt; — Opus + quick eval (5 variants)',
         '/farm &lt;target&gt; — farm-quality (serious eval, mutations)',
-        '/example — add external roast example for learning',
-        '/examples — example library stats',
-        '/analyze — compute style from feedback',
-        '/evolution — quality trends + angle stats',
         '/stats — feedback statistics',
         '/promote &lt;id&gt; — promote stockpiled roast to CreativeMemory',
         '/status — bot health',
         '/help — full command list',
-        groupNote,
       ].join('\n'),
       { parse_mode: 'HTML' },
     );
@@ -122,20 +111,11 @@ export function createBot(opts: {
         '<code>/power hyperliquid</code> — Opus, 5 variants, quick eval',
         '<code>/farm hyperliquid</code> — farm-quality (serious eval, mutations)',
         '',
-        '<b>Manual evaluation:</b>',
-        'Paste any roast text (50-280 chars) → rate it with buttons',
-        '',
         '<b>Rating scale:</b>',
         '🔥 GOLD — best quality, used as training example',
         '✅ GOOD — good enough to post',
         '❌ BAD — not good enough',
         '✏️ EDIT — write your own version (saved as gold)',
-        '',
-        '<b>Learning:</b>',
-        '<code>/example</code> — add external roast example for learning',
-        '<code>/examples</code> — view example library stats',
-        '<code>/analyze</code> — compute style supplement from feedback',
-        '<code>/evolution</code> — fire rate trend + angle leaderboard',
         '',
         '<b>Other commands:</b>',
         '<code>/stats</code> — feedback statistics',
@@ -145,10 +125,6 @@ export function createBot(opts: {
         '<code>/trigger</code> — force-process next queue item',
         '<code>/promote &lt;id&gt;</code> — promote stockpiled roast to CreativeMemory',
         '<code>/pause</code> / <code>/resume</code> — toggle autonomous posting',
-        '',
-        isGroupChat(ctx)
-          ? '<i>In groups: paste text as a reply to my message.</i>'
-          : '<i>In DM: just paste any text to evaluate.</i>',
       ].join('\n'),
       { parse_mode: 'HTML' },
     );
@@ -569,83 +545,6 @@ export function createBot(opts: {
     );
   });
 
-  bot.command('analyze', async (ctx) => {
-    const supplement = computeStyleSupplement(feedbackRepo);
-    if (!supplement) {
-      await ctx.reply('Not enough data yet (need ≥10 gold ratings).');
-      return;
-    }
-
-    if (configRepo) {
-      configRepo.setStyleSupplement(supplement);
-    }
-
-    await ctx.reply(
-      [
-        '<b>📊 Style Analysis</b>',
-        '',
-        `<code>${escapeHtml(supplement.text)}</code>`,
-        '',
-        `Sample: ${String(supplement.sampleSize)} gold ratings`,
-        `Computed: ${supplement.computedAt.slice(0, 16)}`,
-        configRepo ? '✅ Saved — will be injected into next roast prompt' : '⚠️ Config repo unavailable — not saved',
-      ].join('\n'),
-      { parse_mode: 'HTML' },
-    );
-  });
-
-  bot.command('evolution', async (ctx) => {
-    const metrics = feedbackRepo.getSessionMetrics(10);
-    if (metrics.length === 0) {
-      await ctx.reply('No session data yet. Rate some roasts first!');
-      return;
-    }
-
-    const lines: string[] = ['<b>📈 Evolution Dashboard</b>', ''];
-
-    // Fire rate trend
-    lines.push('<b>Fire rate trend (last 10 days):</b>');
-    for (const m of metrics) {
-      const bar = '🟩'.repeat(Math.round(m.fireRate * 10)) + '⬜'.repeat(10 - Math.round(m.fireRate * 10));
-      const scoreStr = m.avgLlmScore !== null ? ` · LLM: ${String(m.avgLlmScore)}` : '';
-      lines.push(`  ${m.date}: ${bar} ${String(Math.round(m.fireRate * 100))}% (${String(m.fireCount)}/${String(m.total)})${scoreStr}`);
-    }
-    lines.push('');
-
-    // Angle leaderboard
-    const anglePerf = feedbackRepo.getAnglePerformance();
-    if (anglePerf.length > 0) {
-      lines.push('<b>Angle leaderboard:</b>');
-      const sorted = [...anglePerf]
-        .filter((a) => a.total >= 2)
-        .sort((a, b) => b.fireCount / b.total - (a.fireCount / a.total));
-      for (const a of sorted) {
-        const fireRate = Math.round((a.fireCount / a.total) * 100);
-        const rejectRate = Math.round((a.rejectCount / a.total) * 100);
-        const medal = fireRate >= 50 ? '🥇' : fireRate >= 30 ? '🥈' : rejectRate >= 50 ? '💀' : '  ';
-        lines.push(`  ${medal} ${escapeHtml(a.angle)} — 🔥${String(fireRate)}% ❌${String(rejectRate)}% (${String(a.total)})`);
-      }
-      lines.push('');
-    }
-
-    // Style supplement status
-    const supplement = configRepo?.getStyleSupplement();
-    if (supplement) {
-      lines.push('<b>Active style supplement:</b>');
-      lines.push(`  <code>${escapeHtml(supplement.text)}</code>`);
-      lines.push(`  Updated: ${supplement.computedAt.slice(0, 16)} (n=${String(supplement.sampleSize)})`);
-    } else {
-      lines.push('<i>No style supplement active. Run /analyze to compute.</i>');
-    }
-
-    await ctx.reply(lines.join('\n'), { parse_mode: 'HTML' });
-  });
-
-  // --- External example learning flow ---
-  if (exampleRepo && patternRepo) {
-    registerExampleFlow(bot, { botToken: token, exampleRepo, patternRepo, provider, logger });
-  }
-
   // --- Callback: rating buttons ---
 
   bot.on('callback_query:data', async (ctx) => {
@@ -705,9 +604,7 @@ export function createBot(opts: {
       // Update message to show ratings
       if (variant?.messageId && ctx.chat) {
         const ratingLabels = buildRatingLabels(session, variantIdx, evaluatorId, evaluatorName);
-        const originalText = session.source === 'manual'
-          ? formatManualEvalMessage(variant.text)
-          : formatVariantMessage(variant.text, variantIdx, variant.angle, variant.score, session.variants.length);
+        const originalText = formatVariantMessage(variant.text, variantIdx, variant.angle, variant.score, session.variants.length);
         const ratingsLine = `\n\n<b>Ratings:</b> ${ratingLabels.join(' · ')}`;
 
         try {
@@ -892,15 +789,13 @@ export function createBot(opts: {
 
       // Update variant message to show edit rating
       if (variant.messageId && ctx.chat) {
-        const originalText = session.source === 'manual'
-          ? formatManualEvalMessage(variant.text)
-          : formatVariantMessage(
-              variant.text,
-              pendingEdit.variantIdx,
-              variant.angle,
-              variant.score,
-              session.variants.length,
-            );
+        const originalText = formatVariantMessage(
+          variant.text,
+          pendingEdit.variantIdx,
+          variant.angle,
+          variant.score,
+          session.variants.length,
+        );
         try {
           await ctx.api.editMessageText(
             ctx.chat.id,
@@ -932,30 +827,6 @@ export function createBot(opts: {
       }
 
       return;
-    }
-
-    // Skip very short messages
-    if (text.length < 20) {
-      await ctx.reply('Text too short to evaluate. Roast tweets are typically 50-280 chars.');
-      return;
-    }
-
-    // Create a manual eval session with a single variant
-    const session = sessions.createSession(
-      'manual',
-      'manual',
-      [{ text, angle: 'manual', score: 0 }],
-      ctx.chat.id,
-    );
-
-    const msg = await ctx.reply(formatManualEvalMessage(text), {
-      parse_mode: 'HTML',
-      reply_markup: ratingKeyboard(session.id, 0),
-    });
-
-    const variant = session.variants[0];
-    if (variant) {
-      variant.messageId = msg.message_id;
     }
   });
 

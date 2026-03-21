@@ -36,11 +36,6 @@ export function formatVariantMessage(
   return `${header}\n\n<code>${escapeHtml(text)}</code>`;
 }
 
-export function formatManualEvalMessage(text: string): string {
-  const charCount = text.length;
-  return `<b>Evaluate this roast</b> · ${String(charCount)} chars\n\n<code>${escapeHtml(text)}</code>`;
-}
-
 export function formatSessionSummary(session: RoastSession): string {
   const lines: string[] = [
     `<b>📊 Session results: ${escapeHtml(session.targetName)}</b>`,
