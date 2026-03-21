@@ -230,6 +230,10 @@ program
     const provider = createProviderFrom(db, logger);
 
     let targets: Array<{ name: string; type: string }> = [];
+    // Hoisted so the post-generation completion step can reference the original
+    // fetched rows without re-querying (re-querying would miss status='generating'
+    // rows and could race with newly inserted pending targets).
+    let discoveredPending: ReturnType<typeof farmTarget.getPending> = [];
 
     if (opts.targets) {
       targets = opts.targets.split(',').map((name) => ({
@@ -238,10 +242,10 @@ program
       }));
     } else if (opts.fromDiscovered) {
       const limit = parseInt(opts.limit, 10);
-      const pending = farmTarget.getPending(limit);
-      targets = pending.map((t) => ({ name: t.name, type: t.type }));
+      discoveredPending = farmTarget.getPending(limit);
+      targets = discoveredPending.map((t) => ({ name: t.name, type: t.type }));
 
-      for (const t of pending) {
+      for (const t of discoveredPending) {
         farmTarget.updateStatus(t.id, 'generating');
       }
     }
@@ -271,6 +275,7 @@ program
 
     let totalAttempts = 0;
     let totalFiltered = 0;
+    const failedTargetNames = new Set<string>();
 
     for (const result of results) {
       totalAttempts += result.attempts;
@@ -282,19 +287,18 @@ program
 
       const strategyLabel = result.strategies.join('+') || 'none';
       if (result.errors.length > 0) {
+        failedTargetNames.add(result.targetName);
         console.log(`  ✗ ${result.targetName} (${strategyLabel}${mutationLabel}): ${result.errors[0]}`);
       } else {
         console.log(`  ✓ ${result.targetName} (${strategyLabel}${mutationLabel}): ${String(result.attempts)} stored, ${String(result.filtered)} filtered`);
       }
     }
 
-    // Mark discovered targets as completed
+    // Mark discovered targets completed using the original fetched IDs.
+    // Failed targets revert to 'pending' so they can be retried.
     if (opts.fromDiscovered) {
-      const pending = farmTarget.getPending(0);
-      for (const t of pending) {
-        if (t.status === 'generating') {
-          farmTarget.updateStatus(t.id, 'completed');
-        }
+      for (const t of discoveredPending) {
+        farmTarget.updateStatus(t.id, failedTargetNames.has(t.name) ? 'pending' : 'completed');
       }
     }
 

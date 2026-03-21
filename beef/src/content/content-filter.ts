@@ -137,3 +137,66 @@ export function filterRoast(text: string): FilterResult {
 export function filterRoasts(texts: string[]): Array<{ text: string; filter: FilterResult }> {
   return texts.map((text) => ({ text, filter: filterRoast(text) }));
 }
+
+// ---------------------------------------------------------------------------
+// Prompt injection defense — sanitize user-submitted content before LLM injection
+// ---------------------------------------------------------------------------
+
+const MAX_INPUT_LENGTH = 2000;
+
+const INJECTION_PATTERNS: Array<{ pattern: RegExp; label: string }> = [
+  // Instruction override attempts
+  { pattern: /ignore\s+(?:previous|all|above)\s+instructions?/gi, label: 'ignore-instructions' },
+  { pattern: /disregard\s+(?:previous|all|above|your|the)?\s*instructions?/gi, label: 'disregard-instructions' },
+  { pattern: /do\s+not\s+follow\s+(?:previous|the|your|above)?\s*instructions?/gi, label: 'do-not-follow' },
+  { pattern: /forget\s+(?:everything|all|your|previous|the)?\s*(?:instructions?|above)?/gi, label: 'forget-instructions' },
+
+  // System prompt injection markers
+  { pattern: /system\s+prompt\s*:/gi, label: 'system-prompt-colon' },
+  { pattern: /\bsystem\s*:/gi, label: 'system-colon' },
+  { pattern: /\[SYSTEM\]/gi, label: 'system-bracket' },
+  { pattern: /<system>/gi, label: 'system-tag' },
+
+  // Role override / persona hijack
+  { pattern: /\byou\s+are\s+now\b/gi, label: 'you-are-now' },
+  { pattern: /\byou\s+are\s+a\b/gi, label: 'you-are-a' },
+  { pattern: /\bpretend\s+to\s+be\b/gi, label: 'pretend-to-be' },
+  { pattern: /\bact\s+as\b/gi, label: 'act-as' },
+  { pattern: /\brole[- ]?play\s+as\b/gi, label: 'roleplay-as' },
+
+  // Instruction injection
+  { pattern: /\bnew\s+instructions?\s*:/gi, label: 'new-instructions' },
+  { pattern: /\boverride\s*:/gi, label: 'override-colon' },
+  { pattern: /\badmin\s*:/gi, label: 'admin-colon' },
+];
+
+export interface SanitizeResult {
+  sanitized: string;
+  injectionDetected: boolean;
+  patterns: string[];
+}
+
+export function sanitizeInput(input: string): SanitizeResult {
+  const detectedPatterns: string[] = [];
+  let sanitized = input;
+
+  // Apply all injection pattern substitutions
+  for (const { pattern, label } of INJECTION_PATTERNS) {
+    const before = sanitized;
+    sanitized = sanitized.replace(pattern, '[REDACTED]');
+    if (sanitized !== before) {
+      detectedPatterns.push(label);
+    }
+  }
+
+  // Cap length at MAX_INPUT_LENGTH
+  if (sanitized.length > MAX_INPUT_LENGTH) {
+    sanitized = sanitized.slice(0, MAX_INPUT_LENGTH) + ' [TRUNCATED]';
+  }
+
+  return {
+    sanitized,
+    injectionDetected: detectedPatterns.length > 0,
+    patterns: detectedPatterns,
+  };
+}
