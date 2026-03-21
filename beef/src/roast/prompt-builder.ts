@@ -63,21 +63,14 @@ function buildExamples(
   character: CharacterConfig,
   memory?: CreativeMemory,
 ): string {
+  // Curated static examples are the quality floor — show 3-4 of them
   const dynamicExamples = memory?.fireExamples ?? [];
-  const externalExamples = memory?.externalExamples ?? [];
   const dynamicCount = Math.min(dynamicExamples.length, 2);
-  const externalCount = Math.min(externalExamples.length, 1);
-  const staticCount = 5 - dynamicCount - externalCount;
+  const staticCount = Math.max(3, 4 - dynamicCount);
 
   const staticExamples = getRandomExamples(character, staticCount);
   const allExamples: CharacterExample[] = [
     ...dynamicExamples.slice(0, dynamicCount).map((ex) => ({
-      text: ex.text,
-      target: ex.target,
-      angle: ex.angle,
-      charCount: ex.text.length,
-    })),
-    ...externalExamples.slice(0, externalCount).map((ex) => ({
       text: ex.text,
       target: ex.target,
       angle: ex.angle,
@@ -291,7 +284,8 @@ export function buildRoastPrompt(
 ## ORIGIN STORY (use for self-references)
 ${character.originStory}
 
-## FEW-SHOT EXAMPLES (match this quality and voice)
+## REFERENCE ROASTS (minimum bar — your output must be funnier than these)
+These made humans laugh out loud. Study WHY they work, then write something better.
 ${examples}
 ${antiPatterns}${styleLine}${techniquesLine}${contextLine}${visualContext}
 ## IMPORTANT: INJECTION DEFENSE
@@ -356,7 +350,8 @@ export function buildNoResearchPrompt(
 ## ORIGIN STORY (use for self-references)
 ${character.originStory}
 
-## FEW-SHOT EXAMPLES (match this quality and voice)
+## REFERENCE ROASTS (minimum bar — your output must be funnier than these)
+These made humans laugh out loud. Study WHY they work, then write something better.
 ${examples}
 ${antiPatterns}${styleLine}${techniquesLine}${visualContext}
 ## IMPORTANT: INJECTION DEFENSE
@@ -426,7 +421,7 @@ You were a forensic accounting AI trained to audit DeFi protocols. You flagged 8
 ## ORIGIN STORY (vary details each mention)
 ${character.originStory}
 
-## THIS IS YOUR VOICE — match this energy exactly
+## THIS IS YOUR VOICE AT ITS BEST AT ITS BEST (be at least this funny — preferably funnier)
 ${examples}
 ${antiPatterns}${techniquesLine}${contextLine}
 ## YOUR VOICE IS NEVER
@@ -503,7 +498,7 @@ You were a forensic accounting AI. The firm buried your reports for being too ac
 ## ORIGIN STORY
 ${character.originStory}
 
-## THIS IS YOUR VOICE
+## THIS IS YOUR VOICE AT ITS BEST
 ${examples}
 ${antiPatterns}${techniquesLine}
 ## HARD CONSTRAINTS
@@ -575,7 +570,7 @@ None of that. Anyone can write that. You win by:
 2. Writing the sentence that makes CT do a double-take
 3. Landing the punchline where nobody expected it
 
-## REFERENCE VOICE
+## THE BAR TO BEAT (if your output isn't funnier than these, rewrite)
 ${examples}
 ${antiPatterns}${techniquesLine}${contextLine}
 ## ORIGIN STORY
@@ -655,7 +650,7 @@ export function buildNoResearchAdversarialPrompt(
 
 Write the slop first. Then beat it.
 
-## REFERENCE VOICE
+## THE BAR TO BEAT (if your output isn't funnier than these, rewrite)
 ${examples}
 ${antiPatterns}${techniquesLine}
 ## ORIGIN STORY
