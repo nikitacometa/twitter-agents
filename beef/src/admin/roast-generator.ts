@@ -7,12 +7,16 @@ import type { ExternalExampleRepository } from '@storage/repositories/external-e
 import type { RoastPatternRepository } from '@storage/repositories/roast-pattern.repository.js';
 import type { AngleWeight, CreativeMemory, FireExample } from '@common/types/index.js';
 import { RoastEngine } from '@roast/roast-engine.js';
+import type { EvaluationMode } from '@roast/roast-engine.js';
+import type { EvaluationOutput } from '@evaluation/evaluator.js';
 
 let cachedEngine: RoastEngine | null = null;
+let cachedEvaluationMode: EvaluationMode = 'none';
 
-function getEngine(provider: ProviderManager, logger: Logger): RoastEngine {
-  if (!cachedEngine) {
-    cachedEngine = new RoastEngine({ provider, logger });
+function getEngine(provider: ProviderManager, logger: Logger, evaluationMode: EvaluationMode = 'none'): RoastEngine {
+  if (!cachedEngine || cachedEvaluationMode !== evaluationMode) {
+    cachedEngine = new RoastEngine({ provider, logger, evaluationMode });
+    cachedEvaluationMode = evaluationMode;
   }
   return cachedEngine;
 }
@@ -95,6 +99,10 @@ function buildCreativeMemory(
   };
 }
 
+export interface GenerateRoastsResult extends AgentRoastOutput {
+  evaluation?: EvaluationOutput;
+}
+
 export async function generateRoasts(
   targetName: string,
   provider: ProviderManager,
@@ -107,8 +115,9 @@ export async function generateRoasts(
   patternRepo?: RoastPatternRepository,
   imagePaths?: string[],
   profileContext?: string,
-): Promise<AgentRoastOutput> {
-  const engine = getEngine(provider, logger);
+  evaluationMode?: EvaluationMode,
+): Promise<GenerateRoastsResult> {
+  const engine = getEngine(provider, logger, evaluationMode);
 
   let memory = feedbackRepo ? buildCreativeMemory(targetName, feedbackRepo, configRepo, exampleRepo, patternRepo) : undefined;
   if (profileContext && memory) {
@@ -140,6 +149,7 @@ export async function generateRoasts(
     bestIndex: result.draft.bestIndex,
     researchNotes: result.draft.researchNotes,
     factCheckPassed: result.draft.factCheckPassed,
+    evaluation: result.evaluation,
   };
 }
 

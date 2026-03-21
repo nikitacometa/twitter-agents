@@ -17,15 +17,21 @@ import {
 } from './prompt-builder.js';
 import type { PromptStrategy } from './prompt-builder.js';
 import { filterRoast } from '@content/content-filter.js';
+import { RoastEvaluator } from '@evaluation/evaluator.js';
+import type { EvaluationOutput } from '@evaluation/evaluator.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const DEFAULT_CHARACTER_PATH = resolve(__dirname, '../../characters/beef-bot.json');
+
+export type EvaluationMode = 'quick' | 'serious' | 'none';
 
 export interface RoastEngineOptions {
   provider: ProviderManager;
   logger: Logger;
   characterPath?: string;
   variantCount?: number;
+  evaluationMode?: EvaluationMode;
+  evaluationThreshold?: number;
 }
 
 export interface RoastResult {
@@ -33,6 +39,7 @@ export interface RoastResult {
   filtered: RoastVariant[];
   durationMs: number;
   provider: string;
+  evaluation?: EvaluationOutput;
 }
 
 export class RoastEngine {
@@ -40,15 +47,32 @@ export class RoastEngine {
   private readonly logger: Logger;
   private readonly character: CharacterConfig;
   private readonly variantCount: number;
+  private readonly evaluationMode: EvaluationMode;
+  private readonly evaluator: RoastEvaluator | null;
 
   constructor(opts: RoastEngineOptions) {
     this.provider = opts.provider;
     this.logger = opts.logger;
     this.variantCount = opts.variantCount ?? 3;
+    this.evaluationMode = opts.evaluationMode ?? 'none';
+
+    if (this.evaluationMode !== 'none') {
+      this.evaluator = new RoastEvaluator({
+        provider: opts.provider,
+        logger: opts.logger,
+        threshold: opts.evaluationThreshold,
+        mode: this.evaluationMode,
+      });
+    } else {
+      this.evaluator = null;
+    }
 
     const charPath = opts.characterPath ?? DEFAULT_CHARACTER_PATH;
     this.character = loadCharacter(charPath);
-    this.logger.info({ character: this.character.meta.name, version: this.character.version }, 'Character loaded');
+    this.logger.info(
+      { character: this.character.meta.name, version: this.character.version, evaluationMode: this.evaluationMode },
+      'Character loaded',
+    );
   }
 
   get characterConfig(): CharacterConfig {
@@ -122,8 +146,75 @@ export class RoastEngine {
       throw new Error(`All ${String(allVariants.length)} variants filtered out for "${targetName}"`);
     }
 
-    // Rank by score descending — best variant across all strategies wins
-    passed.sort((a, b) => b.score - a.score);
+    // Evaluate and rank variants
+    let bestEvaluation: EvaluationOutput | undefined;
+
+    if (this.evaluator && passed.length > 0) {
+      // Run judge-based evaluation on best candidate (pre-sorted by self-score)
+      passed.sort((a, b) => b.score - a.score);
+      const bestCandidate = passed[0]!;
+
+      try {
+        bestEvaluation = await this.evaluator.evaluate({
+          id: taskId,
+          targetName,
+          tweetText: bestCandidate.text,
+          researchNotes,
+        });
+
+        this.logger.info(
+          {
+            taskId,
+            target: targetName,
+            mode: this.evaluationMode,
+            compositeScore: bestEvaluation.compositeScore,
+            verdict: bestEvaluation.verdict,
+            vetoReasons: bestEvaluation.vetoReasons,
+          },
+          'Judge evaluation complete for best variant',
+        );
+
+        // If best variant was vetoed, try evaluating remaining variants
+        if (bestEvaluation.verdict === 'discard' && passed.length > 1) {
+          for (let i = 1; i < passed.length; i++) {
+            const candidate = passed[i]!;
+            try {
+              const evalResult = await this.evaluator.evaluate({
+                id: `${taskId}-alt-${String(i)}`,
+                targetName,
+                tweetText: candidate.text,
+                researchNotes,
+              });
+
+              if (evalResult.verdict === 'stockpile') {
+                // Swap: promote this variant to position 0
+                passed.splice(i, 1);
+                passed.unshift(candidate);
+                bestEvaluation = evalResult;
+                this.logger.info(
+                  { taskId, target: targetName, promotedIndex: i, compositeScore: evalResult.compositeScore },
+                  'Promoted alternative variant after veto',
+                );
+                break;
+              }
+            } catch (evalError) {
+              this.logger.warn(
+                { taskId, variantIndex: i, err: evalError },
+                'Alternative variant evaluation failed',
+              );
+            }
+          }
+        }
+      } catch (evalError) {
+        this.logger.warn(
+          { taskId, target: targetName, err: evalError },
+          'Judge evaluation failed, falling back to self-score ranking',
+        );
+      }
+    } else {
+      // No evaluator — fall back to LLM self-score ranking
+      passed.sort((a, b) => b.score - a.score);
+    }
 
     const draft: RoastDraft = {
       target: { name: targetName, type: 'project' },
@@ -141,6 +232,8 @@ export class RoastEngine {
         passed: passed.length,
         filtered: filtered.length,
         bestScore: passed[0]?.score,
+        evaluationScore: bestEvaluation?.compositeScore,
+        evaluationVerdict: bestEvaluation?.verdict,
         durationMs: strategyResults.durationMs,
         provider: strategyResults.provider,
         strategies: strategyResults.strategiesSucceeded,
@@ -153,6 +246,7 @@ export class RoastEngine {
       filtered,
       durationMs: strategyResults.durationMs,
       provider: strategyResults.provider,
+      evaluation: bestEvaluation,
     };
   }
 
