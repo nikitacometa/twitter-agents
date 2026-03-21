@@ -90,6 +90,8 @@ const TELEGRAPHED_PATTERNS = [
   /you have to respect the/i,
   /i have nothing to add/i,
   /genuinely impressive/i,
+  /^it's 20\d\d\b/i,
+  /genuinely the most/i,
 ];
 
 // Patterns that signal "too technical" — human reviewers consistently reject these
