@@ -1,6 +1,6 @@
 import type { Logger } from 'pino';
 import type { ProviderManager } from '@agent/provider-manager.js';
-import type { FarmAttempt, EvaluationResult, EvaluationScores, JudgeEvaluation } from './types.js';
+import type { FarmAttempt, EvaluationResult, JudgeEvaluation } from './types.js';
 import {
   pickJudges,
   buildEvaluationPrompt,
@@ -9,26 +9,14 @@ import {
 import type { JudgePersonaConfig } from './judge-personas.js';
 import {
   calculateWeightedComposite,
+  checkHardVetoes,
+  checkFunnyConsensusVeto,
   preFilter,
 } from '@evaluation/evaluator.js';
 import { getErrorMessage } from '@common/utils/error.util.js';
 
 export { calculateWeightedComposite, preFilter };
 export type { PreFilterResult } from '@evaluation/evaluator.js';
-
-// ---------------------------------------------------------------------------
-// Hard vetoes — original single-judge logic preserved for backward compatibility.
-// New code should use RoastEvaluator from @evaluation/evaluator.js which has
-// majority-based FUNNY veto (fixes false positives on deadpan roasts).
-// ---------------------------------------------------------------------------
-
-function checkHardVetoes(scores: EvaluationScores): string | null {
-  if (scores.factual < 2) return 'FACTUAL < 2 (invented claims)';
-  if (scores.funny < 2) return 'FUNNY < 2 (not a roast, just commentary)';
-  if (scores.original < 2) return 'ORIGINAL < 2 (completely generic)';
-  if (scores.degen < 1) return 'DEGEN < 1 (zero brand voice)';
-  return null;
-}
 
 // ---------------------------------------------------------------------------
 // EvaluationOutput — farm-specific shape with attemptId
@@ -127,6 +115,10 @@ export class SelfEvaluator {
       const veto = checkHardVetoes(r.result.scores);
       if (veto) vetoReasons.push(`${r.persona}: ${veto}`);
     }
+
+    // FUNNY consensus veto: majority of judges score FUNNY < 2
+    const funnyVeto = checkFunnyConsensusVeto(results);
+    if (funnyVeto) vetoReasons.push(funnyVeto);
 
     // Consensus veto: if majority of judges give composite < 3.0, auto-discard
     // Round to 1 decimal first to avoid floating-point edge cases (e.g. 2.9999... < 3.0)

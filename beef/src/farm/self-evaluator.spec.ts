@@ -252,7 +252,24 @@ describe('SelfEvaluator', () => {
       expect(result.vetoReasons!.some((r) => r.includes('FACTUAL < 2'))).toBe(true);
     });
 
-    it('triggers hard veto when funny < 2', async () => {
+    it('triggers FUNNY consensus veto when supermajority scores funny < 2', async () => {
+      const provider = createMockProvider([
+        { text: makeEvalJson({ funny: 1 }) },
+        { text: makeEvalJson({ funny: 1 }) },
+        { text: makeEvalJson({ funny: 1 }) },
+        { text: makeEvalJson({ funny: 1 }) },
+        { text: makeEvalJson({ funny: 4 }) },
+      ]);
+
+      const evaluator = new SelfEvaluator({ provider, logger });
+      const result = await evaluator.evaluate(makeAttempt());
+
+      expect(result.verdict).toBe('discard');
+      expect(result.vetoReasons).toBeDefined();
+      expect(result.vetoReasons!.some((r) => r.includes('FUNNY_CONSENSUS'))).toBe(true);
+    });
+
+    it('does NOT veto FUNNY when only one judge scores low', async () => {
       const provider = createMockProvider([
         { text: makeEvalJson({ funny: 1 }) },
         { text: makeEvalJson() },
@@ -264,9 +281,8 @@ describe('SelfEvaluator', () => {
       const evaluator = new SelfEvaluator({ provider, logger });
       const result = await evaluator.evaluate(makeAttempt());
 
-      expect(result.verdict).toBe('discard');
-      expect(result.vetoReasons).toBeDefined();
-      expect(result.vetoReasons!.some((r) => r.includes('FUNNY < 2'))).toBe(true);
+      const hasFunnyVeto = result.vetoReasons?.some((r) => r.includes('FUNNY'));
+      expect(hasFunnyVeto ?? false).toBe(false);
     });
 
     it('triggers hard veto when original < 2', async () => {

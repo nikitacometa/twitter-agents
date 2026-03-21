@@ -19,6 +19,7 @@ import type { PromptStrategy } from './prompt-builder.js';
 import { filterRoast } from '@content/content-filter.js';
 import { RoastEvaluator } from '@evaluation/evaluator.js';
 import type { EvaluationOutput } from '@evaluation/evaluator.js';
+import { pickMutations, formatMutationSection } from '../farm/mutations.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const DEFAULT_CHARACTER_PATH = resolve(__dirname, '../../characters/beef-bot.json');
@@ -86,6 +87,7 @@ export class RoastEngine {
     profile?: TaskProfile,
     variantCountOverride?: number,
     imagePaths?: string[],
+    mutationCount?: number,
   ): Promise<RoastResult> {
     const taskId = `roast-${source}-${Date.now()}`;
     const effectiveProfile = profile ?? 'roast-research';
@@ -97,7 +99,7 @@ export class RoastEngine {
 
     // 3×3 Multi-strategy: rubric, persona, adversarial — each generates N variants
     const strategyResults = await this.runMultiStrategy(
-      taskId, targetName, effectiveProfile, effectiveVariantCount, memory, imagePaths,
+      taskId, targetName, effectiveProfile, effectiveVariantCount, memory, imagePaths, mutationCount,
     );
 
     let allVariants = strategyResults.variants;
@@ -119,10 +121,11 @@ export class RoastEngine {
         requiresResearch: false,
         imagePaths,
       });
-      this.validateOutput(fallback.data, taskId);
-      allVariants = [...fallback.data.variants];
-      researchNotes = fallback.data.researchNotes;
-      factCheckPassed = fallback.data.factCheckPassed;
+      const parsed = this.parseOutput(fallback.data, taskId);
+      this.validateOutput(parsed, taskId);
+      allVariants = [...parsed.variants];
+      researchNotes = parsed.researchNotes;
+      factCheckPassed = parsed.factCheckPassed;
     }
 
     // Content filter
@@ -279,6 +282,7 @@ export class RoastEngine {
     variantCount: number,
     memory?: CreativeMemory,
     imagePaths?: string[],
+    mutationCount?: number,
   ): Promise<{
     variants: Array<{ text: string; score: number; angle: string }>;
     researchNotes: string | null;
@@ -288,10 +292,16 @@ export class RoastEngine {
     strategiesSucceeded: PromptStrategy[];
     error?: unknown;
   }> {
-    const strategyPrompts = PROMPT_STRATEGIES.map((strategy) => ({
-      strategy,
-      prompt: this.buildStrategyPrompt(strategy, targetName, variantCount, true, memory, imagePaths),
-    }));
+    const mutations = mutationCount && mutationCount > 0 ? pickMutations(mutationCount) : [];
+    const mutationSection = formatMutationSection(mutations);
+
+    const strategyPrompts = PROMPT_STRATEGIES.map((strategy) => {
+      const base = this.buildStrategyPrompt(strategy, targetName, variantCount, true, memory, imagePaths);
+      return {
+        strategy,
+        prompt: mutationSection ? base + '\n' + mutationSection : base,
+      };
+    });
 
     this.logger.info(
       { taskId, strategies: PROMPT_STRATEGIES, variantsPerStrategy: variantCount },
@@ -323,7 +333,7 @@ export class RoastEngine {
 
       if (result.status === 'fulfilled') {
         try {
-          const data = result.value.data;
+          const data = this.parseOutput(result.value.data, `${taskId}-${strategy}`);
           this.validateOutput(data, `${taskId}-${strategy}`);
           allVariants.push(...data.variants);
           if (data.researchNotes && !researchNotes) researchNotes = data.researchNotes;
@@ -357,6 +367,24 @@ export class RoastEngine {
       strategiesSucceeded,
       error: firstError,
     };
+  }
+
+  private parseOutput(data: unknown, taskId: string): AgentRoastOutput {
+    if (typeof data === 'string') {
+      const cleaned = data.replace(/^```(?:json)?\s*\n?/m, '').replace(/\n?```\s*$/m, '').trim();
+      const jsonMatch = cleaned.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        return JSON.parse(jsonMatch[0]) as AgentRoastOutput;
+      }
+      throw new Error(`[${taskId}] Failed to parse string output as JSON`);
+    }
+
+    const obj = data as Record<string, unknown>;
+    if (typeof obj['text'] === 'string') {
+      return this.parseOutput(obj['text'], taskId);
+    }
+
+    return data as AgentRoastOutput;
   }
 
   private validateOutput(data: AgentRoastOutput, taskId: string): void {
