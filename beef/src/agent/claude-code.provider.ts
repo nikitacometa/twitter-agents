@@ -151,9 +151,13 @@ export class ClaudeCodeProvider implements LLMProvider {
 
   private execClaude(args: string[], timeout: number): Promise<{ stdout: string }> {
     return new Promise((resolve, reject) => {
+      // Extend PATH for PM2/cron contexts where ~/.local/bin isn't in PATH
+      const home = process.env.HOME ?? '';
+      const extendedPath = `${home}/.local/bin:${home}/.npm-global/bin:${process.env.PATH ?? ''}`;
+
       const child = spawn('claude', args, {
         stdio: ['ignore', 'pipe', 'pipe'],
-        env: { ...process.env, ...cliConfig.env },
+        env: { ...process.env, ...cliConfig.env, PATH: extendedPath },
       });
       this.childProcesses.add(child);
 
