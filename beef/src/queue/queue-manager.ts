@@ -341,6 +341,12 @@ export class QueueManager {
       return { dequeued: true, posted: false, target: item.targetName, error: 'No reply_to context' };
     }
 
+    if (!this.enableMentionReplies) {
+      this.logger.info({ queueId: item.id, target: item.targetName }, 'Casual reply skipped — ENABLE_MENTION_REPLIES=false');
+      this.queueRepo.fail(item.id, 'Mention replies disabled');
+      return { dequeued: true, posted: false, target: item.targetName, error: 'Mention replies disabled' };
+    }
+
     // Daily limit for casual replies (separate from mention roasts)
     const casualToday = this.roastRepo.getTodayCount('casual_reply');
     if (casualToday >= this.casualReplyLimit) {
@@ -464,8 +470,9 @@ export function extractParentAuthorFromTarget(targetName: string): string | unde
 
 export function extractTriggerText(context: string | null): string | undefined {
   if (!context) return undefined;
-  const match = context.match(/\|text:(.+?)(?:\||$)/);
-  return match?.[1];
+  // text: is always the last segment in context, so grab everything after it
+  const match = context.match(/\|text:(.+)$/);
+  return match?.[1] || undefined;
 }
 
 export function extractMediaUrls(context: string | null): string[] {

@@ -98,8 +98,8 @@ describe('extractTriggerText', () => {
     expect(extractTriggerText(ctx)).toBe(expected);
   });
 
-  it('extracts text before next pipe delimiter', () => {
-    expect(extractTriggerText('reply_to:1|text:hello|extra:data')).toBe('hello');
+  it('preserves pipe characters in user text (text: is always last segment)', () => {
+    expect(extractTriggerText('reply_to:1|text:this | that')).toBe('this | that');
   });
 
   it.each([

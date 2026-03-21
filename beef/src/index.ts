@@ -132,13 +132,18 @@ if (config.ENABLE_TWITTER) {
       profileFetcher = new CachedProfileFetcher({
         inner: scraperClient,
         targetRepo,
-        userRepo,
         logger,
       });
       logger.info('Twitter client: scraper mode (cookie auth)');
     } catch (error) {
       logger.error({ err: error }, 'Scraper login failed — falling back to API mode');
-      twitter = new TwitterClient({ dryRun: config.DRY_RUN, logger });
+      const fallbackClient = new TwitterClient({ dryRun: config.DRY_RUN, logger });
+      twitter = fallbackClient;
+      profileFetcher = new CachedProfileFetcher({
+        inner: fallbackClient,
+        targetRepo,
+        logger,
+      });
     }
   } else {
     const twitterCredentials =
@@ -160,7 +165,6 @@ if (config.ENABLE_TWITTER) {
     profileFetcher = new CachedProfileFetcher({
       inner: apiClient,
       targetRepo,
-      userRepo,
       logger,
     });
     logger.info('Twitter client: API mode');

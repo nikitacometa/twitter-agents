@@ -1,27 +1,23 @@
 import type { Logger } from 'pino';
 import type { IProfileFetcher, TwitterProfile } from './twitter-client.interface.js';
 import type { TargetRepository } from '@storage/repositories/target.repository.js';
-import type { UserRepository } from '@storage/repositories/user.repository.js';
 
 const DEFAULT_TTL_HOURS = 24;
 
 export class CachedProfileFetcher implements IProfileFetcher {
   private readonly inner: IProfileFetcher;
   private readonly targetRepo: TargetRepository;
-  private readonly userRepo: UserRepository;
   private readonly logger: Logger;
   private readonly ttlMs: number;
 
   constructor(opts: {
     inner: IProfileFetcher;
     targetRepo: TargetRepository;
-    userRepo: UserRepository;
     logger: Logger;
     ttlHours?: number;
   }) {
     this.inner = opts.inner;
     this.targetRepo = opts.targetRepo;
-    this.userRepo = opts.userRepo;
     this.logger = opts.logger;
     this.ttlMs = (opts.ttlHours ?? DEFAULT_TTL_HOURS) * 60 * 60 * 1000;
   }
@@ -44,14 +40,6 @@ export class CachedProfileFetcher implements IProfileFetcher {
       isVerified: profile.isVerified,
       website: profile.website,
       recentTweets: profile.recentTweets,
-    });
-
-    this.userRepo.upsert({
-      twitterId: username.toLowerCase(),
-      username: profile.username,
-      displayName: profile.username,
-      followerCount: profile.followersCount ?? undefined,
-      bioSummary: profile.biography ?? undefined,
     });
 
     this.logger.debug({ username, followers: profile.followersCount }, 'Profile cached');
