@@ -111,8 +111,11 @@ export class ClaudeCodeProvider implements LLMProvider {
 
   async healthCheck(): Promise<boolean> {
     try {
+      const home = process.env.HOME ?? '';
+      const extendedPath = `${home}/.local/bin:${home}/.npm-global/bin:${process.env.PATH ?? ''}`;
       const { stdout } = await execFileAsync('claude', ['--version'], {
         timeout: HEALTH_CHECK_TIMEOUT_MS,
+        env: { ...process.env, PATH: extendedPath },
       });
       const healthy = stdout.trim().length > 0;
       this.logger.debug({ version: stdout.trim() }, 'Claude Code health check');
@@ -176,11 +179,11 @@ export class ClaudeCodeProvider implements LLMProvider {
 
         if (signal) {
           reject(new Error(
-            `claude process failed (killed by ${signal} after ${String(timeout)}ms)${stderr ? `\nstderr: ${stderr}` : ''}`,
+            `claude process failed (killed by ${signal} after ${String(timeout)}ms)${stderr ? `\nstderr: ${stderr}` : ''}${stdout ? `\nstdout: ${stdout.slice(0, 500)}` : ''}`,
           ));
         } else if (code !== 0) {
           reject(new Error(
-            `claude process failed (exit code ${String(code)})${stderr ? `\nstderr: ${stderr}` : ''}`,
+            `claude process failed (exit code ${String(code)})${stderr ? `\nstderr: ${stderr}` : ''}${stdout ? `\nstdout: ${stdout.slice(0, 500)}` : ''}`,
           ));
         } else {
           resolve({ stdout });
