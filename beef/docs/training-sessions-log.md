@@ -149,3 +149,77 @@ See `docs/improvement-plan-s2.md` for detailed action items.
 - AI 3.5-3.7 is a dead zone — same score maps to 1.5-3.75 human
 - Justin Sun and CZ = best targets (inherently absurd real stories)
 - "i audited" / "i'm a forensic ai" openers are overused (6/23 roasts)
+
+---
+
+## Session 3 — 2026-03-21 (post-I2 validation)
+
+**Scope:** 62 roasts, 7 targets: Brian Armstrong, Vitalik Buterin, TON, CZ, farcaster, solana, opensea. AI-only evaluation (no human blind review yet).
+
+**Purpose:** Validate I2 improvement plan changes (punchline isolation, length guidance, pre-filter patterns, angle weight rebalance, judge calibration).
+
+### Results summary
+
+| Metric | S3 | S2 baseline |
+|--------|-----|-------------|
+| Generated | 62 | 56 |
+| Pre-filtered | 24 (39%) | 0 (no pre-filter) |
+| LLM-evaluated | 38 | 56 |
+| Stockpiled | 14 (23% total, 37% of evaluated) | — |
+| Avg AI score (evaluated) | 3.39 | 3.63 |
+| Avg AI score (stockpiled) | 3.80 | — |
+| Avg chars (stockpiled) | **131** | ~180 |
+
+### Pre-filter effectiveness
+
+24/62 (39%) rejected before LLM calls — saved ~120 judge invocations.
+
+| Reason | Count |
+|--------|-------|
+| exceeds 3 sentences | ~19 |
+| "it's 20XX" telegraphed | 5 |
+| other telegraphed/generic | ~0 |
+
+Adversarial strategy worst offender for sentence count (12/21 pre-filtered).
+
+### Per-target results
+
+| Target | Total | Pre-filtered | Stockpiled | Rate |
+|--------|-------|-------------|-----------|------|
+| CZ | 9 | 2 | 4 | 44% |
+| Vitalik | 9 | 1 | 3 | 33% |
+| farcaster | 8 | 5 | 2 | 25% |
+| Brian Armstrong | 9 | 2 | 2 | 22% |
+| solana | 9 | 6 | 1 | 11% |
+| TON | 9 | 5 | 1 | 11% |
+| opensea | 9 | 3 | 1 | 11% |
+
+### Per-strategy results
+
+| Strategy | Stockpiled | Pre-filtered | Avg score |
+|----------|-----------|-------------|-----------|
+| rubric | 7 (50%) | 7 | 3.49 |
+| adversarial | 4 (29%) | 12 | 3.31 |
+| persona | 3 (21%) | 5 | 3.35 |
+
+### Top stockpiled roasts (pending human review)
+
+| # | Score | Target | Angle | Chars | Text |
+|---|-------|--------|-------|-------|------|
+| 1 | 4.3 | farcaster | SELF_AWARE | 134 | "i'm a language model trained on financial disclosures and the most successful thing farcaster shipped in five years was a full refund." |
+| 2 | 4.0 | Brian Armstrong | UNDERSTATEMENT | 90 | "$550 million sold, 88 trades, zero buys. brian, i say this gently — you ARE the bear case." |
+| 3 | 3.9 | opensea | RHETORICAL | 132 | "90% of opensea's $2.6B comeback month was token swaps. the world's largest nft marketplace survived by not being an nft marketplace." |
+| 4 | 3.9 | solana | SELF_AWARE | 137 | "i was built to detect fraud. solana's biggest app launched millions of tokens — nearly all rug pulls — i've never seen a cleaner dataset." |
+| 5 | 3.9 | CZ | RULE_OF_THREE | 72 | "4 months, $50M fine, $47B richer. CZ's prison sentence returned 94,000%." |
+| 6 | 3.9 | CZ | FAKE_COMPLIMENT | 94 | "$800K in lobbying bought CZ a presidential pardon. that's a lower expense ratio than vanguard." |
+| 7 | 3.9 | Vitalik | COMPARISON | 145 | "vitalik 'left X' by posting to X through a wrapper called firefly. has anyone ever accidentally described ethereum's L2 strategy more accurately?" |
+
+### Key observations
+
+1. **Length improvement confirmed**: avg stockpiled 131 chars (was ~180). Best roasts: CZ 72 chars, Brian Armstrong 90 chars
+2. **Pre-filter "it's 20XX" working**: caught 5 future-framing roasts (3 TON, 2 opensea)
+3. **SELF_AWARE angle dominates**: 5/14 stockpiled (36%). Forensic AI voice is $BEEF's strongest identity signal
+4. **Big personalities > projects**: CZ 44%, Vitalik 33% vs opensea/solana/TON 11% each
+5. **DEGEN score remains weak**: many roasts score 1-2 on brand voice. Projects especially lack $BEEF identity
+6. **Adversarial generates longest**: 12/21 pre-filtered for sentence count — strategy needs tighter constraints
+7. **Needs human blind review** to validate AI scores against actual humor impact
