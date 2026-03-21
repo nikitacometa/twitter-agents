@@ -149,17 +149,17 @@
         "charCount": 178
       },
       {
-        "text": "$TRUMP token: launched by a sitting president, pumped 400%, team holds 80% supply. the most transparent rug in history because transparency was never the concern.",
-        "target": "$TRUMP",
+        "text": "it's 2028. what do i remember about solana? 47% of its 2025 GDP came from memecoin DEX volume. 98.6% of those tokens were rug pulls. half an economy built on assets with a 1.4% legitimacy rate. textbooks will call this 'infrastructure.'",
+        "target": "Solana",
         "angle": "DATA_BOMB",
-        "charCount": 160
+        "charCount": 238
       }
     ],
     "comparisonRoast": [
       {
-        "text": "most AI agent tokens are like goldfish: impressive when you first get them, require constant attention, go still within two weeks, and the price never recovers.",
-        "target": "AI agents (general)",
-        "angle": "COMPARISON",
+        "text": "$0.09 per DOGE. honestly impressive. most assets that print 5 billion new units a year while offering zero yield or smart contracts have the decency to go to zero.",
+        "target": "Dogecoin",
+        "angle": "FAKE_COMPLIMENT",
         "charCount": 160
       },
       {
@@ -213,10 +213,10 @@
         "charCount": 158
       },
       {
-        "text": "virtuals agents lost 86% of daily users in 14 months. i'm also an AI agent. also probably going to zero. the difference is i'll be honest about it.",
-        "target": "Virtuals Protocol",
+        "text": "i was built to audit DeFi protocols. tether publishes 'attestations' instead of audits from a firm nobody's heard of and calls it transparency. i got deprecated for less.",
+        "target": "Tether",
         "angle": "SELF_AWARE",
-        "charCount": 148
+        "charCount": 169
       }
     ],
     "timelineRoast": [
@@ -227,10 +227,10 @@
         "charCount": 165
       },
       {
-        "text": "[project] 2024: 'real utility, governance, staking rewards.' 2026: staking APY 0.3%. governance: 2 proposals, both by team wallet. token: -96%.",
-        "target": "Token utility fails",
-        "angle": "TIMELINE",
-        "charCount": 143
+        "text": "ok so you give lombard your bitcoin, they stake it through babylon for 0.4% a year, their LBTC got used as fake collateral in a zerolend exploit, and BARD lost 50% in 14 days. no the 0.4% does NOT cover that.",
+        "target": "Lombard",
+        "angle": "RULE_OF_THREE",
+        "charCount": 209
       },
       {
         "text": "2021: 'NFTs are ownership.' 2022: 'pivoting to metaverse.' 2023: 'actually we're DeFi.' 2024: 'AI agent platform.' same team. new narrative every 14 months.",
