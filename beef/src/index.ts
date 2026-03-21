@@ -1,5 +1,12 @@
 import dotenv from 'dotenv';
-dotenv.config({ override: true });
+import { resolve } from 'node:path';
+
+// Load base .env, then overlay environment-specific .env.{BEEF_ENV}
+dotenv.config();
+const beefEnv = process.env.BEEF_ENV || 'test';
+const envFile = resolve(process.cwd(), `.env.${beefEnv}`);
+dotenv.config({ path: envFile, override: true });
+
 import { validateEnv } from './common/config/env.validation.js';
 import { logger } from './common/utils/logger.js';
 import { createDatabase } from './storage/database.js';
@@ -30,9 +37,19 @@ import { HealthMonitor } from './health/health-monitor.js';
 
 const config = validateEnv();
 
+const botUsername = config.TWITTER_BOT_USERNAME || config.TWITTER_USERNAME || '0xBeefer';
+
 logger.info(
-  { botName: config.BOT_NAME, env: config.NODE_ENV, twitter: config.ENABLE_TWITTER },
-  'Starting $BEEF roast bot',
+  {
+    botName: config.BOT_NAME,
+    beefEnv: config.BEEF_ENV,
+    nodeEnv: config.NODE_ENV,
+    twitterMode: config.TWITTER_CLIENT_MODE,
+    twitterEnabled: config.ENABLE_TWITTER,
+    dryRun: config.DRY_RUN,
+    botUsername,
+  },
+  `Starting $BEEF roast bot [${config.BEEF_ENV.toUpperCase()}]`,
 );
 
 // --- Database ---
@@ -59,7 +76,27 @@ let provider: ProviderManager | null = null;
 try {
   const primary = new ClaudeCodeProvider(logger, llmLogRepo);
   const fallback = createAnthropicSDKProvider(config.ANTHROPIC_API_KEY, logger, llmLogRepo);
-  const alerter = { send: (msg: string) => Promise.resolve(logger.warn({ alert: msg }, 'Provider alert')) };
+  const alerter = {
+    send: async (msg: string) => {
+      logger.warn({ alert: msg }, 'Provider alert');
+      if (config.TELEGRAM_BOT_TOKEN && config.TELEGRAM_CHAT_ID) {
+        try {
+          const url = `https://api.telegram.org/bot${config.TELEGRAM_BOT_TOKEN}/sendMessage`;
+          await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              chat_id: config.TELEGRAM_CHAT_ID,
+              text: `🚨 <b>Provider Alert</b>\n\n${msg.replace(/[<>&]/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' })[c] ?? c)}`,
+              parse_mode: 'HTML',
+            }),
+          });
+        } catch (err) {
+          logger.error({ err }, 'Failed to send alert to Telegram');
+        }
+      }
+    },
+  };
   provider = new ProviderManager(primary, fallback, alerter, logger);
   logger.info('LLM providers initialized');
 } catch (error) {
@@ -105,11 +142,13 @@ if (config.ENABLE_TWITTER) {
           }
         : undefined;
 
-    twitter = new TwitterClient({
+    const apiClient = new TwitterClient({
       credentials: twitterCredentials,
       dryRun: config.DRY_RUN,
       logger,
     });
+    twitter = apiClient;
+    profileFetcher = apiClient;
     logger.info('Twitter client: API mode');
   }
 
@@ -120,7 +159,7 @@ if (config.ENABLE_TWITTER) {
     configRepo,
     queueRepo,
     logger,
-    botUsername: config.TWITTER_USERNAME,
+    botUsername,
   });
 
   engagementTracker = new EngagementTracker({
@@ -159,11 +198,13 @@ const healthMonitor = new HealthMonitor({
   port: 3000,
   logger,
   db,
+  beefEnv: config.BEEF_ENV,
   checks: {
     isTwitterConfigured: () => twitter?.isConfigured ?? false,
     isProviderAvailable: () => provider !== null,
     getQueuePending: () => queueRepo.getPendingCount(),
     getRoastsToday: () => roastRepo.getTodayCount('autonomous'),
+    getApiUsage: twitter && 'usage' in twitter ? () => (twitter as TwitterClient).usage : undefined,
   },
 });
 
@@ -227,6 +268,7 @@ if (config.TELEGRAM_BOT_TOKEN) {
     },
     pollMentions: mentionHandler ? () => mentionHandler.poll() : undefined,
     twitterEnabled: config.ENABLE_TWITTER,
+    beefEnv: config.BEEF_ENV,
   });
 
   void bot.start({

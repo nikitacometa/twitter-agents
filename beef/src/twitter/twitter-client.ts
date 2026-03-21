@@ -1,7 +1,7 @@
-import { TwitterApi } from 'twitter-api-v2';
+import { TwitterApi, ApiResponseError } from 'twitter-api-v2';
 import type { Logger } from 'pino';
 import type { TweetMetrics } from '@common/types/index.js';
-import type { ITwitterClient, PostResult, MentionData } from './twitter-client.interface.js';
+import type { ITwitterClient, IProfileFetcher, TwitterProfile, PostResult, MentionData } from './twitter-client.interface.js';
 import { retryWithBackoff, NonRetryableError } from '@common/utils/error.util.js';
 
 export interface TwitterCredentials {
@@ -13,21 +13,19 @@ export interface TwitterCredentials {
 
 export { type PostResult } from './twitter-client.interface.js';
 
-function rethrowIfRateLimit(error: unknown): void {
-  if (
-    error instanceof Error &&
-    'code' in error &&
-    (error as Error & { code: number }).code === 429
-  ) {
-    throw new NonRetryableError('Twitter API rate limited (429)');
-  }
+export interface ApiUsageStats {
+  posts: number;
+  reads: number;
+  date: string;
+  lastRateLimit?: { remaining: number; limit: number; resetAt: string };
 }
 
-export class TwitterClient implements ITwitterClient {
+export class TwitterClient implements ITwitterClient, IProfileFetcher {
   private readonly client: TwitterApi | null;
   private readonly dryRun: boolean;
   private readonly logger: Logger;
   private cachedUserId: string | null = null;
+  private readonly _usage: ApiUsageStats = { posts: 0, reads: 0, date: new Date().toISOString().slice(0, 10) };
 
   constructor(opts: {
     credentials?: TwitterCredentials;
@@ -55,6 +53,44 @@ export class TwitterClient implements ITwitterClient {
     return this.client !== null;
   }
 
+  get usage(): Readonly<ApiUsageStats> {
+    this.resetUsageIfNewDay();
+    return { ...this._usage };
+  }
+
+  private resetUsageIfNewDay(): void {
+    const today = new Date().toISOString().slice(0, 10);
+    if (this._usage.date !== today) {
+      this._usage.posts = 0;
+      this._usage.reads = 0;
+      this._usage.date = today;
+      this._usage.lastRateLimit = undefined;
+    }
+  }
+
+  private trackPost(): void {
+    this.resetUsageIfNewDay();
+    this._usage.posts++;
+  }
+
+  private trackRead(): void {
+    this.resetUsageIfNewDay();
+    this._usage.reads++;
+  }
+
+  private handleRateLimitError(error: unknown): never {
+    if (error instanceof ApiResponseError && error.code === 429) {
+      const rl = error.rateLimit;
+      if (rl) {
+        const resetAt = new Date(rl.reset * 1000).toISOString();
+        this._usage.lastRateLimit = { remaining: rl.remaining, limit: rl.limit, resetAt };
+        this.logger.warn({ remaining: rl.remaining, limit: rl.limit, resetAt }, 'Twitter API rate limited (429)');
+      }
+      throw new NonRetryableError('Twitter API rate limited (429)');
+    }
+    throw error;
+  }
+
   async postTweet(text: string): Promise<PostResult | null> {
     if (text.length > 280) {
       this.logger.error({ charCount: text.length }, 'Tweet exceeds 280 chars — rejected');
@@ -75,11 +111,11 @@ export class TwitterClient implements ITwitterClient {
       async () => {
         try {
           const result = await this.client!.v2.tweet(text);
-          this.logger.info({ tweetId: result.data.id, charCount: text.length }, 'Tweet posted');
+          this.trackPost();
+          this.logger.info({ tweetId: result.data.id, charCount: text.length, dailyPosts: this._usage.posts }, 'Tweet posted');
           return { tweetId: result.data.id };
         } catch (error) {
-          rethrowIfRateLimit(error);
-          throw error;
+          this.handleRateLimitError(error);
         }
       },
       { maxRetries: 2, baseDelayMs: 2000, label: 'postTweet' },
@@ -106,11 +142,11 @@ export class TwitterClient implements ITwitterClient {
       async () => {
         try {
           const result = await this.client!.v2.reply(text, replyToId);
-          this.logger.info({ tweetId: result.data.id, replyToId }, 'Reply posted');
+          this.trackPost();
+          this.logger.info({ tweetId: result.data.id, replyToId, dailyPosts: this._usage.posts }, 'Reply posted');
           return { tweetId: result.data.id };
         } catch (error) {
-          rethrowIfRateLimit(error);
-          throw error;
+          this.handleRateLimitError(error);
         }
       },
       { maxRetries: 2, baseDelayMs: 2000, label: 'replyToTweet' },
@@ -204,7 +240,8 @@ export class TwitterClient implements ITwitterClient {
         results.push(mention);
       }
 
-      this.logger.info({ count: results.length, sinceId }, 'Mentions fetched');
+      this.trackRead();
+      this.logger.info({ count: results.length, sinceId, dailyReads: this._usage.reads }, 'Mentions fetched');
       return results;
     } catch (error) {
       this.logger.error({ err: error }, 'Failed to fetch mentions');
@@ -245,5 +282,51 @@ export class TwitterClient implements ITwitterClient {
     }
 
     return result;
+  }
+
+  async getProfile(username: string): Promise<TwitterProfile | null> {
+    if (!this.client) {
+      this.logger.debug('getProfile skipped — no client');
+      return null;
+    }
+
+    try {
+      const user = await this.client.v2.userByUsername(username, {
+        'user.fields': 'description,public_metrics,verified,url',
+      });
+
+      if (!user.data) {
+        this.logger.debug({ username }, 'User not found');
+        return null;
+      }
+
+      const recentTweets: string[] = [];
+      try {
+        const timeline = await this.client.v2.userTimeline(user.data.id, {
+          max_results: 5,
+          exclude: ['replies', 'retweets'],
+        });
+        for (const tweet of timeline.data?.data ?? []) {
+          recentTweets.push(tweet.text);
+        }
+      } catch {
+        this.logger.debug({ username }, 'Failed to fetch user timeline — continuing without');
+      }
+
+      this.trackRead();
+      this.logger.info({ username, followers: user.data.public_metrics?.followers_count, dailyReads: this._usage.reads }, 'Profile fetched via API');
+
+      return {
+        username: user.data.username,
+        biography: user.data.description ?? null,
+        followersCount: user.data.public_metrics?.followers_count ?? null,
+        isVerified: user.data.verified ?? false,
+        website: user.data.url ?? null,
+        recentTweets,
+      };
+    } catch (error) {
+      this.logger.error({ err: error, username }, 'Failed to fetch profile');
+      return null;
+    }
   }
 }

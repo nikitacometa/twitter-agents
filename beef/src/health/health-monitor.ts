@@ -4,12 +4,14 @@ import type Database from 'better-sqlite3';
 
 export interface HealthStatus {
   status: 'ok' | 'degraded' | 'error';
+  beefEnv: string;
   uptime: number;
   db: boolean;
   twitter: boolean;
   provider: boolean;
   queuePending: number;
   roastsToday: number;
+  apiUsage?: { posts: number; reads: number };
   lastCheck: string;
 }
 
@@ -23,23 +25,28 @@ export class HealthMonitor {
     isProviderAvailable: () => boolean;
     getQueuePending: () => number;
     getRoastsToday: () => number;
+    getApiUsage?: () => { posts: number; reads: number };
   };
+  private readonly beefEnv: string;
   private readonly startTime = Date.now();
 
   constructor(opts: {
     port?: number;
     logger: Logger;
     db: Database.Database;
+    beefEnv?: string;
     checks: {
       isTwitterConfigured: () => boolean;
       isProviderAvailable: () => boolean;
       getQueuePending: () => number;
       getRoastsToday: () => number;
+      getApiUsage?: () => { posts: number; reads: number };
     };
   }) {
     this.port = opts.port ?? 3000;
     this.logger = opts.logger;
     this.db = opts.db;
+    this.beefEnv = opts.beefEnv ?? 'unknown';
     this.checks = opts.checks;
   }
 
@@ -68,14 +75,18 @@ export class HealthMonitor {
 
     const status = !dbOk ? 'error' : !provider ? 'degraded' : 'ok';
 
+    const apiUsage = this.checks.getApiUsage?.();
+
     return {
       status,
+      beefEnv: this.beefEnv,
       uptime: Math.round((Date.now() - this.startTime) / 1000),
       db: dbOk,
       twitter,
       provider,
       queuePending,
       roastsToday,
+      ...(apiUsage ? { apiUsage } : {}),
       lastCheck: new Date().toISOString(),
     };
   }

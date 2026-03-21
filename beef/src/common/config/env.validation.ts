@@ -2,7 +2,10 @@ import { z } from 'zod';
 
 const envSchema = z
   .object({
-    // Twitter API (Basic tier)
+    // Bot environment: test (Euphoria AI) or production (0xBeefer)
+    BEEF_ENV: z.enum(['test', 'production']).default('test'),
+
+    // Twitter API (Official API v2)
     TWITTER_API_KEY: z.string().optional(),
     TWITTER_API_SECRET: z.string().optional(),
     TWITTER_ACCESS_TOKEN: z.string().optional(),
@@ -10,6 +13,9 @@ const envSchema = z
 
     // Twitter client mode
     TWITTER_CLIENT_MODE: z.enum(['api', 'scraper']).default('api'),
+
+    // Twitter bot handle (without @) — used for mention filtering in API mode
+    TWITTER_BOT_USERNAME: z.string().optional(),
 
     // Twitter scraper credentials (cookie auth via agent-twitter-client)
     TWITTER_USERNAME: z.string().optional(),
@@ -80,6 +86,16 @@ const envSchema = z
           code: z.ZodIssueCode.custom,
           message: 'TELEGRAM_BOT_TOKEN is required in production',
           path: ['TELEGRAM_BOT_TOKEN'],
+        });
+      }
+    }
+    if (data.BEEF_ENV === 'production' && data.TWITTER_CLIENT_MODE === 'api') {
+      const apiCreds = [data.TWITTER_API_KEY, data.TWITTER_API_SECRET, data.TWITTER_ACCESS_TOKEN, data.TWITTER_ACCESS_SECRET];
+      if (apiCreds.some((c) => !c)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: 'All Twitter API credentials required in production API mode (TWITTER_API_KEY, TWITTER_API_SECRET, TWITTER_ACCESS_TOKEN, TWITTER_ACCESS_SECRET)',
+          path: ['TWITTER_API_KEY'],
         });
       }
     }

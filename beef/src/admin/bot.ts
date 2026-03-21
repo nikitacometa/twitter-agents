@@ -53,6 +53,7 @@ export function createBot(opts: {
   postingMode?: { autonomous: boolean; mentionReplies: boolean };
   pollMentions?: () => Promise<PollResult>;
   twitterEnabled?: boolean;
+  beefEnv?: string;
 }): Bot {
   const { token, adminIds, openAccess, feedbackRepo, provider, logger, queueManager, configRepo, exampleRepo, patternRepo, stockpileRepo, postingMode, pollMentions } = opts;
   const bot = new Bot(token);
@@ -344,7 +345,7 @@ export function createBot(opts: {
 
     await ctx.reply(
       [
-        '<b>🤖 Bot Status</b>',
+        `<b>🤖 Bot Status</b> [${escapeHtml((opts.beefEnv ?? 'unknown').toUpperCase())}]`,
         '',
         providerStatus,
         `Total ratings: <b>${String(stats.total)}</b>`,
@@ -353,7 +354,7 @@ export function createBot(opts: {
         runtime ? `Paused: <b>${String(runtime.paused)}</b>` : '',
         postingStr,
         `Access: ${adminStr}`,
-        `Chat type: ${ctx.chat.type}`,
+        `Twitter: <b>${opts.twitterEnabled ? 'enabled' : 'disabled'}</b>`,
       ].filter(Boolean).join('\n'),
       { parse_mode: 'HTML' },
     );

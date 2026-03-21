@@ -56,7 +56,7 @@ export class MentionHandler {
     this.configRepo = opts.configRepo;
     this.queueRepo = opts.queueRepo;
     this.logger = opts.logger;
-    this.botUsername = opts.botUsername?.trim() || 'BeefThis';
+    this.botUsername = opts.botUsername?.trim() || '0xBeefer';
   }
 
   async poll(): Promise<PollResult> {
@@ -230,7 +230,7 @@ export class MentionHandler {
   }
 }
 
-export function classifyMention(text: string, botUsername = 'BeefThis'): MentionRequestType {
+export function classifyMention(text: string, botUsername = '0xBeefer'): MentionRequestType {
   // Strip bot's own mention so that "BeefThis" containing "beef" doesn't
   // force every mention into roast_request.
   const stripped = text.replace(new RegExp(`@${escapeRegExp(botUsername)}`, 'gi'), '');
