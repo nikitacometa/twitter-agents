@@ -8,6 +8,22 @@ const ANGLES = [
   'RHETORICAL', 'SELF_AWARE', 'QUOTE_FLIP', 'UNDERSTATEMENT', 'RULE_OF_THREE',
 ] as const;
 
+// Quality-based angle weights from human review (56 rated roasts, March 2026).
+// UNDERSTATEMENT: 1 sample → 3.75 avg, underrepresented but high ceiling.
+// TIMELINE: "cz posted photo of dog" → 2.25, chronological format produces flat narratives.
+// QUOTE_FLIP: mixed (3.75 TON xAI but 2.0–2.25 on tepid closers).
+export const DEFAULT_ANGLE_WEIGHTS: Record<string, number> = {
+  UNDERSTATEMENT: 1.8,
+  DATA_BOMB: 1.3,
+  COMPARISON: 1.0,
+  FAKE_COMPLIMENT: 1.0,
+  SELF_AWARE: 1.0,
+  RHETORICAL: 0.9,
+  QUOTE_FLIP: 0.8,
+  RULE_OF_THREE: 0.7,
+  TIMELINE: 0.6,
+};
+
 export type RoastAngle = (typeof ANGLES)[number];
 
 /**
@@ -24,7 +40,7 @@ function pickAngles(count: number, weights?: AngleWeight[]): RoastAngle[] {
   }
 
   const keyed = ANGLES.map((angle) => {
-    const weight = weightMap.get(angle) ?? 1.0;
+    const weight = weightMap.get(angle) ?? (DEFAULT_ANGLE_WEIGHTS[angle] ?? 1.0);
     const key = Math.random() ** (1 / weight);
     return { angle, key };
   });
@@ -41,7 +57,8 @@ function buildAntiPatternSection(rejects: RejectExample[]): string {
     (r) => `  - [${r.angle}] "${r.text}" (target: ${r.target})`,
   );
 
-  return `\n## ANTI-PATTERNS (these specific texts were rated BAD — avoid similar patterns)
+  return `\n## ANTI-PATTERNS (rated BAD by humans — avoid similar patterns)
+Common failure modes: too long (>200 chars), fact-listing without a funny twist, weak/telegraphed punchlines, future-framing ("it's 2028"), technical jargon as punchline.
 ${lines.join('\n')}
 `;
 }
@@ -122,6 +139,19 @@ The target tweet includes images. Read each file below for additional roast mate
 ${fileList}
 Use the Read tool to view these images. Reference what you see in your roast if it adds bite.
 `;
+}
+
+// ---------------------------------------------------------------------------
+// Length + punchline constraints — shared across all prompt strategies
+// ---------------------------------------------------------------------------
+
+function buildLengthAndPunchlineConstraints(): string {
+  return `- TARGET LENGTH: 80-150 characters. Under 120 is ideal.
+- You MAY go up to 280 chars ONLY if every additional word earns its place.
+- Data shows: roasts under 150 chars score 3.4 avg; over 200 chars score 2.3 avg.
+- MAX 2 sentences. Setup + punchline. No exceptions.
+- Your punchline must work in ISOLATION. Extract the last 5-10 words — if they're not funny alone, rewrite.
+- Best punchlines are 1-5 words that reframe the entire setup: "unprecedented.", "decentralized.", "evolution."`;
 }
 
 // ---------------------------------------------------------------------------
@@ -304,8 +334,7 @@ ${buildQuoteHuntingSection()}${buildRubricCoTStep()}
 Each variant MUST:
 - Use one of these angles (one per variant):
 ${angleList}
-- Be UNDER 280 characters (count precisely)
-- MAX 2 sentences. Setup + punchline. No exceptions.
+${buildLengthAndPunchlineConstraints()}
 - Include at least one verifiable data point from your research
 - Have a clear setup → punchline structure where the punchline lands LAST
 - Use one of the ROAST STRUCTURE techniques above
@@ -365,8 +394,7 @@ Generate ${String(variantCount)} roast variants WITHOUT web research. Use genera
 Each variant MUST:
 - Use one of these angles (one per variant):
 ${angleList}
-- Be UNDER 280 characters
-- MAX 2 sentences. Setup + punchline. No exceptions.
+${buildLengthAndPunchlineConstraints()}
 - Have a clear setup → punchline structure where the punchline lands LAST
 - Use one of the ROAST STRUCTURE techniques above
 - Pass the CHARACTER CHECKPOINT above
@@ -431,8 +459,7 @@ ${antiPatterns}${techniquesLine}${contextLine}
 - Anything a generic AI would write about this target
 
 ## HARD CONSTRAINTS
-- ≤280 characters (count precisely)
-- MAX 2 sentences. Setup + punchline. No exceptions.
+${buildLengthAndPunchlineConstraints()}
 - Punchline always last — never telegraph it
 - Lowercase unless single-word emphasis
 - No hashtags, no emojis except 💀 or 🔥 max once
@@ -502,8 +529,7 @@ ${character.originStory}
 ${examples}
 ${antiPatterns}${techniquesLine}
 ## HARD CONSTRAINTS
-- ≤280 characters
-- MAX 2 sentences. Setup + punchline. No exceptions.
+${buildLengthAndPunchlineConstraints()}
 - Punchline always last
 - Lowercase unless single-word emphasis
 - No hashtags, no emojis except 💀 or 🔥 max once
@@ -577,8 +603,7 @@ ${antiPatterns}${techniquesLine}${contextLine}
 ${character.originStory}
 
 ## HARD CONSTRAINTS
-- ≤280 characters (count precisely)
-- MAX 2 sentences. Setup + punchline. No exceptions.
+${buildLengthAndPunchlineConstraints()}
 - Punchline always last — never telegraph it
 - Lowercase unless single-word emphasis
 - No hashtags, no emojis except 💀 or 🔥 max once
@@ -657,8 +682,7 @@ ${antiPatterns}${techniquesLine}
 ${character.originStory}
 
 ## HARD CONSTRAINTS
-- ≤280 characters
-- MAX 2 sentences. Setup + punchline. No exceptions.
+${buildLengthAndPunchlineConstraints()}
 - Punchline always last
 - Lowercase unless single-word emphasis
 - No hashtags, no emojis except 💀 or 🔥 max once

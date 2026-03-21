@@ -10,6 +10,7 @@ import {
   buildPersonaPrompt,
   buildAdversarialPrompt,
   PROMPT_STRATEGIES,
+  DEFAULT_ANGLE_WEIGHTS,
 } from '@roast/prompt-builder.js';
 import type { PromptStrategy } from '@roast/prompt-builder.js';
 import { filterRoast } from '@content/content-filter.js';
@@ -299,13 +300,14 @@ export class BatchGenerator {
     ];
 
     return allAngles.map((angle) => {
+      const qualityWeight = DEFAULT_ANGLE_WEIGHTS[angle] ?? 1.0;
       if (!usedAngles.has(angle)) {
-        // Never used → max boost
-        return { angle, weight: 2.0 };
+        // Never used → diversity boost × quality weight
+        return { angle, weight: 2.0 * qualityWeight };
       }
       const count = angleDist.find((a) => a.angle === angle)?.count ?? 0;
-      // Inverse frequency: less used → higher weight
-      return { angle, weight: 1 + (maxCount - count) / maxCount };
+      // Inverse frequency × quality weight (suppresses TIMELINE, boosts UNDERSTATEMENT)
+      return { angle, weight: (1 + (maxCount - count) / maxCount) * qualityWeight };
     });
   }
 
