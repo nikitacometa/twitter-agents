@@ -13,15 +13,18 @@ import { getErrorMessage } from '@common/utils/error.util.js';
 // Weighted scoring — FUNNY is king, TIMELY is tiebreaker
 // ---------------------------------------------------------------------------
 
+// Weights recalibrated from human review (March 2026, 33 rated roasts).
+// Key finding: humans rate primarily on humor impact and shareability.
+// AI was overweighting factual/analytical quality vs. comedy.
 const DIMENSION_WEIGHTS: Record<keyof EvaluationScores, number> = {
-  funny: 0.20,
+  funny: 0.30,
+  shareable: 0.20,
   savage: 0.15,
-  shareable: 0.15,
-  original: 0.15,
-  degen: 0.15,
-  factual: 0.10,
-  crypto_native: 0.05,
+  original: 0.10,
+  degen: 0.10,
   timely: 0.05,
+  factual: 0.05,
+  crypto_native: 0.05,
 };
 
 export function calculateWeightedComposite(scores: EvaluationScores): number {
@@ -61,6 +64,15 @@ const TELEGRAPHED_PATTERNS = [
   /i want to frame this/i,
   /you have to respect the/i,
   /i have nothing to add/i,
+  /genuinely impressive/i,
+];
+
+// Patterns that signal "too technical" — human reviewers consistently reject these
+const TOO_TECHY_PATTERNS = [
+  /\bERC-\d+\b.*\bfunctions?\b/i,
+  /\bsetLawEnforcement/i,
+  /\bwipeFrozen/i,
+  /\bterms of service say\b.*\bcontractual IOU\b/i,
 ];
 
 export function preFilter(tweetText: string): PreFilterResult {
@@ -87,6 +99,20 @@ export function preFilter(tweetText: string): PreFilterResult {
     if (p.test(tweetText)) {
       return { pass: false, reason: `telegraphed pattern: ${p.source}` };
     }
+  }
+
+  // 5. Too technical — human reviewers reject legalistic/contract-level detail
+  for (const p of TOO_TECHY_PATTERNS) {
+    if (p.test(tweetText)) {
+      return { pass: false, reason: `too technical for CT audience: ${p.source}` };
+    }
+  }
+
+  // 6. Truncation detection — catch sentences cut off mid-thought
+  // Only flag obvious mid-sentence breaks, not missing final punctuation (CT style)
+  const trimmed = tweetText.trim();
+  if (/\b(the|a|an|of|in|for|to|and|but|or|with|that|is|was|are|were)\s*$/i.test(trimmed)) {
+    return { pass: false, reason: 'truncated: ends mid-sentence on a function word' };
   }
 
   return { pass: true };
@@ -187,7 +213,8 @@ export class SelfEvaluator {
     }
 
     // Consensus veto: if majority of judges give composite < 3.0, auto-discard
-    const lowJudgeCount = composites.filter((c) => c < 3.0).length;
+    // Round to 1 decimal first to avoid floating-point edge cases (e.g. 2.9999... < 3.0)
+    const lowJudgeCount = composites.filter((c) => Math.round(c * 10) / 10 < 3.0).length;
     const majorityThreshold = Math.ceil(results.length / 2);
     if (lowJudgeCount >= majorityThreshold) {
       vetoReasons.push(`CONSENSUS: ${String(lowJudgeCount)}/${String(results.length)} judges scored < 3.0`);

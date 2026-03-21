@@ -540,6 +540,7 @@ describe('preFilter', () => {
     'i want to frame this achievement',
     'you have to respect the hustle',
     'i have nothing to add here',
+    'genuinely impressive that they shipped',
   ])('rejects telegraphed pattern: %s', (text) => {
     const result = preFilter(text);
     expect(result.pass).toBe(false);
@@ -547,6 +548,25 @@ describe('preFilter', () => {
   });
 
   it('passes clean short tweets', () => {
+    const result = preFilter('uniswap governance spent $11M watching bots frontrun swaps');
+    expect(result.pass).toBe(true);
+  });
+
+  it.each([
+    'the safest ERC-20 with setLawEnforcementRole functions',
+  ])('rejects too-technical pattern: %s', (text) => {
+    const result = preFilter(text);
+    expect(result.pass).toBe(false);
+    expect(result.reason).toContain('too technical');
+  });
+
+  it('rejects tweets truncated mid-sentence', () => {
+    const result = preFilter('four thousand whitepapers in my training data and i still cant explain the');
+    expect(result.pass).toBe(false);
+    expect(result.reason).toContain('truncated');
+  });
+
+  it('passes tweets ending without punctuation but not truncated', () => {
     const result = preFilter('uniswap governance spent $11M watching bots frontrun swaps');
     expect(result.pass).toBe(true);
   });
@@ -569,7 +589,7 @@ describe('calculateWeightedComposite', () => {
     const withHighFunny = { ...base, funny: 5 };
     const withHighTimely = { ...base, timely: 5 };
 
-    // funny weight 0.20 vs timely weight 0.05
+    // funny weight 0.30 vs timely weight 0.05
     expect(calculateWeightedComposite(withHighFunny)).toBeGreaterThan(
       calculateWeightedComposite(withHighTimely),
     );
@@ -577,16 +597,16 @@ describe('calculateWeightedComposite', () => {
 
   it('returns correct weighted value for mixed scores', () => {
     const scores: EvaluationScores = {
-      funny: 5,         // 0.20 * 5 = 1.00
+      funny: 5,         // 0.30 * 5 = 1.50
       savage: 4,        // 0.15 * 4 = 0.60
-      shareable: 4,     // 0.15 * 4 = 0.60
-      original: 3,      // 0.15 * 3 = 0.45
-      degen: 4,         // 0.15 * 4 = 0.60
-      factual: 3,       // 0.10 * 3 = 0.30
+      shareable: 4,     // 0.20 * 4 = 0.80
+      original: 3,      // 0.10 * 3 = 0.30
+      degen: 4,         // 0.10 * 4 = 0.40
+      factual: 3,       // 0.05 * 3 = 0.15
       crypto_native: 3, // 0.05 * 3 = 0.15
       timely: 1,        // 0.05 * 1 = 0.05
     };
-    // Total = 3.75
-    expect(calculateWeightedComposite(scores)).toBeCloseTo(3.75, 5);
+    // Total = 3.95
+    expect(calculateWeightedComposite(scores)).toBeCloseTo(3.95, 5);
   });
 });

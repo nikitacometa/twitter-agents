@@ -24,10 +24,13 @@ const PERSONAS: Record<JudgePersona, JudgePersonaConfig> = {
       'LOW marks (1-2) — be harsh on these:\n' +
       '- Setup-punchline you\'ve seen 100 times ("they lost X and this is fine")\n' +
       '- Roasts of dead projects nobody talks about anymore\n' +
+      '- Roasts of obscure/niche targets that CT has no opinion on (e.g. Net Protocol, Zora)\n' +
       '- Longer than it needs to be — you scroll past anything padded\n' +
       "- Smart but not shareable — you appreciate it but wouldn't RT\n" +
-      '- Uses ALL CAPS for emphasis where structure should carry the punch\n\n' +
-      'When scoring SHAREABLE: "would I actually RT this RIGHT NOW?"',
+      '- Uses ALL CAPS for emphasis where structure should carry the punch\n' +
+      '- Too technical: mentions smart contract function names, ERC standards, legal clauses\n\n' +
+      'When scoring SHAREABLE: "would I actually RT this RIGHT NOW?"\n' +
+      'IMPORTANT: If the target is obscure (< 10K followers, dead project, niche protocol), cap SHAREABLE at 2.',
   },
   comedy_writer: {
     id: 'comedy_writer',
@@ -44,7 +47,9 @@ const PERSONAS: Record<JudgePersona, JudgePersonaConfig> = {
       '- Punchline visible from the setup ("you have to respect the COMMITMENT")\n' +
       "- More than 2 sentences — if it needs explaining, it's not funny\n" +
       "- Data dump with a sarcastic conclusion — that's not a joke, that's commentary\n" +
-      '- Structures you\'ve seen before: "that\'s not X, that\'s Y" / "most X could never"',
+      '- Structures you\'ve seen before: "that\'s not X, that\'s Y" / "most X could never"\n' +
+      '- Laundry list of facts without an ironic twist — listing problems is not comedy\n' +
+      '- Legal/contractual analysis framed as humor — "the ToS says X but the whitepaper says Y" is an audit, not a roast',
   },
   data_hawk: {
     id: 'data_hawk',
@@ -59,7 +64,8 @@ const PERSONAS: Record<JudgePersona, JudgePersonaConfig> = {
       '- Round numbers that smell estimated ("down 90%")\n' +
       "- Data that's publicly known and already widely mocked\n" +
       '- Factual claims with no research context to verify\n' +
-      "- Data that's accurate but boring — TVL of a dead project nobody tracks\n\n" +
+      "- Data that's accurate but boring — TVL of a dead project nobody tracks\n" +
+      '- Data about obscure projects nobody is tracking or discussing on CT\n\n' +
       'IMPORTANT: If no research context is provided AND the tweet contains ' +
       'specific numbers, FACTUAL cannot score above 3. You need to verify claims.',
   },
@@ -101,7 +107,10 @@ const PERSONAS: Record<JudgePersona, JudgePersonaConfig> = {
       '- Start every dimension at 2 and require evidence to raise it\n' +
       '- If your gut says "this is okay" — score it 3, not 4\n' +
       '- Only give 5 if you\'d bet money this tweet goes viral\n' +
-      '- When in doubt, round DOWN',
+      '- When in doubt, round DOWN\n' +
+      '- If the target is obscure or boring (nobody on CT is talking about it) → cap SHAREABLE at 1\n' +
+      '- If the roast reads like an audit report rather than a joke → cap FUNNY at 2\n' +
+      '- Ask yourself: "Would a 30K-follower CT degen screenshot this?" If not → overall cap at 3',
   },
 };
 
@@ -169,7 +178,8 @@ The system will determine verdict from your scores.
    CALIBRATION:
    Score 2: data dump with sarcastic conclusion ("and they call this 'innovation'")
    Score 4: genuine misdirection — first sentence sets one expectation, punchline goes somewhere unexpected
-   Auto-cap at 3 if: punchline is visible from the setup, more than 2 sentences, or structure you've seen 100 times.
+   Auto-cap at 3 if: punchline is visible from the setup, more than 2 sentences, structure you've seen 100 times, or it reads like commentary rather than comedy.
+   BREVITY BONUS: 1-sentence roasts with a devastating twist get +1. The best roasts are 80-150 characters.
 
 4. ORIGINAL (1-5): Would CT have seen this take before?
    CALIBRATION:

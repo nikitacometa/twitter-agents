@@ -21,6 +21,7 @@ interface StockpileRow {
   status: string;
   served_at: string | null;
   created_at: string;
+  human_score: number | null;
 }
 
 export class StockpileRepository {
@@ -293,5 +294,6 @@ function mapRow(row: StockpileRow): StockpiledRoast {
     status: row.status as StockpileStatus,
     servedAt: row.served_at,
     createdAt: row.created_at,
+    humanScore: row.human_score,
   };
 }
