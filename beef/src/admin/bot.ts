@@ -452,7 +452,7 @@ export function createBot(opts: {
       }, 15_000);
 
       try {
-        const result = await qm.processNextForce();
+        const result = await qm.processNextManual();
         clearInterval(progressInterval);
         const elapsed = Math.round((Date.now() - startTime) / 1000);
 

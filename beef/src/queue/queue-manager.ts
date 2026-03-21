@@ -108,6 +108,19 @@ export class QueueManager {
   }
 
   /**
+   * Manual trigger: respects daily limits but bypasses pause/quiet/posting-mode flags.
+   */
+  async processNextManual(): Promise<QueueProcessResult> {
+    const todayCount = this.roastRepo.getTodayCount('autonomous');
+    if (todayCount >= this.dailyLimit) {
+      this.logger.info({ todayCount, dailyLimit: this.dailyLimit }, 'Daily limit reached (manual)');
+      return { dequeued: false, error: `Daily limit reached (${String(todayCount)}/${String(this.dailyLimit)})` };
+    }
+
+    return this.dequeueAndProcess(true);
+  }
+
+  /**
    * Enqueue a target for autonomous roasting.
    */
   enqueueAutonomous(targetName: string): number {
