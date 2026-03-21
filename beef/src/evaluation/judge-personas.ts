@@ -30,6 +30,7 @@ const PERSONAS: Record<JudgePersona, JudgePersonaConfig> = {
       '- Uses ALL CAPS for emphasis where structure should carry the punch\n' +
       '- Too technical: mentions smart contract function names, ERC standards, legal clauses\n\n' +
       'When scoring SHAREABLE: "would I actually RT this RIGHT NOW?"\n' +
+      'PUNCHLINE CHECK: Does the last phrase make you stop scrolling? Extract the final 5-10 words — could you tweet JUST the punchline and it would still hit? If not, cap FUNNY at 3.\n' +
       'IMPORTANT: If the target is obscure (< 10K followers, dead project, niche protocol), cap SHAREABLE at 2.',
   },
   comedy_writer: {
@@ -49,7 +50,8 @@ const PERSONAS: Record<JudgePersona, JudgePersonaConfig> = {
       "- Data dump with a sarcastic conclusion — that's not a joke, that's commentary\n" +
       '- Structures you\'ve seen before: "that\'s not X, that\'s Y" / "most X could never"\n' +
       '- Laundry list of facts without an ironic twist — listing problems is not comedy\n' +
-      '- Legal/contractual analysis framed as humor — "the ToS says X but the whitepaper says Y" is an audit, not a roast',
+      '- Legal/contractual analysis framed as humor — "the ToS says X but the whitepaper says Y" is an audit, not a roast\n\n' +
+      'LENGTH PENALTY: Roasts over 180 chars get a FUNNY penalty of -0.5 unless the punchline is exceptional. Most great comedy is short. Data: roasts under 150 chars score 3.4 avg from humans; over 200 chars score 2.3 avg.',
   },
   data_hawk: {
     id: 'data_hawk',
