@@ -246,10 +246,31 @@ if (mentionHandler) {
   const mh = mentionHandler;
   scheduler.register({
     name: 'mention-poller',
-    cronTime: '*/10 * * * *',
-    jitterMs: 2 * 60 * 1000,
+    cronTime: '*/5 * * * *',
+    jitterMs: 1 * 60 * 1000,
     handler: async () => {
-      await mh.poll();
+      const result = await mh.poll();
+
+      // Notify admins via Telegram
+      if (bot && config.TELEGRAM_ADMIN_IDS.length > 0) {
+        let text: string;
+        if (result.processed > 0) {
+          const lines = result.mentions.map(
+            (m) =>
+              `• @${m.authorName}: "${m.text.slice(0, 60)}${m.text.length > 60 ? '…' : ''}" [${m.requestType}]${m.queued ? ' ✅' : ''}`,
+          );
+          text = `📬 <b>Mentions:</b> ${String(result.processed)} new\n${lines.join('\n')}`;
+        } else {
+          text = '📭 Mentions poll: no new mentions';
+        }
+        for (const adminId of config.TELEGRAM_ADMIN_IDS) {
+          try {
+            await bot.api.sendMessage(adminId, text, { parse_mode: 'HTML' });
+          } catch (err) {
+            logger.debug({ err, adminId }, 'Failed to send mention poll notification');
+          }
+        }
+      }
     },
   });
 }
