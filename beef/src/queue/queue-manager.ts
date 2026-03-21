@@ -15,6 +15,7 @@ import { downloadTweetMedia } from '@common/utils/media-downloader.js';
 export interface QueueProcessResult {
   dequeued: boolean;
   posted?: boolean;
+  savedOnly?: boolean;
   tweetId?: string;
   target?: string;
   error?: string;
@@ -26,7 +27,7 @@ export class QueueManager {
   private readonly configRepo: ConfigRepository;
   private readonly feedbackRepo: FeedbackRepository;
   private readonly provider: ProviderManager;
-  private readonly twitter: ITwitterClient;
+  private readonly twitter?: ITwitterClient;
   private readonly profileFetcher?: IProfileFetcher;
   private readonly stockpile?: StockpileRepository;
   private readonly logger: Logger;
@@ -41,7 +42,7 @@ export class QueueManager {
     configRepo: ConfigRepository;
     feedbackRepo: FeedbackRepository;
     provider: ProviderManager;
-    twitter: ITwitterClient;
+    twitter?: ITwitterClient;
     profileFetcher?: IProfileFetcher;
     stockpile?: StockpileRepository;
     logger: Logger;
@@ -179,9 +180,18 @@ export class QueueManager {
             contextData: stockpiled.researchNotes ?? undefined,
           });
 
-          const postResult = replyToId
-            ? await this.twitter.replyToTweet(stockpiled.tweetText, replyToId)
-            : await this.twitter.postTweet(stockpiled.tweetText);
+          const postResult = await this.postOrSkip(stockpiled.tweetText, replyToId);
+
+          if (postResult === 'no_twitter') {
+            this.stockpile.markServed(stockpiled.id, 'bot');
+            this.roastRepo.updateStatus(roastId, 'pending_approval');
+            this.queueRepo.complete(item.id);
+            this.logger.info(
+              { queueId: item.id, roastId, target: item.targetName, fromStockpile: true },
+              'Stockpiled roast ready (no Twitter — saved only)',
+            );
+            return { dequeued: true, posted: false, savedOnly: true, target: item.targetName };
+          }
 
           if (postResult) {
             this.stockpile.markServed(stockpiled.id, 'bot');
@@ -255,9 +265,17 @@ export class QueueManager {
       });
 
       // Reply if triggered by a mention, standalone tweet otherwise
-      const postResult = replyToId
-        ? await this.twitter.replyToTweet(best.text, replyToId)
-        : await this.twitter.postTweet(best.text);
+      const postResult = await this.postOrSkip(best.text, replyToId);
+
+      if (postResult === 'no_twitter') {
+        this.roastRepo.updateStatus(roastId, 'pending_approval');
+        this.queueRepo.complete(item.id);
+        this.logger.info(
+          { queueId: item.id, roastId, target: item.targetName },
+          'Roast generated (no Twitter — saved only)',
+        );
+        return { dequeued: true, posted: false, savedOnly: true, target: item.targetName };
+      }
 
       if (postResult) {
         this.roastRepo.updateStatus(roastId, 'posted', postResult.tweetId);
@@ -284,6 +302,16 @@ export class QueueManager {
         });
       }
     }
+  }
+
+  private async postOrSkip(
+    text: string,
+    replyToId?: string,
+  ): Promise<{ tweetId: string } | null | 'no_twitter'> {
+    if (!this.twitter) return 'no_twitter';
+    return replyToId
+      ? this.twitter.replyToTweet(text, replyToId)
+      : this.twitter.postTweet(text);
   }
 
   getPendingCount(): number {

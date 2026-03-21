@@ -44,6 +44,10 @@ const envSchema = z
       .enum(['true', 'false'])
       .default('true')
       .transform((v) => v === 'true'),
+    ENABLE_TWITTER: z
+      .enum(['true', 'false'])
+      .default('true')
+      .transform((v) => v === 'true'),
 
     // Monitoring
     SENTRY_DSN: z.string().optional(),

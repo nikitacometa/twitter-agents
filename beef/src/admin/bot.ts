@@ -47,6 +47,7 @@ export function createBot(opts: {
   stockpileRepo?: StockpileRepository;
   postingMode?: { autonomous: boolean; mentionReplies: boolean };
   pollMentions?: () => Promise<PollResult>;
+  twitterEnabled?: boolean;
 }): Bot {
   const { token, adminIds, openAccess, feedbackRepo, provider, logger, queueManager, configRepo, exampleRepo, patternRepo, stockpileRepo, postingMode, pollMentions } = opts;
   const bot = new Bot(token);
@@ -404,6 +405,11 @@ export function createBot(opts: {
       } else if (result.posted) {
         await ctx.reply(
           `✅ Posted! Target: <b>${escapeHtml(result.target ?? '?')}</b>\nTweet ID: <code>${escapeHtml(result.tweetId ?? '?')}</code>`,
+          { parse_mode: 'HTML' },
+        );
+      } else if (result.savedOnly) {
+        await ctx.reply(
+          `📝 Generated & saved (Twitter disabled). Target: <b>${escapeHtml(result.target ?? '?')}</b>`,
           { parse_mode: 'HTML' },
         );
       } else {
