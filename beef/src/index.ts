@@ -243,6 +243,38 @@ async function notifyQueueResult(
 
   const lines: string[] = [];
 
+  // Pending approval — send with inline buttons
+  if (result.pendingApproval && result.roastId) {
+    const stockpileTag = result.fromStockpile ? ' [stockpile]' : '';
+    lines.push(`🔍 <b>Review${stockpileTag}</b> — ${escHtml(result.target ?? '?')} <i>(${source})</i>`);
+    if (result.evaluationScore) lines.push(`Eval: <b>${result.evaluationScore.toFixed(1)}</b>/5`);
+    if (result.newStockpileCount) lines.push(`Stockpiled: <b>${String(result.newStockpileCount)}</b> new`);
+
+    const text = lines.join('\n');
+    const keyboard = {
+      inline_keyboard: [[
+        { text: 'Post', callback_data: `approve:${String(result.roastId)}` },
+        { text: 'Skip', callback_data: `reject:${String(result.roastId)}` },
+      ]],
+    };
+
+    for (const adminId of config.TELEGRAM_ADMIN_IDS) {
+      try {
+        await bot.api.sendMessage(adminId, text, { parse_mode: 'HTML' });
+        if (result.postedText) {
+          await bot.api.sendMessage(
+            adminId,
+            `<code>${escHtml(result.postedText)}</code>`,
+            { parse_mode: 'HTML', reply_markup: keyboard },
+          );
+        }
+      } catch (err) {
+        logger.debug({ err, adminId }, 'Failed to send approval notification');
+      }
+    }
+    return;
+  }
+
   if (result.posted || result.savedOnly) {
     const emoji = result.posted ? '✅' : '📝';
     const label = result.posted ? 'Posted' : 'Saved (no Twitter)';

@@ -34,11 +34,16 @@ export class ConfigRepository {
       dailyLimit: parseInt(this.get('daily_limit') ?? '10', 10),
       mentionSinceId: this.get('mention_since_id') ?? null,
       moderationMode: this.get('moderation_mode') === 'true',
+      approveMode: this.get('approve_mode') === 'true',
     };
   }
 
   setPaused(paused: boolean): void {
     this.set('paused', String(paused));
+  }
+
+  setApproveMode(enabled: boolean): void {
+    this.set('approve_mode', String(enabled));
   }
 
   setMentionSinceId(sinceId: string): void {

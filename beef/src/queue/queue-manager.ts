@@ -22,6 +22,8 @@ export interface QueueProcessResult {
   dequeued: boolean;
   posted?: boolean;
   savedOnly?: boolean;
+  pendingApproval?: boolean;
+  roastId?: number;
   tweetId?: string;
   target?: string;
   error?: string;
@@ -49,6 +51,8 @@ export class QueueManager {
   private readonly evaluationThreshold: number;
   private cachedRoastEngine: RoastEngine | null = null;
   private cachedEvaluator: SelfEvaluator | null = null;
+  private readonly pendingApprovals = new Map<number, { replyToId?: string; stockpileId?: number }>();
+  private readonly approvingIds = new Set<number>();
 
   constructor(opts: {
     queueRepo: QueueRepository;
@@ -209,9 +213,21 @@ export class QueueManager {
 
           const postResult = await this.postOrSkip(stockpiled.tweetText, replyToId);
 
+          if (postResult === 'pending_approval') {
+            this.pendingApprovals.set(roastId, { replyToId, stockpileId: stockpiled.id });
+            this.queueRepo.complete(item.id);
+            this.logger.info(
+              { queueId: item.id, roastId, target: item.targetName, fromStockpile: true },
+              'Stockpiled roast pending approval',
+            );
+            return {
+              dequeued: true, pendingApproval: true, roastId, target: item.targetName,
+              fromStockpile: true, postedText: stockpiled.tweetText,
+            };
+          }
+
           if (postResult === 'no_twitter') {
             this.stockpile.markServed(stockpiled.id, 'bot');
-            this.roastRepo.updateStatus(roastId, 'pending_approval');
             this.queueRepo.complete(item.id);
             this.logger.info(
               { queueId: item.id, roastId, target: item.targetName, fromStockpile: true },
@@ -490,8 +506,20 @@ export class QueueManager {
 
     const postResult = await this.postOrSkip(tweetText, replyToId);
 
+    if (postResult === 'pending_approval') {
+      this.pendingApprovals.set(roastId, { replyToId });
+      this.queueRepo.complete(item.id);
+      this.logger.info(
+        { queueId: item.id, roastId, target: item.targetName, evaluationScore, newStockpileCount },
+        'Roast pending approval',
+      );
+      return {
+        dequeued: true, pendingApproval: true, roastId, target: item.targetName,
+        evaluationScore, newStockpileCount, postedText: tweetText, stockpiledVariants,
+      };
+    }
+
     if (postResult === 'no_twitter') {
-      this.roastRepo.updateStatus(roastId, 'pending_approval');
       this.queueRepo.complete(item.id);
       this.logger.info(
         { queueId: item.id, roastId, target: item.targetName, evaluationScore, newStockpileCount },
@@ -591,8 +619,17 @@ export class QueueManager {
 
     const postResult = await this.postOrSkip(result.text, replyToId);
 
+    if (postResult === 'pending_approval') {
+      this.pendingApprovals.set(roastId, { replyToId });
+      this.queueRepo.complete(item.id);
+      this.logger.info(
+        { queueId: item.id, roastId, target: item.targetName, tone: result.tone },
+        'Casual reply pending approval',
+      );
+      return { dequeued: true, pendingApproval: true, roastId, target: item.targetName, postedText: result.text };
+    }
+
     if (postResult === 'no_twitter') {
-      this.roastRepo.updateStatus(roastId, 'pending_approval');
       this.queueRepo.complete(item.id);
       this.logger.info(
         { queueId: item.id, roastId, target: item.targetName, tone: result.tone },
@@ -616,10 +653,15 @@ export class QueueManager {
     return { dequeued: true, posted: false, target: item.targetName, error: 'Twitter post returned null' };
   }
 
+  private isApproveMode(): boolean {
+    return this.configRepo.getRuntime().approveMode;
+  }
+
   private async postOrSkip(
     text: string,
     replyToId?: string,
-  ): Promise<{ tweetId: string } | null | 'no_twitter'> {
+  ): Promise<{ tweetId: string } | null | 'no_twitter' | 'pending_approval'> {
+    if (this.isApproveMode()) return 'pending_approval';
     if (!this.twitter) return 'no_twitter';
     return replyToId
       ? this.twitter.replyToTweet(text, replyToId)
@@ -639,6 +681,59 @@ export class QueueManager {
       priority: item.priority,
       createdAt: item.createdAt,
     }));
+  }
+
+  /**
+   * Approve a pending roast — post to Twitter and update status.
+   * Works even after restart (reads from DB, loses only replyToId).
+   */
+  async approveRoast(roastId: number): Promise<{ tweetId: string; text: string } | null> {
+    if (this.approvingIds.has(roastId)) return null;
+    this.approvingIds.add(roastId);
+    try {
+      const roast = this.roastRepo.getById(roastId);
+      if (!roast || roast.status !== 'pending_approval') return null;
+      if (!this.twitter) return null;
+
+      const pending = this.pendingApprovals.get(roastId);
+      const replyToId = pending?.replyToId;
+
+      const postResult = replyToId
+        ? await this.twitter.replyToTweet(roast.tweetText, replyToId)
+        : await this.twitter.postTweet(roast.tweetText);
+
+      if (!postResult) return null;
+
+      this.roastRepo.updateStatus(roastId, 'posted', postResult.tweetId);
+
+      // Mark stockpile entry as served (prefer stored ID, fallback to text match)
+      if (this.stockpile) {
+        if (pending?.stockpileId) {
+          this.stockpile.markServed(pending.stockpileId, 'bot');
+        } else {
+          const available = this.stockpile.getAvailable(roast.targetName, 20);
+          const match = available.find((s) => s.tweetText === roast.tweetText);
+          if (match) this.stockpile.markServed(match.id, 'bot');
+        }
+      }
+
+      this.pendingApprovals.delete(roastId);
+      return { tweetId: postResult.tweetId, text: roast.tweetText };
+    } finally {
+      this.approvingIds.delete(roastId);
+    }
+  }
+
+  /**
+   * Reject a pending roast. Stockpile entry stays available for future use.
+   */
+  rejectRoast(roastId: number): boolean {
+    const roast = this.roastRepo.getById(roastId);
+    if (!roast || roast.status !== 'pending_approval') return false;
+
+    this.roastRepo.updateStatus(roastId, 'rejected');
+    this.pendingApprovals.delete(roastId);
+    return true;
   }
 
   private async buildProfileContext(username: string): Promise<string | undefined> {

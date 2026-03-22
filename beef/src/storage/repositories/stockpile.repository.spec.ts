@@ -226,27 +226,15 @@ describe('StockpileRepository', () => {
       expect(result!.tweetText).toBe('only one');
     });
 
-    it('distributes selection roughly 70/30 over many calls', () => {
-      // Insert 5 roasts with different scores
+    it('always returns the highest-scored candidate', () => {
       repo.insert({ targetName: 'D', targetType: 'token', tweetText: 'best', qualityScore: 4.9, freshnessType: 'evergreen' });
       repo.insert({ targetName: 'D', targetType: 'token', tweetText: 'good', qualityScore: 4.5, freshnessType: 'evergreen' });
       repo.insert({ targetName: 'D', targetType: 'token', tweetText: 'ok', qualityScore: 4.2, freshnessType: 'evergreen' });
-      repo.insert({ targetName: 'D', targetType: 'token', tweetText: 'decent', qualityScore: 4.1, freshnessType: 'evergreen' });
-      repo.insert({ targetName: 'D', targetType: 'token', tweetText: 'low', qualityScore: 4.0, freshnessType: 'evergreen' });
 
-      let topCount = 0;
-      const iterations = 200;
-
-      for (let i = 0; i < iterations; i++) {
+      for (let i = 0; i < 10; i++) {
         const result = repo.findBest('D');
-        if (result!.tweetText === 'best') topCount++;
+        expect(result!.tweetText).toBe('best');
       }
-
-      // With 70/30 split: top gets picked ~70% directly + ~20% via random (1/5 of 30%)
-      // Expected: ~76%. Allow wide margin: 55-95%
-      const topRate = topCount / iterations;
-      expect(topRate).toBeGreaterThan(0.5);
-      expect(topRate).toBeLessThan(0.95);
     });
   });
 

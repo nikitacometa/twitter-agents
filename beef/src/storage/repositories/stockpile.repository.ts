@@ -165,19 +165,11 @@ export class StockpileRepository {
   }
 
   /**
-   * Find the best available roast for a target.
-   * 70% chance: top-scored. 30% chance: random from top 5.
-   * Prevents always serving the "safest" roast.
+   * Find the best available roast for a target (highest-scored).
    */
   findBest(targetName: string): StockpiledRoast | undefined {
-    const candidates = this.getAvailable(targetName, 10);
-    if (candidates.length === 0) return undefined;
-
-    if (Math.random() < 0.7 || candidates.length <= 2) {
-      return candidates[0];
-    }
-    const pool = candidates.slice(0, Math.min(5, candidates.length));
-    return pool[Math.floor(Math.random() * pool.length)];
+    const candidates = this.getAvailable(targetName, 1);
+    return candidates[0];
   }
 
   markServed(id: number, destination: 'bot' | 'landing'): void {

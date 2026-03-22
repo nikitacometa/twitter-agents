@@ -1,4 +1,4 @@
-import { Bot } from 'grammy';
+import { Bot, InlineKeyboard } from 'grammy';
 import type { Context } from 'grammy';
 import type { Logger } from 'pino';
 import type { ProviderManager } from '@agent/provider-manager.js';
@@ -155,6 +155,7 @@ export function createBot(opts: {
         '<code>/queue &lt;target&gt;</code> — add target to posting queue',
         '<code>/trigger</code> — force-process next queue item',
         '<code>/poll</code> — check for new mentions',
+        '<code>/approve on|off</code> — require manual approval before posting',
         '<code>/pause</code> / <code>/resume</code> — toggle autonomous posting',
         '',
         '<b>📊 Monitoring</b>',
@@ -510,6 +511,7 @@ export function createBot(opts: {
         '',
         providerStatus,
         runtime?.paused ? '⏸ <b>PAUSED</b>' : '',
+        runtime?.approveMode ? '🔍 <b>APPROVE MODE</b>' : '',
         `Twitter: <b>${opts.twitterEnabled ? 'enabled' : 'disabled'}</b>`,
         postingStr,
         `Ratings: <b>${String(stats.total)}</b>`,
@@ -627,6 +629,43 @@ export function createBot(opts: {
             `⚠️ ${escapeHtml(reason)}`,
             { parse_mode: 'HTML' },
           );
+        } else if (result.pendingApproval && result.roastId) {
+          const stockpileInfo = result.fromStockpile ? ' (from stockpile)' : '';
+          const evalInfo = result.evaluationScore
+            ? `\nEval: <b>${result.evaluationScore.toFixed(1)}</b>/5`
+            : '';
+          const newStockpileInfo = result.newStockpileCount
+            ? `\nStockpiled: <b>${String(result.newStockpileCount)}</b> new`
+            : '';
+          await api.editMessageText(
+            chatId,
+            statusMsg.message_id,
+            `Review — ${escapeHtml(result.target ?? '?')} <i>(${String(elapsed)}s)</i>${stockpileInfo}${evalInfo}${newStockpileInfo}`,
+            { parse_mode: 'HTML' },
+          );
+
+          if (result.postedText) {
+            const keyboard = new InlineKeyboard()
+              .text('Post', `approve:${String(result.roastId)}`)
+              .text('Skip', `reject:${String(result.roastId)}`);
+            await api.sendMessage(
+              chatId,
+              `<code>${escapeHtml(result.postedText)}</code>`,
+              { parse_mode: 'HTML', reply_markup: keyboard },
+            ).catch(() => {});
+          }
+
+          // Send stockpiled variants for review (no buttons — info only)
+          if (result.stockpiledVariants && result.stockpiledVariants.length > 0) {
+            const lines = result.stockpiledVariants.map(
+              (v, i) => `${String(i + 1)}. [${v.score.toFixed(1)}] <i>${escapeHtml(v.angle)}</i>\n<code>${escapeHtml(v.text)}</code>`,
+            );
+            await api.sendMessage(
+              chatId,
+              `<b>Stockpiled variants:</b>\n\n${lines.join('\n\n')}`,
+              { parse_mode: 'HTML' },
+            ).catch(() => {});
+          }
         } else if (result.posted || result.savedOnly) {
           const statusEmoji = result.posted ? '✅' : '📝';
           const statusLabel = result.posted ? 'Posted' : 'Generated (Twitter disabled)';
@@ -647,7 +686,7 @@ export function createBot(opts: {
 
           // Send posted text as separate message for easy review
           if (result.postedText) {
-            await api.sendMessage(chatId, `🎯 <b>Posted:</b>\n<code>${escapeHtml(result.postedText)}</code>`, { parse_mode: 'HTML' }).catch(() => {});
+            await api.sendMessage(chatId, `<b>Posted:</b>\n<code>${escapeHtml(result.postedText)}</code>`, { parse_mode: 'HTML' }).catch(() => {});
           }
 
           // Send stockpiled variants for review
@@ -657,7 +696,7 @@ export function createBot(opts: {
             );
             await api.sendMessage(
               chatId,
-              `📦 <b>Stockpiled variants:</b>\n\n${lines.join('\n\n')}`,
+              `<b>Stockpiled variants:</b>\n\n${lines.join('\n\n')}`,
               { parse_mode: 'HTML' },
             ).catch(() => {});
           }
@@ -838,6 +877,76 @@ export function createBot(opts: {
       ].join('\n'),
       { parse_mode: 'HTML' },
     );
+  });
+
+  // --- Approve mode toggle ---
+  bot.command('approve', async (ctx) => {
+    if (!configRepo) {
+      await ctx.reply('Config not available.');
+      return;
+    }
+
+    const arg = ctx.match?.trim().toLowerCase();
+    if (arg === 'on' || arg === 'true') {
+      configRepo.setApproveMode(true);
+      await ctx.reply('Approve mode ON — roasts will require manual approval before posting.');
+      return;
+    }
+    if (arg === 'off' || arg === 'false') {
+      configRepo.setApproveMode(false);
+      await ctx.reply('Approve mode OFF — roasts post automatically.');
+      return;
+    }
+
+    const runtime = configRepo.getRuntime();
+    await ctx.reply(
+      `Approve mode: <b>${runtime.approveMode ? 'ON' : 'OFF'}</b>\n\n<code>/approve on</code> — require approval\n<code>/approve off</code> — auto-post`,
+      { parse_mode: 'HTML' },
+    );
+  });
+
+  // --- Inline button callbacks (approve/reject roasts) ---
+  bot.on('callback_query:data', async (ctx) => {
+    const data = ctx.callbackQuery.data;
+
+    if (data.startsWith('approve:') && queueManager) {
+      const roastId = parseInt(data.slice(8), 10);
+      if (Number.isNaN(roastId)) {
+        await ctx.answerCallbackQuery({ text: 'Invalid roast ID', show_alert: true });
+        return;
+      }
+      try {
+        const result = await queueManager.approveRoast(roastId);
+        if (result) {
+          await ctx.editMessageText(
+            `<b>Posted!</b>\nTweet: <code>${escapeHtml(result.tweetId)}</code>\n\n<code>${escapeHtml(result.text)}</code>`,
+            { parse_mode: 'HTML' },
+          );
+          await ctx.answerCallbackQuery({ text: 'Posted!' });
+        } else {
+          await ctx.answerCallbackQuery({ text: 'Failed — already handled or no Twitter', show_alert: true });
+        }
+      } catch (error) {
+        logger.error({ err: error, roastId }, 'Approve callback failed');
+        await ctx.answerCallbackQuery({
+          text: `Error: ${getErrorMessage(error).slice(0, 100)}`,
+          show_alert: true,
+        });
+      }
+    } else if (data.startsWith('reject:') && queueManager) {
+      const roastId = parseInt(data.slice(7), 10);
+      if (Number.isNaN(roastId)) {
+        await ctx.answerCallbackQuery({ text: 'Invalid roast ID', show_alert: true });
+        return;
+      }
+      const rejected = queueManager.rejectRoast(roastId);
+      if (rejected) {
+        await ctx.editMessageText('<b>Rejected</b>', { parse_mode: 'HTML' });
+        await ctx.answerCallbackQuery({ text: 'Rejected' });
+      } else {
+        await ctx.answerCallbackQuery({ text: 'Not found or already handled', show_alert: true });
+      }
+    }
   });
 
   return bot;

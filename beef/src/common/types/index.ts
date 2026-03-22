@@ -6,7 +6,7 @@ export type TargetType = 'project' | 'token' | 'trend' | 'person';
 
 export type RoastSource = 'autonomous' | 'mention' | 'burn_request' | 'reply_guy' | 'casual_reply';
 
-export type RoastStatus = 'posted' | 'failed' | 'dry_run' | 'pending_approval';
+export type RoastStatus = 'posted' | 'failed' | 'dry_run' | 'pending_approval' | 'rejected';
 
 export interface RoastTarget {
   name: string;
@@ -245,6 +245,7 @@ export interface RuntimeConfig {
   dailyLimit: number;
   mentionSinceId: string | null;
   moderationMode: boolean;
+  approveMode: boolean;
 }
 
 // --- Tweet observation ---
