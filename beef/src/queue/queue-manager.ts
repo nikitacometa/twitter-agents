@@ -17,6 +17,7 @@ import { classifyFreshness, calculateExpiry } from '@farm/freshness.js';
 import { getErrorMessage } from '@common/utils/error.util.js';
 import { isQuietHour } from '@scheduler/scheduler.js';
 import { downloadTweetMedia } from '@common/utils/media-downloader.js';
+import type { ActivityLogger } from '../activity/activity-logger.js';
 
 export interface QueueProcessResult {
   dequeued: boolean;
@@ -49,6 +50,7 @@ export class QueueManager {
   private readonly enableMentionReplies: boolean;
   private readonly casualReplyLimit: number;
   private readonly evaluationThreshold: number;
+  private readonly activityLogger?: ActivityLogger;
   private cachedRoastEngine: RoastEngine | null = null;
   private cachedEvaluator: SelfEvaluator | null = null;
   private readonly pendingApprovals = new Map<number, { replyToId?: string; stockpileId?: number }>();
@@ -69,6 +71,7 @@ export class QueueManager {
     casualReplyLimit?: number;
     enableMentionReplies: boolean;
     evaluationThreshold?: number;
+    activityLogger?: ActivityLogger;
   }) {
     this.queueRepo = opts.queueRepo;
     this.roastRepo = opts.roastRepo;
@@ -84,6 +87,7 @@ export class QueueManager {
     this.casualReplyLimit = opts.casualReplyLimit ?? 40;
     this.evaluationThreshold = opts.evaluationThreshold ?? 3.5;
     this.enableMentionReplies = opts.enableMentionReplies;
+    this.activityLogger = opts.activityLogger;
   }
 
   /**
@@ -98,12 +102,14 @@ export class QueueManager {
 
     if (isQuietHour()) {
       this.logger.debug('Quiet hours — skipping queue processing');
+      this.activityLogger?.emit({ type: 'sleep', data: { reason: 'quiet_hours' } });
       return { dequeued: false, error: 'Quiet hours (2-7 UTC)' };
     }
 
     const todayCount = this.roastRepo.getTodayCount('autonomous');
     if (todayCount >= this.dailyLimit) {
       this.logger.info({ todayCount, dailyLimit: this.dailyLimit }, 'Daily limit reached');
+      this.activityLogger?.emit({ type: 'stats', data: { count: todayCount, limit: this.dailyLimit } });
       return { dequeued: false, error: `Daily limit reached (${String(todayCount)}/${String(this.dailyLimit)})` };
     }
 
@@ -150,6 +156,7 @@ export class QueueManager {
     }
 
     this.logger.info({ queueId: item.id, target: item.targetName, source: item.source }, 'Processing queue item');
+    this.activityLogger?.emit({ type: 'hunt', data: { target: item.targetName, source: item.source } });
 
     // M3.4: Idempotency — skip if a roast for this target was already posted recently (crash recovery)
     const existing = this.roastRepo.findRecentByTarget(item.targetName, item.source);
@@ -200,6 +207,7 @@ export class QueueManager {
             { queueId: item.id, stockpileId: stockpiled.id, target: item.targetName, score: stockpiled.qualityScore },
             'Using stockpiled roast instead of generating',
           );
+          this.activityLogger?.emit({ type: 'cooking', data: { target: item.targetName, fromStockpile: true } });
 
           const roastId = this.roastRepo.insert({
             targetName: item.targetName,
@@ -240,6 +248,7 @@ export class QueueManager {
             this.stockpile.markServed(stockpiled.id, 'bot');
             this.roastRepo.updateStatus(roastId, 'posted', postResult.tweetId);
             this.queueRepo.complete(item.id);
+            this.activityLogger?.emit({ type: 'posted', data: { target: item.targetName, tweetId: postResult.tweetId } });
             this.logger.info(
               { queueId: item.id, roastId, tweetId: postResult.tweetId, target: item.targetName, fromStockpile: true },
               'Stockpiled roast posted',
@@ -284,6 +293,9 @@ export class QueueManager {
         }
       }
 
+      this.activityLogger?.emit({ type: 'target_locked', data: { target: item.targetName } });
+      this.activityLogger?.emit({ type: 'cooking', data: { target: item.targetName, strategies: 3 } });
+
       // Full farm flow: generate (3 strategies × 2 variants + mutations) → evaluate → stockpile → post best
       const output = await generateRoasts(
         item.targetName, this.provider, this.logger, this.feedbackRepo,
@@ -296,10 +308,23 @@ export class QueueManager {
         return { dequeued: true, posted: false, target: item.targetName, error: 'No variants generated' };
       }
 
+      this.activityLogger?.emit({
+        type: 'think',
+        narrative: output.diaryThought || undefined,
+        data: { target: item.targetName, variantCount: output.variants.length },
+      });
+
       // Evaluate all variants through 5-judge panel and collect passing ones
       const { best, newStockpileCount, bestScore, stockpiledVariants } = await this.evaluateAndStockpile(
         output, item.targetName, item.targetType,
       );
+
+      if (best) {
+        this.activityLogger?.emit({
+          type: 'roast_ready',
+          data: { target: item.targetName, score: bestScore },
+        });
+      }
 
       if (!best) {
         // All variants discarded by judges — still try posting the top self-scored variant
@@ -320,6 +345,7 @@ export class QueueManager {
       const msg = getErrorMessage(error);
       this.logger.error({ err: error, queueId: item.id, target: item.targetName }, 'Queue processing failed');
       this.queueRepo.fail(item.id, msg.slice(0, 500));
+      this.activityLogger?.emit({ type: 'error', data: { error: msg.slice(0, 150) } });
       return { dequeued: true, posted: false, target: item.targetName, error: msg.slice(0, 200) };
     } finally {
       if (downloaded) {
@@ -544,6 +570,8 @@ export class QueueManager {
         }
       }
 
+      this.activityLogger?.emit({ type: 'posted', data: { target: item.targetName, tweetId: postResult.tweetId } });
+
       this.logger.info(
         {
           queueId: item.id, roastId, tweetId: postResult.tweetId,
@@ -641,6 +669,7 @@ export class QueueManager {
     if (postResult) {
       this.roastRepo.updateStatus(roastId, 'posted', postResult.tweetId);
       this.queueRepo.complete(item.id);
+      this.activityLogger?.emit({ type: 'posted', data: { target: item.targetName, tweetId: postResult.tweetId } });
       this.logger.info(
         { queueId: item.id, roastId, tweetId: postResult.tweetId, target: item.targetName, tone: result.tone },
         'Casual reply posted',
@@ -716,6 +745,8 @@ export class QueueManager {
           if (match) this.stockpile.markServed(match.id, 'bot');
         }
       }
+
+      this.activityLogger?.emit({ type: 'posted', data: { target: roast.targetName, tweetId: postResult.tweetId } });
 
       this.pendingApprovals.delete(roastId);
       return { tweetId: postResult.tweetId, text: roast.tweetText };

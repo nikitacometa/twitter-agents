@@ -38,6 +38,7 @@ import type { QueueProcessResult } from './queue/queue-manager.js';
 import { EngagementTracker } from './learning/engagement-tracker.js';
 import { HealthMonitor } from './health/health-monitor.js';
 import { CachedProfileFetcher } from './twitter/cached-profile-fetcher.js';
+import { ActivityLogger } from './activity/activity-logger.js';
 
 const config = validateEnv();
 
@@ -80,6 +81,40 @@ if (resetCount > 0) {
 const rescuedCount = queueRepo.rescueFailedMentions();
 if (rescuedCount > 0) {
   logger.info({ rescuedCount }, 'Rescued failed mention queue items back to pending');
+}
+
+// --- Activity Feed ---
+const startTime = Date.now();
+
+function formatUptime(start: number): string {
+  const ms = Date.now() - start;
+  const totalMinutes = Math.floor(ms / 60_000);
+  const days = Math.floor(totalMinutes / 1440);
+  const hours = Math.floor((totalMinutes % 1440) / 60);
+  const minutes = totalMinutes % 60;
+  const parts: string[] = [];
+  if (days > 0) parts.push(`${String(days)}d`);
+  if (hours > 0 || days > 0) parts.push(`${String(hours)}h`);
+  parts.push(`${String(minutes)}m`);
+  return parts.join(' ');
+}
+
+let activityLogger: ActivityLogger | undefined;
+if (config.ACTIVITY_FEED_ENABLED) {
+  activityLogger = new ActivityLogger({
+    feedPath: resolve(process.cwd(), config.ACTIVITY_FEED_PATH),
+    getStats: () => ({
+      totalRoasts: roastRepo.getTotalCount(),
+      totalLikes: roastRepo.getTotalLikes(),
+      stockpileSize: stockpileRepo.getStats().byStatus['available'] ?? 0,
+      burnedTokens: 0,
+      uptime: formatUptime(startTime),
+    }),
+    logger,
+  });
+
+  activityLogger.emit({ type: 'wake' });
+  activityLogger.setStatus('online');
 }
 
 // --- LLM Providers (optional — bot works without them for manual eval) ---
@@ -186,6 +221,7 @@ if (config.ENABLE_TWITTER) {
     tweetRepo,
     logger,
     botUsername,
+    activityLogger,
   });
 
   engagementTracker = new EngagementTracker({
@@ -193,6 +229,7 @@ if (config.ENABLE_TWITTER) {
     roastRepo,
     db,
     logger,
+    activityLogger,
   });
 } else {
   logger.info('Twitter disabled (ENABLE_TWITTER=false) — telegram-only mode');
@@ -214,6 +251,7 @@ if (provider) {
     dailyLimit: config.ROASTS_PER_DAY,
     mentionReplyLimit: config.MENTION_REPLIES_PER_DAY,
     enableMentionReplies: config.ENABLE_MENTION_REPLIES,
+    activityLogger,
   });
   logger.info({ dailyLimit: config.ROASTS_PER_DAY }, 'Queue manager initialized');
 }
@@ -413,6 +451,25 @@ scheduler.register({
   },
 });
 
+// Periodic activity stats (every 2 hours)
+if (activityLogger) {
+  const al = activityLogger;
+  scheduler.register({
+    name: 'activity-stats',
+    cronTime: '15 */2 * * *',
+    jitterMs: 0,
+    handler: () => {
+      const roastsToday = roastRepo.getTodayCount('autonomous') + roastRepo.getTodayCount('mention');
+      const stockpileSize = stockpileRepo.getStats().byStatus['available'] ?? 0;
+      al.emit({
+        type: 'stats',
+        data: { roastsToday, stockpileSize },
+      });
+      return Promise.resolve();
+    },
+  });
+}
+
 // --- Telegram Bot ---
 let bot: ReturnType<typeof createBot> | null = null;
 if (config.TELEGRAM_BOT_TOKEN) {
@@ -481,6 +538,9 @@ scheduler.start();
 // --- Graceful shutdown ---
 const shutdown = async () => {
   logger.info('Shutting down...');
+  activityLogger?.emit({ type: 'sleep' });
+  activityLogger?.setStatus('offline');
+  activityLogger?.flush();
   scheduler.stop();
   healthMonitor.stop();
   if (bot) await bot.stop();

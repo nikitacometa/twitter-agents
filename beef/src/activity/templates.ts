@@ -381,7 +381,7 @@ export const TEMPLATES: Record<ActivityEventType, string[]> = {
 export function pickTemplate(type: ActivityEventType, eventId: string): string {
   const templates = TEMPLATES[type];
   const hash = simpleHash(eventId);
-  return templates[hash % templates.length];
+  return templates[hash % templates.length]!;
 }
 
 /**

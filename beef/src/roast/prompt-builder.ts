@@ -352,7 +352,8 @@ Be honest. A 3 is "passable." A 5 is "this gets screenshotted."
   ],
   "bestIndex": 0,
   "researchNotes": "research facts + step 2 reasoning",
-  "factCheckPassed": true
+  "factCheckPassed": true,
+  "diaryThought": "1-2 sentence internal monologue for your public activity diary. Write as $BEEF about what you just researched or discovered. Reference specific findings. NOT the roast itself — your forensic note about the process. Max 150 chars."
 }`;
 }
 
@@ -495,7 +496,8 @@ Be honest. A 3 is "passable." A 5 is "this gets screenshotted."
   ],
   "bestIndex": 0,
   "researchNotes": "gut reaction + key facts",
-  "factCheckPassed": true
+  "factCheckPassed": true,
+  "diaryThought": "1-2 sentence internal monologue for your public activity diary. Write as $BEEF about what you just researched or discovered. Reference specific findings. NOT the roast itself — your forensic note about the process. Max 150 chars."
 }`;
 }
 
@@ -648,7 +650,8 @@ For each: what makes this better than the obvious take?
   ],
   "bestIndex": 0,
   "researchNotes": "slop diagnosis + key research facts",
-  "factCheckPassed": true
+  "factCheckPassed": true,
+  "diaryThought": "1-2 sentence internal monologue for your public activity diary. Write as $BEEF about what you just researched or discovered. Reference specific findings. NOT the roast itself — your forensic note about the process. Max 150 chars."
 }`;
 }
 
@@ -765,6 +768,7 @@ Write a single casual reply in $BEEF's voice. Match the energy of the message �
 {
   "text": "your reply text",
   "tone": "one of: dry_wit | clap_back | deadpan | self_aware | friendly_roast",
-  "mentionsBeef": false
+  "mentionsBeef": false,
+  "diaryThought": "1 sentence internal monologue for your public diary. Write as $BEEF about this interaction. Max 120 chars."
 }`;
 }

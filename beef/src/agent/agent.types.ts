@@ -68,6 +68,7 @@ export interface AgentRoastOutput {
   bestIndex: number;
   researchNotes: string | null;
   factCheckPassed: boolean;
+  diaryThought?: string;
 }
 
 export interface AgentDiscoveryOutput {
@@ -94,6 +95,7 @@ export interface AgentReplyOutput {
   text: string;
   tone: string;
   mentionsBeef: boolean;
+  diaryThought?: string;
 }
 
 export interface AgentAuditOutput {

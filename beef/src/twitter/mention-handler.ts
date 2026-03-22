@@ -7,6 +7,7 @@ import type { QueueRepository } from '@storage/repositories/queue.repository.js'
 import type { TweetRepository } from '@storage/repositories/tweet.repository.js';
 import type { MentionRequestType } from '@common/types/index.js';
 import type { MentionData } from './twitter-client.interface.js';
+import type { ActivityLogger } from '../activity/activity-logger.js';
 
 export interface MentionPollSummary {
   tweetId: string;
@@ -41,6 +42,7 @@ export class MentionHandler {
   private readonly tweetRepo?: TweetRepository;
   private readonly logger: Logger;
   private readonly botUsername: string;
+  private readonly activityLogger?: ActivityLogger;
   private isPolling = false;
 
   constructor(opts: {
@@ -52,6 +54,7 @@ export class MentionHandler {
     tweetRepo?: TweetRepository;
     logger: Logger;
     botUsername?: string;
+    activityLogger?: ActivityLogger;
   }) {
     this.twitter = opts.twitter;
     this.mentionRepo = opts.mentionRepo;
@@ -61,6 +64,7 @@ export class MentionHandler {
     this.tweetRepo = opts.tweetRepo;
     this.logger = opts.logger;
     this.botUsername = opts.botUsername?.trim() || '0xBeefer';
+    this.activityLogger = opts.activityLogger;
   }
 
   async poll(): Promise<PollResult> {
@@ -193,6 +197,13 @@ export class MentionHandler {
           queueTarget = this.enqueueCasualReply(m);
           queued = true;
         }
+      }
+
+      if (queued) {
+        this.activityLogger?.emit({
+          type: 'mention',
+          data: { author: m.authorName, target: queueTarget ?? m.authorName, requestType },
+        });
       }
 
       summaries.push({

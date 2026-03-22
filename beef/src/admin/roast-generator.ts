@@ -114,6 +114,7 @@ export async function generateRoasts(
     researchNotes: result.draft.researchNotes,
     factCheckPassed: result.draft.factCheckPassed,
     evaluation: result.evaluation,
+    diaryThought: result.diaryThought,
   };
 }
 

@@ -75,6 +75,13 @@ const envSchema = z
       .default('false')
       .transform((v) => v === 'true'),
 
+    // Activity feed
+    ACTIVITY_FEED_PATH: z.string().default('./data/activity-feed.json'),
+    ACTIVITY_FEED_ENABLED: z
+      .enum(['true', 'false'])
+      .default('true')
+      .transform((v) => v === 'true'),
+
     // Environment
     NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
     LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace']).default('info'),

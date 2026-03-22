@@ -2,22 +2,26 @@ import type { Logger } from 'pino';
 import type { ITwitterClient } from '@twitter/twitter-client.interface.js';
 import type { RoastRepository } from '@storage/repositories/roast.repository.js';
 import type Database from 'better-sqlite3';
+import type { ActivityLogger } from '../activity/activity-logger.js';
 
 export class EngagementTracker {
   private readonly twitter: ITwitterClient;
   private readonly roastRepo: RoastRepository;
   private readonly insertSnapshotStmt: Database.Statement;
   private readonly logger: Logger;
+  private readonly activityLogger?: ActivityLogger;
 
   constructor(opts: {
     twitter: ITwitterClient;
     roastRepo: RoastRepository;
     db: Database.Database;
     logger: Logger;
+    activityLogger?: ActivityLogger;
   }) {
     this.twitter = opts.twitter;
     this.roastRepo = opts.roastRepo;
     this.logger = opts.logger;
+    this.activityLogger = opts.activityLogger;
 
     this.insertSnapshotStmt = opts.db.prepare(`
       INSERT INTO engagement_snapshots (roast_id, likes, retweets, replies, impressions)
@@ -66,6 +70,18 @@ export class EngagementTracker {
     }
 
     this.logger.info({ tracked: updated, total: withTweets.length }, 'Engagement snapshot captured');
+
+    if (updated > 0) {
+      const totalNewLikes = withTweets.reduce((sum, r) => {
+        const m = metrics.get(r.tweetId!);
+        return sum + (m ? m.likes : 0);
+      }, 0);
+      this.activityLogger?.emit({
+        type: 'engagement',
+        data: { count: updated, newLikes: totalNewLikes },
+      });
+    }
+
     return updated;
   }
 }
