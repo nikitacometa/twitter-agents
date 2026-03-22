@@ -24,16 +24,16 @@
 - [x] BW-009: Create nginx.conf for SPA routing + static file serving
 - [x] BW-010: Create .env.example with VITE_FEED_URL documentation
 - [x] BW-011: Update CLAUDE.md deploy section for standalone container deploy
-- [x] BW-012: Prepare cometa-proxy nginx config for app.beefthis.wtf
+- [x] BW-012: Prepare cometa-proxy nginx config for app.0xbeef.wtf
 
 ### Integration (after backend deploys)
-- [!] BW-013: Connect to real feed URL (VITE_FEED_URL=https://beefthis.wtf/api/activity) — blocked by backend
+- [!] BW-013: Connect to real feed URL (VITE_FEED_URL=https://0xbeef.wtf/api/activity) — blocked by backend
 - [!] BW-014: Deploy to VPS and verify end-to-end — blocked by BW-007..012 + backend
 
 ---
 
 ## Backlog
 - [ ] BW-020: Landing page CTA "peek into my brain" linking to app
-- [ ] BW-021: DNS + SSL setup for app.beefthis.wtf subdomain
+- [ ] BW-021: DNS + SSL setup for app.0xbeef.wtf subdomain
 - [ ] BW-022: Add error state UI when feed fetch fails
 - [ ] BW-023: Add favicon and OG meta for app subdomain

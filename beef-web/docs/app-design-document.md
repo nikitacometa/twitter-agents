@@ -675,15 +675,15 @@ beef-web/
 ### Nginx Configuration
 
 ```nginx
-# Новый server block: app.0xbeef.wtf (или app.beefthis.wtf)
-# Файл: cometa-proxy/conf.d/app.beefthis.wtf.conf
+# Новый server block: app.0xbeef.wtf (или app.0xbeef.wtf)
+# Файл: cometa-proxy/conf.d/app.0xbeef.wtf.conf
 
 server {
     listen 443 ssl http2;
-    server_name app.beefthis.wtf;
+    server_name app.0xbeef.wtf;
 
-    ssl_certificate     /etc/letsencrypt/live/beefthis.wtf/fullchain.pem;
-    ssl_certificate_key /etc/letsencrypt/live/beefthis.wtf/privkey.pem;
+    ssl_certificate     /etc/letsencrypt/live/0xbeef.wtf/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/0xbeef.wtf/privkey.pem;
 
     root /var/www/beef-web/dist;
     index index.html;
@@ -696,7 +696,7 @@ server {
     # Activity feed data (JSON file from bot)
     location /data/activity-feed.json {
         alias /home/deploy/twitter-agents/beef/data/activity-feed.json;
-        add_header Access-Control-Allow-Origin "https://app.beefthis.wtf";
+        add_header Access-Control-Allow-Origin "https://app.0xbeef.wtf";
         add_header Cache-Control "public, max-age=60";
         add_header X-Content-Type-Options nosniff;
     }
@@ -707,8 +707,8 @@ server {
 }
 ```
 
-**DNS:** A record для `app.beefthis.wtf` → `<redacted>` (тот же IP что основной домен)
-**SSL:** Либо wildcard cert (`*.beefthis.wtf`), либо добавить субдомен в существующий certbot: `certbot --expand -d beefthis.wtf -d app.beefthis.wtf`
+**DNS:** A record для `app.0xbeef.wtf` → `<redacted>` (тот же IP что основной домен)
+**SSL:** Либо wildcard cert (`*.0xbeef.wtf`), либо добавить субдомен в существующий certbot: `certbot --expand -d 0xbeef.wtf -d app.0xbeef.wtf`
 
 ---
 
@@ -784,9 +784,9 @@ Write your diary entry:`,
    - Deploy на VPS
 
 3. **VPS / инфраструктура:**
-   - DNS: A record `app.beefthis.wtf` → `<redacted>`
-   - SSL: `certbot --expand -d beefthis.wtf -d app.beefthis.wtf`
-   - nginx: новый server block для `app.beefthis.wtf` (см. Part 6)
+   - DNS: A record `app.0xbeef.wtf` → `<redacted>`
+   - SSL: `certbot --expand -d 0xbeef.wtf -d app.0xbeef.wtf`
+   - nginx: новый server block для `app.0xbeef.wtf` (см. Part 6)
    - Скопировать `dist/` → `/var/www/beef-web/dist/`
 
 4. **Лендинг (0xbeef.wtf):**

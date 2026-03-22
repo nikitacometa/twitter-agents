@@ -273,8 +273,8 @@ location /api/activity {
     alias /home/deploy/beef/data/activity-feed.json;
     add_header Content-Type application/json;
     add_header Cache-Control "public, max-age=30";
-    add_header Access-Control-Allow-Origin "https://app.beefthis.wtf";
+    add_header Access-Control-Allow-Origin "https://app.0xbeef.wtf";
 }
 ```
 
-The SPA at `app.beefthis.wtf` will poll this endpoint every 5 minutes.
+The SPA at `app.0xbeef.wtf` will poll this endpoint every 5 minutes.

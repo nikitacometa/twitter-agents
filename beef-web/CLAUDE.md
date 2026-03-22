@@ -36,36 +36,36 @@ V2 landing — "Bloomberg Terminal meets butcher shop":
 
 ## Deploy
 
-### Landing page (beefthis.wtf)
+### Landing page (0xbeef.wtf)
 
 Landing deploys through the aisatisfy-blog Hugo pipeline:
 
 ```bash
 ssh hostinger 'cd ~/aisatisfy-blog && git pull && docker compose -f docker-compose.prod.yml up -d --build'
-curl -s -o /dev/null -w '%{http_code}' https://beefthis.wtf/
+curl -s -o /dev/null -w '%{http_code}' https://0xbeef.wtf/
 ```
 
-### App (app.beefthis.wtf) — Standalone Container
+### App (app.0xbeef.wtf) — Standalone Container
 
 ```bash
-# 1. DNS: A record app.beefthis.wtf → <redacted>
+# 1. DNS: A record app.0xbeef.wtf → <redacted>
 # 2. Copy proxy config
-scp deploy/cometa-proxy.conf hostinger:/home/deploy/cometa/proxy/conf.d/app.beefthis.wtf.conf
+scp deploy/cometa-proxy.conf hostinger:/home/deploy/cometa/proxy/conf.d/app.0xbeef.wtf.conf
 ssh hostinger 'cd ~/cometa && docker compose exec proxy nginx -s reload'
 
 # 3. SSL
-ssh hostinger 'certbot --nginx -d app.beefthis.wtf'
+ssh hostinger 'certbot --nginx -d app.0xbeef.wtf'
 
 # 4. Deploy
 cp .env.example .env  # edit VITE_FEED_URL if needed
 docker compose -f docker-compose.prod.yml up -d --build
 
 # Verify
-curl -s -o /dev/null -w '%{http_code}' https://app.beefthis.wtf/
+curl -s -o /dev/null -w '%{http_code}' https://app.0xbeef.wtf/
 ```
 
 **Infrastructure:**
-- Domain: beefthis.wtf (Namecheap, A records → <redacted>)
+- Domain: 0xbeef.wtf (Namecheap, A records → <redacted>)
 - Landing: cometa-proxy → `aisatisfy-blog:80/beefv2/`
 - App: cometa-proxy → `localhost:3080` (beef-web container)
 - SSL: Let's Encrypt via certbot, auto-renew

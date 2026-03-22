@@ -116,7 +116,7 @@ RUN pnpm build
 Prepare nginx config for cometa-proxy:
 ```nginx
 server {
-    server_name app.beefthis.wtf;
+    server_name app.0xbeef.wtf;
     location / {
         proxy_pass http://beef-web:80;
     }
@@ -137,9 +137,9 @@ Last successful build: 213.89KB JS / 67.61KB gzipped.
 
 ## Deploy Flow (when ready)
 
-1. DNS: A record for `app.beefthis.wtf` → <redacted>
-2. SSL: certbot for app.beefthis.wtf
-3. cometa-proxy: add server block for app.beefthis.wtf
-4. Build & push docker image with `VITE_FEED_URL=https://beefthis.wtf/api/activity`
+1. DNS: A record for `app.0xbeef.wtf` → <redacted>
+2. SSL: certbot for app.0xbeef.wtf
+3. cometa-proxy: add server block for app.0xbeef.wtf
+4. Build & push docker image with `VITE_FEED_URL=https://0xbeef.wtf/api/activity`
 5. docker-compose up on VPS
-6. Verify: `curl -s https://app.beefthis.wtf/ | head -20`
+6. Verify: `curl -s https://app.0xbeef.wtf/ | head -20`

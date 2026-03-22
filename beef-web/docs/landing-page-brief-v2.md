@@ -438,7 +438,7 @@ console.log('%cthe source code costs less than most tokens cost to deploy.', 'co
 
 ## Domain
 
-Primary domain: **beefthis.wtf**
+Primary domain: **0xbeef.wtf**
 
 ---
 
