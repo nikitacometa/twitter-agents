@@ -102,11 +102,22 @@ const TOO_TECHY_PATTERNS = [
   /\bterms of service say\b.*\bcontractual IOU\b/i,
 ];
 
+/**
+ * Count real sentences, ignoring dots inside domain names (pump.fun),
+ * decimal numbers (98.6%), dollar amounts ($1.3B), and version strings (v2.1).
+ */
+export function countSentences(text: string): number {
+  const normalized = text
+    .replace(/\d+\.\d+/g, (m) => m.replace(/\./g, '\u2024'))
+    .replace(/\b[a-z0-9]+(?:\.[a-z0-9]+)+\b/gi, (m) => m.replace(/\./g, '\u2024'));
+  return normalized.split(/[.!?]+/).filter((s) => s.trim().length > 0).length;
+}
+
 export function preFilter(tweetText: string): PreFilterResult {
   // 1. Sentence count > 3 → auto-reject (setup → context → punchline is fine)
-  const sentences = tweetText.split(/[.!?]+/).filter((s) => s.trim().length > 0);
-  if (sentences.length > 3) {
-    return { pass: false, reason: `exceeds 3 sentences (${String(sentences.length)} found)` };
+  const sentenceCount = countSentences(tweetText);
+  if (sentenceCount > 3) {
+    return { pass: false, reason: `exceeds 3 sentences (${String(sentenceCount)} found)` };
   }
 
   // 2. Character count > 280 → auto-reject

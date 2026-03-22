@@ -12,10 +12,11 @@ import {
   checkHardVetoes,
   checkFunnyConsensusVeto,
   preFilter,
+  countSentences,
 } from '@evaluation/evaluator.js';
 import { getErrorMessage } from '@common/utils/error.util.js';
 
-export { calculateWeightedComposite, preFilter };
+export { calculateWeightedComposite, preFilter, countSentences };
 export type { PreFilterResult } from '@evaluation/evaluator.js';
 
 // ---------------------------------------------------------------------------

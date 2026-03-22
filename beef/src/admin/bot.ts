@@ -310,12 +310,15 @@ export function createBot(opts: {
     // All discarded — show best with its score and a warning
     const best = variants[0]!;
     const vetoInfo = eval_.vetoReasons && eval_.vetoReasons.length > 0
-      ? `\n<i>Veto: ${escapeHtml(eval_.vetoReasons[0]!)}</i>`
+      ? `\nVeto: ${escapeHtml(eval_.vetoReasons[0]!)}`
+      : '';
+    const preFilterInfo = eval_.preFilterReason
+      ? `\n<i>Pre-filter: ${escapeHtml(eval_.preFilterReason)}</i>`
       : '';
 
     const lines: string[] = [
       `✗ All ${String(variants.length)} variants scored below threshold`,
-      `Best: ${bestScore.toFixed(1)}/5${vetoInfo}`,
+      `Best: ${bestScore.toFixed(1)}/5${vetoInfo}${preFilterInfo}`,
       '',
       `<code>${escapeHtml(best.text)}</code>`,
       `<i>${escapeHtml(best.angle)} · ${String(best.text.length)} chars</i>`,

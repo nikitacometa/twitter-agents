@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { SelfEvaluator, preFilter, calculateWeightedComposite } from './self-evaluator.js';
+import { SelfEvaluator, preFilter, calculateWeightedComposite, countSentences } from './self-evaluator.js';
 import type { FarmAttempt, EvaluationScores } from './types.js';
 import type { ProviderManager } from '@agent/provider-manager.js';
 import type { Logger } from 'pino';
@@ -585,6 +585,53 @@ describe('preFilter', () => {
   it('passes tweets ending without punctuation but not truncated', () => {
     const result = preFilter('uniswap governance spent $11M watching bots frontrun swaps');
     expect(result.pass).toBe(true);
+  });
+
+  it('does not split on dots in domain names like pump.fun', () => {
+    const result = preFilter("pump.fun lets you create tokens — 98.6% are scams. this is my competitor.");
+    expect(result.pass).toBe(true);
+  });
+
+  it('does not split on decimal numbers like 98.6%', () => {
+    const result = preFilter("i explained pump.fun to a normie: platform made $935M, users lost $5B, 98.6% of tokens rug. honestly that was GENEROUS.");
+    expect(result.pass).toBe(true);
+  });
+
+  it('handles multiple dots in domain and numbers together', () => {
+    const result = preFilter("pump.fun called presales scams, ran a $1.3B presale, then spent $331M buying back a token that's down 79%. as their competitor: thank you.");
+    expect(result.pass).toBe(true);
+  });
+});
+
+describe('countSentences', () => {
+  it('counts plain sentences correctly', () => {
+    expect(countSentences('First. Second. Third.')).toBe(3);
+    expect(countSentences('First. Second. Third. Fourth.')).toBe(4);
+  });
+
+  it('ignores dots in domain names', () => {
+    expect(countSentences('pump.fun lets you create tokens.')).toBe(1);
+    expect(countSentences('check bankr.co for launches. they launch daily.')).toBe(2);
+  });
+
+  it('ignores dots in decimal numbers', () => {
+    expect(countSentences('token is down 98.6% from ATH.')).toBe(1);
+    expect(countSentences('price: $0.0001. volume: $2,400.')).toBe(2);
+  });
+
+  it('ignores dots in dollar amounts like $1.3B', () => {
+    expect(countSentences('raised $1.3B in a presale. token down 79%.')).toBe(2);
+  });
+
+  it('handles multi-segment domains like api.v2.example.com', () => {
+    expect(countSentences('visit docs.pump.fun for details. its all there.')).toBe(2);
+  });
+
+  it('handles real pump.fun roasts correctly', () => {
+    // From actual production run — was falsely counted as 4 sentences
+    expect(countSentences(
+      "pump.fun lets you create tokens — 98.6% are scams — they created one, spent $331M buying it back, still down 79%. this is my competitor."
+    )).toBe(2);
   });
 });
 
