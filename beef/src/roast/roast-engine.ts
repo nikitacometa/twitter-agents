@@ -115,12 +115,13 @@ export class RoastEngine {
     let researchNotes = strategyResults.researchNotes;
     let factCheckPassed = strategyResults.factCheckPassed;
 
-    // If all strategies failed, try no-research fallback (unless roast-power)
+    // If all strategies failed, try no-research fallback (only for roast-quick/reply profiles)
     if (allVariants.length === 0) {
-      if (effectiveProfile === 'roast-power') {
+      const researchProfiles: Set<string> = new Set(['roast-research', 'roast-power', 'farm-generate', 'farm-discover']);
+      if (researchProfiles.has(effectiveProfile)) {
         throw strategyResults.error instanceof Error
           ? strategyResults.error
-          : new Error('All prompt strategies failed');
+          : new Error('All prompt strategies failed — primary provider unavailable');
       }
       this.logger.warn({ taskId }, 'All strategies failed, trying no-research fallback');
       const fallbackPrompt = buildNoResearchPrompt(targetName, this.character, effectiveVariantCount, memory, imagePaths);
