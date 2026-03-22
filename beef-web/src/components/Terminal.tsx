@@ -137,12 +137,17 @@ function LineContent({ line }: { line: TypewriterLine }) {
   const narrativeVisible =
     displayText.length > labelEnd ? displayText.slice(labelEnd) : ''
 
+  // Split label into badge text and trailing padding
+  const labelTrimmed = labelVisible.trimEnd()
+  const labelPadding = labelVisible.slice(labelTrimmed.length)
+
   return (
     <>
       {timeVisible && <span className={styles.time}>{timeVisible}</span>}
-      {labelVisible && (
-        <span className={LABEL_CLASS_MAP[config.category] ?? ''}>{labelVisible}</span>
+      {labelTrimmed && (
+        <span className={LABEL_CLASS_MAP[config.category] ?? ''}>{labelTrimmed}</span>
       )}
+      {labelPadding && <span>{labelPadding}</span>}
       {narrativeVisible && (
         <span className={styles.narrative}>{narrativeVisible}</span>
       )}
