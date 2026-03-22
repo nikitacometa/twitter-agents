@@ -94,6 +94,26 @@ export class ProviderManager implements LLMProvider {
     return primaryOk || (this.fallback ? await this.fallback.healthCheck() : false);
   }
 
+  /**
+   * Force-reset provider to primary mode.
+   * Use when provider is stuck in paused/degraded mode after transient failures.
+   */
+  forceReset(): void {
+    const prev = this._mode;
+    this.consecutiveFailures = 0;
+    this._mode = 'primary';
+    this.stopRecoveryTimer();
+    this.logger.info({ previousMode: prev }, 'Provider force-reset to primary mode');
+  }
+
+  getStatusInfo(): { mode: ProviderMode; consecutiveFailures: number; hasRecoveryTimer: boolean } {
+    return {
+      mode: this._mode,
+      consecutiveFailures: this.consecutiveFailures,
+      hasRecoveryTimer: this.recoveryTimer !== null,
+    };
+  }
+
   async waitForIdle(maxWaitMs: number): Promise<void> {
     await this.primary.waitForIdle?.(maxWaitMs);
   }

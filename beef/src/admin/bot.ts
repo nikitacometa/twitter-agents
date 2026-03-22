@@ -125,6 +125,8 @@ export function createBot(opts: {
         '<code>/poll</code> — check for new mentions now',
         '<code>/trigger</code> — force-process next queue item',
         '<code>/promote &lt;id&gt;</code> — promote stockpiled roast to CreativeMemory',
+        '<code>/diagnose</code> — provider status + health check',
+        '<code>/reset</code> — force-reset provider to primary mode',
         '<code>/pause</code> / <code>/resume</code> — toggle autonomous posting',
       ].join('\n'),
       { parse_mode: 'HTML' },
@@ -464,33 +466,40 @@ export function createBot(opts: {
             `⚠️ ${escapeHtml(reason)}`,
             { parse_mode: 'HTML' },
           );
-        } else if (result.posted) {
+        } else if (result.posted || result.savedOnly) {
+          const statusEmoji = result.posted ? '✅' : '📝';
+          const statusLabel = result.posted ? 'Posted' : 'Generated (Twitter disabled)';
           const stockpileInfo = result.fromStockpile ? ' (from stockpile)' : '';
           const evalInfo = result.evaluationScore
             ? `\nEval: <b>${result.evaluationScore.toFixed(1)}</b>/5`
-            : '';
+            : (result.newStockpileCount === 0 && !result.fromStockpile ? '\n⚠️ Nothing passed evaluation — used best self-scored' : '');
           const newStockpileInfo = result.newStockpileCount
-            ? `\nNew stockpile: <b>${String(result.newStockpileCount)}</b> added`
+            ? `\nStockpiled: <b>${String(result.newStockpileCount)}</b> new`
             : '';
+          const tweetIdLine = result.tweetId ? `\nTweet ID: <code>${escapeHtml(result.tweetId)}</code>` : '';
           await api.editMessageText(
             chatId,
             statusMsg.message_id,
-            `✅ Posted in ${String(elapsed)}s${stockpileInfo}\nTarget: <b>${escapeHtml(result.target ?? '?')}</b>\nTweet ID: <code>${escapeHtml(result.tweetId ?? '?')}</code>${evalInfo}${newStockpileInfo}`,
+            `${statusEmoji} ${statusLabel} in ${String(elapsed)}s${stockpileInfo}\nTarget: <b>${escapeHtml(result.target ?? '?')}</b>${tweetIdLine}${evalInfo}${newStockpileInfo}`,
             { parse_mode: 'HTML' },
           );
-        } else if (result.savedOnly) {
-          const evalInfo = result.evaluationScore
-            ? `\nEval: <b>${result.evaluationScore.toFixed(1)}</b>/5`
-            : '';
-          const newStockpileInfo = result.newStockpileCount
-            ? `\nNew stockpile: <b>${String(result.newStockpileCount)}</b> added`
-            : '';
-          await api.editMessageText(
-            chatId,
-            statusMsg.message_id,
-            `📝 Generated in ${String(elapsed)}s (Twitter disabled)\nTarget: <b>${escapeHtml(result.target ?? '?')}</b>${evalInfo}${newStockpileInfo}`,
-            { parse_mode: 'HTML' },
-          );
+
+          // Send posted text as separate message for easy review
+          if (result.postedText) {
+            await api.sendMessage(chatId, `🎯 <b>Posted:</b>\n<code>${escapeHtml(result.postedText)}</code>`, { parse_mode: 'HTML' }).catch(() => {});
+          }
+
+          // Send stockpiled variants for review
+          if (result.stockpiledVariants && result.stockpiledVariants.length > 0) {
+            const lines = result.stockpiledVariants.map(
+              (v, i) => `${String(i + 1)}. [${v.score.toFixed(1)}] <i>${escapeHtml(v.angle)}</i>\n<code>${escapeHtml(v.text)}</code>`,
+            );
+            await api.sendMessage(
+              chatId,
+              `📦 <b>Stockpiled variants:</b>\n\n${lines.join('\n\n')}`,
+              { parse_mode: 'HTML' },
+            ).catch(() => {});
+          }
         } else {
           await api.editMessageText(
             chatId,
@@ -529,6 +538,75 @@ export function createBot(opts: {
     }
     configRepo.setPaused(false);
     await ctx.reply('▶️ Autonomous posting resumed.');
+  });
+
+  bot.command('diagnose', async (ctx) => {
+    const chatId = ctx.chat?.id;
+    if (!chatId) return;
+
+    const lines: string[] = ['<b>🔍 Provider Diagnostics</b>', ''];
+
+    if (!provider) {
+      lines.push('Provider: <b>not configured</b>');
+    } else {
+      const status = provider.getStatusInfo();
+      const modeEmoji = status.mode === 'primary' ? '🟢' : status.mode === 'degraded' ? '🟡' : '🔴';
+      lines.push(`Mode: ${modeEmoji} <b>${status.mode}</b>`);
+      lines.push(`Consecutive failures: <b>${String(status.consecutiveFailures)}</b>/3`);
+      lines.push(`Recovery timer: ${status.hasRecoveryTimer ? 'active' : 'inactive'}`);
+
+      // Quick health check
+      lines.push('');
+      lines.push('Running health check...');
+    }
+
+    const queuePending = queueManager?.getPendingCount() ?? 0;
+    lines.push('');
+    lines.push(`Queue pending: <b>${String(queuePending)}</b>`);
+    lines.push(`Twitter: ${opts.twitterEnabled ? '✅ enabled' : '❌ disabled'}`);
+    lines.push(`Env: <code>${opts.beefEnv ?? 'unknown'}</code>`);
+
+    const msg = await ctx.reply(lines.join('\n'), { parse_mode: 'HTML' });
+
+    if (provider) {
+      try {
+        const healthy = await provider.healthCheck();
+        const status = provider.getStatusInfo();
+        const modeEmoji = status.mode === 'primary' ? '🟢' : status.mode === 'degraded' ? '🟡' : '🔴';
+        await ctx.api.editMessageText(
+          chatId,
+          msg.message_id,
+          lines.slice(0, -4).join('\n') +
+            `\nHealth check: ${healthy ? '✅ passed' : '❌ failed'}` +
+            `\nMode after check: ${modeEmoji} <b>${status.mode}</b>` +
+            `\n\nQueue pending: <b>${String(queuePending)}</b>` +
+            `\nTwitter: ${opts.twitterEnabled ? '✅ enabled' : '❌ disabled'}` +
+            `\nEnv: <code>${opts.beefEnv ?? 'unknown'}</code>`,
+          { parse_mode: 'HTML' },
+        );
+      } catch (error) {
+        await ctx.api.editMessageText(
+          chatId,
+          msg.message_id,
+          lines.join('\n') + `\n\nHealth check error: ${escapeHtml(getErrorMessage(error).slice(0, 200))}`,
+          { parse_mode: 'HTML' },
+        ).catch(() => {});
+      }
+    }
+  });
+
+  bot.command('reset', async (ctx) => {
+    if (!provider) {
+      await ctx.reply('⚠️ Provider not configured.');
+      return;
+    }
+    const before = provider.getStatusInfo();
+    provider.forceReset();
+    const after = provider.getStatusInfo();
+    await ctx.reply(
+      `🔄 Provider reset: <b>${before.mode}</b> → <b>${after.mode}</b>\nFailures: ${String(before.consecutiveFailures)} → 0`,
+      { parse_mode: 'HTML' },
+    );
   });
 
   bot.command('promote', async (ctx) => {

@@ -28,6 +28,8 @@ export interface QueueProcessResult {
   fromStockpile?: boolean;
   evaluationScore?: number;
   newStockpileCount?: number;
+  postedText?: string;
+  stockpiledVariants?: Array<{ text: string; score: number; angle: string }>;
 }
 
 export class QueueManager {
@@ -296,7 +298,7 @@ export class QueueManager {
       }
 
       // Evaluate all variants through 5-judge panel and collect passing ones
-      const { best, newStockpileCount, bestScore } = await this.evaluateAndStockpile(
+      const { best, newStockpileCount, bestScore, stockpiledVariants } = await this.evaluateAndStockpile(
         output, item.targetName, item.targetType,
       );
 
@@ -308,12 +310,12 @@ export class QueueManager {
         );
         const fallback = output.variants[output.bestIndex] ?? output.variants[0]!;
         return await this.postGeneratedRoast(
-          item, fallback.text, output, replyToId, undefined, 0,
+          item, fallback.text, output, replyToId, undefined, 0, stockpiledVariants,
         );
       }
 
       return await this.postGeneratedRoast(
-        item, best.text, output, replyToId, bestScore, newStockpileCount,
+        item, best.text, output, replyToId, bestScore, newStockpileCount, stockpiledVariants,
       );
     } catch (error) {
       const msg = getErrorMessage(error);
@@ -364,11 +366,13 @@ export class QueueManager {
     best: { text: string; score: number; angle: string } | undefined;
     bestScore: number | undefined;
     newStockpileCount: number;
+    stockpiledVariants: Array<{ text: string; score: number; angle: string }>;
   }> {
     const evaluator = this.getEvaluator();
     let newStockpileCount = 0;
     let bestVariant: { text: string; score: number; angle: string } | undefined;
     let bestComposite = 0;
+    const stockpiledVariants: Array<{ text: string; score: number; angle: string }> = [];
 
     // Build FarmAttempt-compatible objects for the evaluator
     const fakeAttempts: Array<{ attempt: FarmAttempt; variant: { text: string; score: number; angle: string } }> = [];
@@ -444,6 +448,7 @@ export class QueueManager {
               expiresAt: calculateExpiry(freshness) ?? undefined,
             });
             newStockpileCount++;
+            stockpiledVariants.push({ text: variant.text, score: evalResult.compositeScore, angle: variant.angle });
             this.logger.info(
               { target: targetName, score: evalResult.compositeScore, angle: variant.angle },
               'Variant added to stockpile',
@@ -473,6 +478,7 @@ export class QueueManager {
       best: bestVariant,
       bestScore: bestComposite || undefined,
       newStockpileCount,
+      stockpiledVariants,
     };
   }
 
@@ -486,6 +492,7 @@ export class QueueManager {
     replyToId: string | undefined,
     evaluationScore: number | undefined,
     newStockpileCount: number,
+    stockpiledVariants?: Array<{ text: string; score: number; angle: string }>,
   ): Promise<QueueProcessResult> {
     const roastId = this.roastRepo.insert({
       targetName: item.targetName,
@@ -509,7 +516,7 @@ export class QueueManager {
       );
       return {
         dequeued: true, posted: false, savedOnly: true, target: item.targetName,
-        evaluationScore, newStockpileCount,
+        evaluationScore, newStockpileCount, postedText: tweetText, stockpiledVariants,
       };
     }
 
@@ -536,7 +543,7 @@ export class QueueManager {
       );
       return {
         dequeued: true, posted: true, tweetId: postResult.tweetId, target: item.targetName,
-        evaluationScore, newStockpileCount,
+        evaluationScore, newStockpileCount, postedText: tweetText, stockpiledVariants,
       };
     }
 

@@ -33,6 +33,7 @@ import { ScraperTwitterClient } from './twitter/scraper-twitter-client.js';
 import { MentionHandler } from './twitter/mention-handler.js';
 import { Scheduler } from './scheduler/scheduler.js';
 import { QueueManager } from './queue/queue-manager.js';
+import type { QueueProcessResult } from './queue/queue-manager.js';
 import { EngagementTracker } from './learning/engagement-tracker.js';
 import { HealthMonitor } from './health/health-monitor.js';
 import { CachedProfileFetcher } from './twitter/cached-profile-fetcher.js';
@@ -227,6 +228,59 @@ const healthMonitor = new HealthMonitor({
   },
 });
 
+// --- Queue result notification helper ---
+function escHtml(text: string): string {
+  return text.replace(/[<>&]/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' })[c] ?? c);
+}
+
+async function notifyQueueResult(
+  result: QueueProcessResult,
+  source: string,
+): Promise<void> {
+  if (!bot || config.TELEGRAM_ADMIN_IDS.length === 0) return;
+  if (!result.dequeued) return;
+
+  const lines: string[] = [];
+
+  if (result.posted || result.savedOnly) {
+    const emoji = result.posted ? '✅' : '📝';
+    const label = result.posted ? 'Posted' : 'Saved (no Twitter)';
+    const stockpileTag = result.fromStockpile ? ' [stockpile]' : '';
+    lines.push(`${emoji} <b>${label}${stockpileTag}</b> — ${escHtml(result.target ?? '?')} <i>(${source})</i>`);
+    if (result.tweetId) lines.push(`Tweet: <code>${escHtml(result.tweetId)}</code>`);
+    if (result.evaluationScore) lines.push(`Eval: <b>${result.evaluationScore.toFixed(1)}</b>/5`);
+    if (result.newStockpileCount === 0 && !result.fromStockpile) {
+      lines.push('⚠️ Nothing passed evaluation — used best self-scored');
+    }
+    if (result.newStockpileCount) lines.push(`📦 Stockpiled: <b>${String(result.newStockpileCount)}</b> new`);
+    if (result.postedText) lines.push(`\n<code>${escHtml(result.postedText)}</code>`);
+  } else {
+    lines.push(`❌ <b>Failed</b> — ${escHtml(result.target ?? '?')} <i>(${source})</i>`);
+    if (result.error) lines.push(escHtml(result.error.slice(0, 300)));
+  }
+
+  const text = lines.join('\n');
+  for (const adminId of config.TELEGRAM_ADMIN_IDS) {
+    try {
+      await bot.api.sendMessage(adminId, text, { parse_mode: 'HTML' });
+
+      // Send stockpiled variants as separate message
+      if (result.stockpiledVariants && result.stockpiledVariants.length > 0) {
+        const variantLines = result.stockpiledVariants.map(
+          (v, i) => `${String(i + 1)}. [${v.score.toFixed(1)}] <i>${escHtml(v.angle)}</i>\n<code>${escHtml(v.text)}</code>`,
+        );
+        await bot.api.sendMessage(
+          adminId,
+          `📦 <b>Stockpiled variants for ${escHtml(result.target ?? '?')}:</b>\n\n${variantLines.join('\n\n')}`,
+          { parse_mode: 'HTML' },
+        );
+      }
+    } catch (err) {
+      logger.debug({ err, adminId }, 'Failed to send queue result notification');
+    }
+  }
+}
+
 // --- Scheduler ---
 const scheduler = new Scheduler(logger);
 
@@ -237,7 +291,8 @@ if (queueManager) {
     cronTime: '*/20 * * * *',
     jitterMs: 5 * 60 * 1000,
     handler: async () => {
-      await qm.processNext();
+      const result = await qm.processNext();
+      await notifyQueueResult(result, 'scheduler');
     },
   });
 }
@@ -280,7 +335,8 @@ if (mentionHandler) {
           logger.info({ queuedCount }, 'Triggering immediate queue processing for new mentions');
           void (async () => {
             for (let i = 0; i < queuedCount; i++) {
-              await qm.processNext();
+              const queueResult = await qm.processNext();
+              await notifyQueueResult(queueResult, 'mention');
             }
           })();
         }
