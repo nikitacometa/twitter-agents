@@ -773,6 +773,16 @@ export class QueueManager {
 
       const replyToId = roast.replyToId ?? undefined;
 
+      // Guard: mention/reply sources MUST have replyToId — posting standalone is always a bug
+      const replySources: RoastSource[] = ['mention', 'reply_guy', 'casual_reply'];
+      if (replySources.includes(roast.source as RoastSource) && !replyToId) {
+        this.logger.error(
+          { roastId, source: roast.source, target: roast.targetName },
+          'Cannot approve mention roast without reply_to_id — would post standalone (data corruption)',
+        );
+        return null;
+      }
+
       const postResult = replyToId
         ? await this.twitter.replyToTweet(roast.tweetText, replyToId)
         : await this.twitter.postTweet(roast.tweetText);

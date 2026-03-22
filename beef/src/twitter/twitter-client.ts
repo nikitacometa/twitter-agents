@@ -79,14 +79,19 @@ export class TwitterClient implements ITwitterClient, IProfileFetcher {
   }
 
   private handleRateLimitError(error: unknown): never {
-    if (error instanceof ApiResponseError && error.code === 429) {
-      const rl = error.rateLimit;
-      if (rl) {
-        const resetAt = new Date(rl.reset * 1000).toISOString();
-        this._usage.lastRateLimit = { remaining: rl.remaining, limit: rl.limit, resetAt };
-        this.logger.warn({ remaining: rl.remaining, limit: rl.limit, resetAt }, 'Twitter API rate limited (429)');
+    if (error instanceof ApiResponseError) {
+      if (error.code === 429) {
+        const rl = error.rateLimit;
+        if (rl) {
+          const resetAt = new Date(rl.reset * 1000).toISOString();
+          this._usage.lastRateLimit = { remaining: rl.remaining, limit: rl.limit, resetAt };
+          this.logger.warn({ remaining: rl.remaining, limit: rl.limit, resetAt }, 'Twitter API rate limited (429)');
+        }
+        throw new NonRetryableError('Twitter API rate limited (429)');
       }
-      throw new NonRetryableError('Twitter API rate limited (429)');
+      if (error.code === 403) {
+        throw new NonRetryableError(`Twitter API forbidden (403): ${error.data?.detail ?? error.message}`);
+      }
     }
     throw error;
   }
