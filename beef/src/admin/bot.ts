@@ -20,6 +20,8 @@ import type { JobInfo } from '@scheduler/scheduler.js';
 import {
   escapeHtml,
   formatStatsMessage,
+  formatStockpileRoast,
+  formatStockpileList,
 } from './formatters.js';
 
 interface ParsedFlags {
@@ -165,6 +167,13 @@ export function createBot(opts: {
         '<code>/stats</code> — feedback statistics',
         '<code>/diagnose</code> — provider health check',
         '<code>/reset</code> — force-reset provider to primary',
+        '',
+        '<b>📦 Stockpile</b>',
+        '<code>/stockpile &lt;target&gt;</code> — list roasts for a target',
+        '<code>/unrated</code> — roasts missing human score',
+        '<code>/srate &lt;id&gt; &lt;1-5&gt;</code> — set human score',
+        '<code>/sdel &lt;id&gt;</code> — delete from stockpile',
+        '<code>/sadd &lt;target&gt;</code> — add text (reply to msg or next line)',
         '',
         '<b>🏆 Curation</b>',
         '<code>/promote &lt;id&gt;</code> — stockpile → CreativeMemory',
@@ -879,6 +888,274 @@ export function createBot(opts: {
         `<code>${escapeHtml(roast.tweetText.slice(0, 200))}</code>`,
         '',
         '<i>Added to CreativeMemory as fire example. Will influence future generation.</i>',
+      ].join('\n'),
+      { parse_mode: 'HTML' },
+    );
+  });
+
+  // --- Stockpile management commands ---
+
+  bot.command('stockpile', async (ctx) => {
+    if (!stockpileRepo) {
+      await ctx.reply('⚠️ Stockpile not configured.');
+      return;
+    }
+
+    const target = ctx.match?.trim();
+    if (!target) {
+      // No target — show overview: top targets with counts
+      const topTargets = stockpileRepo.getTopTargets(15);
+      if (topTargets.length === 0) {
+        await ctx.reply('📦 Stockpile is empty.');
+        return;
+      }
+      const stats = stockpileRepo.getStats();
+      const available = stats.byStatus['available'] ?? 0;
+      const lines: string[] = [
+        '<b>📦 Stockpile Overview</b>',
+        `<i>${String(available)} available · ${String(stats.total)} total · avg AI ${stats.avgScore !== null ? stats.avgScore.toFixed(1) : '—'}</i>`,
+        '',
+      ];
+      for (const t of topTargets) {
+        lines.push(`  <b>${escapeHtml(t.name)}</b> — ${String(t.stockpileCount)} roasts (avg ${t.avgScore.toFixed(1)})`);
+      }
+      lines.push('');
+      lines.push('<i>Usage: /stockpile &lt;target&gt; to see roasts</i>');
+      await ctx.reply(lines.join('\n'), { parse_mode: 'HTML' });
+      return;
+    }
+
+    const roasts = stockpileRepo.getByTarget(target);
+    if (roasts.length === 0) {
+      await ctx.reply(`📦 No roasts for <b>${escapeHtml(target)}</b>.`, { parse_mode: 'HTML' });
+      return;
+    }
+
+    // Telegram message limit is ~4096 chars — split if needed
+    const title = `<b>📦 Stockpile: ${escapeHtml(target)}</b>`;
+    const fullMessage = formatStockpileList(roasts, title);
+
+    if (fullMessage.length <= 4000) {
+      await ctx.reply(fullMessage, { parse_mode: 'HTML' });
+    } else {
+      // Send roasts one by one with summary header
+      const available = roasts.filter((r) => r.status === 'available');
+      const header = `<b>📦 ${escapeHtml(target)}</b> — ${String(roasts.length)} roasts (${String(available.length)} available)`;
+      await ctx.reply(header, { parse_mode: 'HTML' });
+
+      for (let i = 0; i < roasts.length; i++) {
+        const msg = formatStockpileRoast(roasts[i]!, i);
+        await ctx.reply(msg, { parse_mode: 'HTML' });
+      }
+    }
+  });
+
+  bot.command('unrated', async (ctx) => {
+    if (!stockpileRepo) {
+      await ctx.reply('⚠️ Stockpile not configured.');
+      return;
+    }
+
+    const limitStr = ctx.match?.trim();
+    const limit = limitStr && /^\d+$/.test(limitStr) ? Math.min(parseInt(limitStr, 10), 50) : 20;
+
+    const roasts = stockpileRepo.getUnrated(limit);
+    if (roasts.length === 0) {
+      await ctx.reply('✅ All stockpile roasts have human scores.');
+      return;
+    }
+
+    const title = `<b>📋 Unrated Roasts</b> (${String(roasts.length)})`;
+    const fullMessage = formatStockpileList(roasts, title, false);
+
+    if (fullMessage.length <= 4000) {
+      await ctx.reply(fullMessage, { parse_mode: 'HTML' });
+    } else {
+      await ctx.reply(title, { parse_mode: 'HTML' });
+      for (let i = 0; i < roasts.length; i++) {
+        const msg = formatStockpileRoast(roasts[i]!, i);
+        await ctx.reply(msg, { parse_mode: 'HTML' });
+      }
+    }
+  });
+
+  bot.command('srate', async (ctx) => {
+    if (!stockpileRepo) {
+      await ctx.reply('⚠️ Stockpile not configured.');
+      return;
+    }
+
+    const args = ctx.match?.trim().split(/\s+/);
+    if (!args || args.length < 2) {
+      await ctx.reply('Usage: <code>/srate &lt;id&gt; &lt;1-5&gt;</code>', { parse_mode: 'HTML' });
+      return;
+    }
+
+    const id = parseInt(args[0]!, 10);
+    const score = parseFloat(args[1]!);
+
+    if (Number.isNaN(id) || id <= 0) {
+      await ctx.reply('⚠️ Invalid ID.');
+      return;
+    }
+    if (Number.isNaN(score) || score < 1 || score > 5) {
+      await ctx.reply('⚠️ Score must be between 1 and 5.');
+      return;
+    }
+
+    const roast = stockpileRepo.getById(id);
+    if (!roast) {
+      await ctx.reply(`⚠️ Stockpile #${String(id)} not found.`);
+      return;
+    }
+
+    stockpileRepo.setHumanScore(id, score);
+
+    const prevStr = roast.humanScore !== null ? roast.humanScore.toFixed(1) : '—';
+    await ctx.reply(
+      [
+        `✅ <b>#${String(id)}</b> scored`,
+        '',
+        `Target: ${escapeHtml(roast.targetName)}`,
+        `AI: ${roast.qualityScore.toFixed(1)} │ Human: ${prevStr} → <b>${score.toFixed(1)}</b>`,
+        `<code>${escapeHtml(roast.tweetText.slice(0, 150))}${roast.tweetText.length > 150 ? '...' : ''}</code>`,
+      ].join('\n'),
+      { parse_mode: 'HTML' },
+    );
+  });
+
+  bot.command('sdel', async (ctx) => {
+    if (!stockpileRepo) {
+      await ctx.reply('⚠️ Stockpile not configured.');
+      return;
+    }
+
+    const idStr = ctx.match?.trim();
+    if (!idStr || !/^\d+$/.test(idStr)) {
+      await ctx.reply('Usage: <code>/sdel &lt;id&gt;</code>', { parse_mode: 'HTML' });
+      return;
+    }
+
+    const id = parseInt(idStr, 10);
+    const roast = stockpileRepo.getById(id);
+    if (!roast) {
+      await ctx.reply(`⚠️ Stockpile #${String(id)} not found.`);
+      return;
+    }
+
+    stockpileRepo.deleteById(id);
+    await ctx.reply(
+      [
+        `🗑 <b>Deleted #${String(id)}</b>`,
+        '',
+        `Target: ${escapeHtml(roast.targetName)}`,
+        `Score: AI ${roast.qualityScore.toFixed(1)}${roast.humanScore !== null ? ` │ Human ${roast.humanScore.toFixed(1)}` : ''}`,
+        `<code>${escapeHtml(roast.tweetText.slice(0, 150))}${roast.tweetText.length > 150 ? '...' : ''}</code>`,
+      ].join('\n'),
+      { parse_mode: 'HTML' },
+    );
+  });
+
+  bot.command('sadd', async (ctx) => {
+    if (!stockpileRepo) {
+      await ctx.reply('⚠️ Stockpile not configured.');
+      return;
+    }
+
+    // Parse: /sadd <target>\n<tweet text>  OR  /sadd <target> (reply to a message with the text)
+    const raw = ctx.match?.trim() ?? '';
+    const replyText = ctx.message?.reply_to_message?.text;
+
+    let targetName: string;
+    let tweetText: string;
+
+    if (replyText) {
+      // Reply mode: /sadd <target> + reply to message containing the roast text
+      targetName = raw;
+      tweetText = replyText.trim();
+    } else if (raw.includes('\n')) {
+      // Inline mode: /sadd <target>\n<text>
+      const newlineIdx = raw.indexOf('\n');
+      targetName = raw.slice(0, newlineIdx).trim();
+      tweetText = raw.slice(newlineIdx + 1).trim();
+    } else {
+      await ctx.reply(
+        [
+          'Usage: <code>/sadd &lt;target&gt;</code>',
+          '<i>Reply to a message with the roast text</i>',
+          '',
+          'Or: <code>/sadd &lt;target&gt;\\n&lt;roast text&gt;</code>',
+        ].join('\n'),
+        { parse_mode: 'HTML' },
+      );
+      return;
+    }
+
+    if (!targetName) {
+      await ctx.reply('⚠️ Target name is required.');
+      return;
+    }
+
+    if (!tweetText || tweetText.length === 0) {
+      await ctx.reply('⚠️ Roast text is required.');
+      return;
+    }
+
+    if (tweetText.length > 280) {
+      await ctx.reply(`⚠️ Text is ${String(tweetText.length)} chars — must be ≤280.`);
+      return;
+    }
+
+    // Duplicate check
+    if (stockpileRepo.isDuplicate(tweetText, targetName)) {
+      await ctx.reply('⚠️ Near-duplicate detected in stockpile. Not added.');
+      return;
+    }
+
+    // Auto-evaluate if provider is available
+    let qualityScore = 3.0; // default if no evaluator
+    let evaluatorOutput: string | undefined;
+
+    if (provider) {
+      try {
+        await ctx.reply('🔍 Evaluating quality...');
+        const { RoastEvaluator } = await import('@evaluation/evaluator.js');
+        const evaluator = new RoastEvaluator({ provider, logger, mode: 'quick' });
+        const evalResult = await evaluator.evaluate({
+          id: 'sadd-manual',
+          targetName,
+          tweetText,
+          researchNotes: null,
+        });
+        qualityScore = evalResult.compositeScore;
+        evaluatorOutput = JSON.stringify({
+          verdict: evalResult.verdict,
+          vetoReasons: evalResult.vetoReasons,
+          variance: evalResult.judgeVariance,
+        });
+      } catch (err) {
+        logger.warn({ err, target: targetName }, 'Auto-eval failed for /sadd, using default score');
+      }
+    }
+
+    const id = stockpileRepo.insert({
+      targetName,
+      targetType: 'project',
+      tweetText,
+      qualityScore,
+      evaluatorOutput,
+      freshnessType: 'evergreen',
+    });
+
+    await ctx.reply(
+      [
+        `✅ <b>Added #${String(id)}</b> to stockpile`,
+        '',
+        `Target: <b>${escapeHtml(targetName)}</b>`,
+        `AI score: <b>${qualityScore.toFixed(1)}</b>/5`,
+        `<code>${escapeHtml(tweetText)}</code>`,
+        '',
+        `<i>Use /srate ${String(id)} &lt;1-5&gt; to add human score</i>`,
       ].join('\n'),
       { parse_mode: 'HTML' },
     );

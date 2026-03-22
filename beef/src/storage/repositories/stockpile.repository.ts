@@ -40,6 +40,10 @@ export class StockpileRepository {
   private readonly exportStmt: Database.Statement;
   private readonly topScoredStmt: Database.Statement;
   private readonly angleDistStmt: Database.Statement;
+  private readonly getByTargetStmt: Database.Statement;
+  private readonly getUnratedStmt: Database.Statement;
+  private readonly setHumanScoreStmt: Database.Statement;
+  private readonly deleteByIdStmt: Database.Statement;
 
   constructor(db: Database.Database) {
     this.insertStmt = db.prepare(`
@@ -137,6 +141,28 @@ export class StockpileRepository {
       WHERE angle IS NOT NULL AND status = 'available'
       GROUP BY angle
     `);
+
+    this.getByTargetStmt = db.prepare(`
+      SELECT * FROM roast_stockpile
+      WHERE target_name = ? COLLATE NOCASE
+      ORDER BY quality_score DESC
+    `);
+
+    this.getUnratedStmt = db.prepare(`
+      SELECT * FROM roast_stockpile
+      WHERE human_score IS NULL
+      AND status IN ('available', 'served_bot', 'served_landing')
+      ORDER BY created_at DESC
+      LIMIT ?
+    `);
+
+    this.setHumanScoreStmt = db.prepare(`
+      UPDATE roast_stockpile SET human_score = ? WHERE id = ?
+    `);
+
+    this.deleteByIdStmt = db.prepare(`
+      DELETE FROM roast_stockpile WHERE id = ?
+    `);
   }
 
   insert(roast: InsertStockpileRoast): number {
@@ -226,6 +252,22 @@ export class StockpileRepository {
       // FTS query can fail on certain inputs — treat as non-duplicate
       return false;
     }
+  }
+
+  getByTarget(targetName: string): StockpiledRoast[] {
+    return (this.getByTargetStmt.all(targetName) as StockpileRow[]).map(mapRow);
+  }
+
+  getUnrated(limit = 20): StockpiledRoast[] {
+    return (this.getUnratedStmt.all(limit) as StockpileRow[]).map(mapRow);
+  }
+
+  setHumanScore(id: number, score: number): boolean {
+    return this.setHumanScoreStmt.run(score, id).changes > 0;
+  }
+
+  deleteById(id: number): boolean {
+    return this.deleteByIdStmt.run(id).changes > 0;
   }
 
   getTopScored(minScore: number, limit: number): StockpiledRoast[] {
