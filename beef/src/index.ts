@@ -242,8 +242,14 @@ async function notifyQueueResult(
   result: QueueProcessResult,
   source: string,
 ): Promise<void> {
-  if (!bot || config.TELEGRAM_ADMIN_IDS.length === 0) return;
+  if (!bot) return;
   if (!result.dequeued) return;
+
+  // Status notifications → group chat (TELEGRAM_CHAT_ID), fallback → admin DMs
+  const targets: (number | string)[] = config.TELEGRAM_CHAT_ID
+    ? [config.TELEGRAM_CHAT_ID]
+    : [...config.TELEGRAM_ADMIN_IDS];
+  if (targets.length === 0) return;
 
   const lines: string[] = [];
 
@@ -262,18 +268,18 @@ async function notifyQueueResult(
       ]],
     };
 
-    for (const adminId of config.TELEGRAM_ADMIN_IDS) {
+    for (const target of targets) {
       try {
-        await bot.api.sendMessage(adminId, text, { parse_mode: 'HTML' });
+        await bot.api.sendMessage(target, text, { parse_mode: 'HTML' });
         if (result.postedText) {
           await bot.api.sendMessage(
-            adminId,
+            target,
             `<code>${escHtml(result.postedText)}</code>`,
             { parse_mode: 'HTML', reply_markup: keyboard },
           );
         }
       } catch (err) {
-        logger.debug({ err, adminId }, 'Failed to send approval notification');
+        logger.warn({ err, chatId: target }, 'Failed to send approval notification');
       }
     }
     return;
@@ -297,9 +303,9 @@ async function notifyQueueResult(
   }
 
   const text = lines.join('\n');
-  for (const adminId of config.TELEGRAM_ADMIN_IDS) {
+  for (const target of targets) {
     try {
-      await bot.api.sendMessage(adminId, text, { parse_mode: 'HTML' });
+      await bot.api.sendMessage(target, text, { parse_mode: 'HTML' });
 
       // Send stockpiled variants as separate message
       if (result.stockpiledVariants && result.stockpiledVariants.length > 0) {
@@ -307,13 +313,13 @@ async function notifyQueueResult(
           (v, i) => `${String(i + 1)}. [${v.score.toFixed(1)}] <i>${escHtml(v.angle)}</i>\n<code>${escHtml(v.text)}</code>`,
         );
         await bot.api.sendMessage(
-          adminId,
+          target,
           `📦 <b>Stockpiled variants for ${escHtml(result.target ?? '?')}:</b>\n\n${variantLines.join('\n\n')}`,
           { parse_mode: 'HTML' },
         );
       }
     } catch (err) {
-      logger.debug({ err, adminId }, 'Failed to send queue result notification');
+      logger.warn({ err, chatId: target }, 'Failed to send queue result notification');
     }
   }
 }
