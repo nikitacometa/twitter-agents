@@ -8,3 +8,11 @@ services:
     ports:
       - "3080:80"
     restart: unless-stopped
+    networks:
+      - default
+      - cometa
+
+networks:
+  cometa:
+    external: true
+    name: cometa_default
