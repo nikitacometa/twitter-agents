@@ -8,9 +8,10 @@ import styles from './Terminal.module.css'
 interface Props {
   events: ActivityEvent[]
   isLoading: boolean
+  error: Error | null
 }
 
-export function Terminal({ events, isLoading }: Props) {
+export function Terminal({ events, isLoading, error }: Props) {
   const { lines, isAnimating, skipAnimation } = useTypewriter(events)
   const outputRef = useRef<HTMLDivElement>(null)
 
@@ -34,14 +35,29 @@ export function Terminal({ events, isLoading }: Props) {
     )
   }
 
+  if (error && events.length === 0) {
+    return (
+      <div className={styles.terminal}>
+        <div className={styles.loading}>
+          <span className={styles.loadingLine}>
+            {'> connection failed. retrying...'}
+          </span>
+          <span className={styles.loadingLine}>
+            {'> the butcher is temporarily unreachable.'}
+          </span>
+        </div>
+      </div>
+    )
+  }
+
   if (events.length === 0) {
     return (
       <div className={styles.terminal}>
         <div className={styles.loading}>
-          <span className={styles.loadingLine} style={{ animationDelay: '0s' }}>
+          <span className={styles.loadingLine}>
             {'> no entries yet.'}
           </span>
-          <span className={styles.loadingLine} style={{ animationDelay: '0.4s' }}>
+          <span className={styles.loadingLine}>
             {'> the butcher is sharpening his knives.'}
           </span>
         </div>
@@ -98,6 +114,14 @@ export function Terminal({ events, isLoading }: Props) {
 
 // --- Sub-components ---
 
+const LABEL_CLASS_MAP: Record<string, string> = {
+  action: styles.labelAction ?? '',
+  thinking: styles.labelThinking ?? '',
+  result: styles.labelResult ?? '',
+  status: styles.labelStatus ?? '',
+  engagement: styles.labelEngagement ?? '',
+}
+
 function LineContent({ line }: { line: TypewriterLine }) {
   const { event, displayText, showCursor } = line
   const config = EVENT_CONFIG[event.type]
@@ -113,19 +137,11 @@ function LineContent({ line }: { line: TypewriterLine }) {
   const narrativeVisible =
     displayText.length > labelEnd ? displayText.slice(labelEnd) : ''
 
-  const labelClassMap: Record<string, string> = {
-    action: styles.labelAction ?? '',
-    thinking: styles.labelThinking ?? '',
-    result: styles.labelResult ?? '',
-    status: styles.labelStatus ?? '',
-    engagement: styles.labelEngagement ?? '',
-  }
-
   return (
     <>
       {timeVisible && <span className={styles.time}>{timeVisible}</span>}
       {labelVisible && (
-        <span className={labelClassMap[config.category] ?? ''}>{labelVisible}</span>
+        <span className={LABEL_CLASS_MAP[config.category] ?? ''}>{labelVisible}</span>
       )}
       {narrativeVisible && (
         <span className={styles.narrative}>{narrativeVisible}</span>

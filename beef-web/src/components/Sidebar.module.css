@@ -96,12 +96,22 @@
   padding: var(--space-xs) 0;
 }
 
+.statItem:last-child {
+  grid-column: 1 / -1;
+}
+
 .statNumber {
   font-size: 18px;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
   color: var(--text);
   line-height: 1.2;
+}
+
+.statItem:last-child .statNumber {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-dim);
 }
 
 .statLabel {

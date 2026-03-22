@@ -1,7 +1,7 @@
 import type { ActivityFeed } from '@/types/activity'
 import sampleFeed from '@/data/sample-feed.json'
 
-const FEED_URL = import.meta.env.VITE_FEED_URL as string | undefined
+const FEED_URL = import.meta.env.VITE_FEED_URL
 const POLL_INTERVAL = 5 * 60 * 1000 // 5 minutes
 
 export async function fetchFeed(): Promise<ActivityFeed> {

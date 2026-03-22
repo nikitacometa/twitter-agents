@@ -8,7 +8,7 @@ import styles from './App.module.css'
 const EMPTY_EVENTS: import('@/types/activity').ActivityEvent[] = []
 
 export function App() {
-  const { feed, isLoading } = useActivity()
+  const { feed, error, isLoading } = useActivity()
 
   return (
     <div className={styles.app}>
@@ -18,6 +18,7 @@ export function App() {
         <Terminal
           events={feed?.events ?? EMPTY_EVENTS}
           isLoading={isLoading}
+          error={error}
         />
       </div>
       <MobileTabBar />

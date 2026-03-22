@@ -11,10 +11,6 @@
   padding-bottom: calc(var(--space-sm) + env(safe-area-inset-bottom, 0px));
 }
 
-.tabBar {
-  display: none;
-}
-
 @media (max-width: 768px) {
   .tabBar {
     display: flex;
