@@ -27,7 +27,7 @@ export interface TaskPreset {
 // --- Tool sets ---
 
 const RESEARCH_TOOLS = [
-  'mcp__perplexity-ask__perplexity_ask',
+  'mcp__perplexity__perplexity_ask',
   'WebSearch',
   'WebFetch',
   'Bash(curl *)',
