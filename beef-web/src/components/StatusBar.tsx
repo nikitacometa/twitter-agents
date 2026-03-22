@@ -31,7 +31,7 @@ export function StatusBar({ feed, isLoading }: Props) {
             </span>
             <span className={styles.separator}>·</span>
             <span className={styles.stat}>
-              <span className={styles.statValue}>{feed.stats.stockpileSize}</span> stockpiled
+              <span className={styles.statValue}>{feed.stats.totalLikes.toLocaleString()}</span> likes
             </span>
             <span className={styles.separator}>·</span>
             <span className={styles.stat}>

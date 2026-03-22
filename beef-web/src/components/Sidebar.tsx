@@ -1,3 +1,4 @@
+import { useMemo } from 'react'
 import type { ActivityFeed } from '@/types/activity'
 import styles from './Sidebar.module.css'
 
@@ -6,6 +7,14 @@ interface Props {
 }
 
 export function Sidebar({ feed }: Props) {
+  const targetsCount = useMemo(() => {
+    if (!feed) return 0
+    const targets = feed.events
+      .map(e => e.data?.['target'] as string | undefined)
+      .filter((t): t is string => t != null)
+    return new Set(targets).size
+  }, [feed])
+
   return (
     <aside className={styles.sidebar}>
       <nav className={styles.nav}>
@@ -41,8 +50,8 @@ export function Sidebar({ feed }: Props) {
               <div className={styles.statLabel}>likes</div>
             </div>
             <div className={styles.statItem}>
-              <div className={styles.statNumber}>{feed.stats.stockpileSize}</div>
-              <div className={styles.statLabel}>stockpiled</div>
+              <div className={styles.statNumber}>{targetsCount}</div>
+              <div className={styles.statLabel}>targets</div>
             </div>
             <div className={styles.statItem}>
               <div className={styles.statNumber}>{feed.stats.uptime}</div>

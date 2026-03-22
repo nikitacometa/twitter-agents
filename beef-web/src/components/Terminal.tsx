@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import type { ActivityEvent } from '@/types/activity'
 import { EVENT_CONFIG } from '@/types/activity'
 import { useTypewriter, getLineParts } from '@/hooks/useTypewriter'
@@ -13,14 +13,26 @@ interface Props {
 
 export function Terminal({ events, isLoading, error }: Props) {
   const { lines, isAnimating, skipAnimation } = useTypewriter(events)
-  const outputRef = useRef<HTMLDivElement>(null)
+  const outputRef = useRef<HTMLDivElement | null>(null)
+  const userScrolledRef = useRef(false)
 
-  // Auto-scroll when new lines appear during animation
+  // Callback ref: attach scroll listener when .output div mounts
+  const setOutputRef = useCallback((el: HTMLDivElement | null) => {
+    outputRef.current = el
+    if (!el) return
+    el.addEventListener('scroll', () => {
+      const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 80
+      userScrolledRef.current = !atBottom
+    }, { passive: true })
+    el.scrollTop = el.scrollHeight
+  }, [])
+
+  // Auto-scroll to bottom when new lines appear (unless user scrolled away)
   useEffect(() => {
-    if (isAnimating && outputRef.current) {
+    if (outputRef.current && !userScrolledRef.current) {
       outputRef.current.scrollTop = outputRef.current.scrollHeight
     }
-  }, [lines.length, isAnimating])
+  }, [lines.length])
 
   if (isLoading) {
     return (
@@ -71,7 +83,7 @@ export function Terminal({ events, isLoading, error }: Props) {
       onClick={isAnimating ? skipAnimation : undefined}
       style={isAnimating ? { cursor: 'pointer' } : undefined}
     >
-      <div className={styles.output} ref={outputRef}>
+      <div className={styles.output} ref={setOutputRef}>
         {lines.map((line) => (
           <div key={line.event.id}>
             <div

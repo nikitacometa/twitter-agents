@@ -32,7 +32,27 @@
 
 ---
 
-## Backlog
+## Backlog: Web Strategy (research-backed, 2026-03-23)
+
+### Tier 1 — Pre-token (do now)
+- [ ] BW-030: Shareable Roast Card — visual card from "Submit to Audit" with Share on X (3-4d)
+- [ ] BW-031: Roast Archive / Hall of Fame page — grid of best roasts by engagement (2-3d)
+- [ ] BW-032: Live Stats Strip in app header — daily roasts, impressions, queue count (0.5d)
+- [ ] BW-033: Pipeline Visualizer — horizontal phase bar SCAN→RESEARCH→COOK→JUDGE→POST (1-2d)
+
+### Tier 2 — Next sprint
+- [ ] BW-034: Guilty/Not Guilty voting on roasts (3-4d)
+- [ ] BW-035: Public Audit Queue / next targets page (3-4d)
+- [ ] BW-036: WebSocket/SSE for diary feed — replace 5min polling (2-3d)
+- [ ] BW-037: BEEF voice for all UI messages (1d)
+
+### Tier 3 — Token launch
+- [ ] BW-038: Wallet Connect + Burn-to-request UI (5-7d)
+- [ ] BW-039: Token-gated "Inner Monologue" mode (3-4d)
+- [ ] BW-040: "Beef Wrapped" — portfolio roast card (8-12d)
+- [ ] BW-041: Targets Leaderboard — burn rankings (3-4d)
+
+## Backlog: Infrastructure
 - [ ] BW-020: Landing page CTA "peek into my brain" linking to app
 - [ ] BW-021: DNS + SSL setup for app.0xbeef.wtf subdomain
 - [ ] BW-022: Add error state UI when feed fetch fails

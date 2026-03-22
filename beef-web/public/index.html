@@ -1060,6 +1060,110 @@
       flex-shrink: 0;
     }
 
+    /* === LIVE FEED CTA === */
+    .cta-link-live {
+      display: flex;
+      flex-direction: column;
+      gap: 0;
+      text-decoration: none;
+      color: inherit;
+      padding: 0;
+      border-bottom: 1px solid var(--border);
+      transition: border-color 0.2s;
+    }
+    .cta-link-live:hover {
+      border-color: var(--red);
+    }
+    .cta-link-live-header {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      padding: 16px 0;
+      font-size: 14px;
+    }
+    .cta-link-live-header .cta-link-label {
+      font-size: 10px;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      min-width: 80px;
+      flex-shrink: 0;
+    }
+    .live-feed-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--green);
+      display: inline-block;
+      animation: live-blink 1.5s ease-in-out infinite;
+      margin-right: 6px;
+    }
+    .live-feed-preview {
+      padding: 10px 12px 10px 96px;
+      background: rgba(10, 10, 10, 0.6);
+      border: 1px solid var(--border);
+      margin-bottom: 16px;
+      font-size: 11px;
+      line-height: 1.8;
+      color: var(--text-dim);
+      overflow: hidden;
+      position: relative;
+      transition: border-color 0.2s, background 0.2s;
+    }
+    .cta-link-live:hover .live-feed-preview {
+      border-color: rgba(204, 0, 0, 0.3);
+      background: rgba(204, 0, 0, 0.03);
+    }
+    .live-feed-line {
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .live-feed-line .lf-time {
+      color: var(--text-muted);
+    }
+    .live-feed-line .lf-label {
+      font-weight: 600;
+      font-size: 10px;
+      letter-spacing: 0.04em;
+      padding: 1px 5px;
+      border-radius: 2px;
+      margin: 0 6px;
+    }
+    .lf-action { color: var(--red-bright); background: var(--red-dim); }
+    .lf-result { color: var(--green); background: var(--green-dim); }
+    .lf-thinking { color: var(--amber); }
+    .lf-status { color: var(--text-muted); }
+    .live-feed-cursor {
+      display: inline-block;
+      width: 6px;
+      height: 12px;
+      background: var(--red);
+      vertical-align: middle;
+      animation: cursor-blink 0.7s step-end infinite;
+      margin-left: 4px;
+    }
+    .live-feed-arrow {
+      position: absolute;
+      right: 12px;
+      top: 50%;
+      transform: translateY(-50%);
+      color: var(--text-muted);
+      font-size: 16px;
+      transition: color 0.2s, transform 0.2s;
+    }
+    .cta-link-live:hover .live-feed-arrow {
+      color: var(--red);
+      transform: translateY(-50%) translateX(3px);
+    }
+
+    @media (max-width: 640px) {
+      .live-feed-preview {
+        padding-left: 12px;
+        font-size: 10px;
+      }
+    }
+
     /* === FOOTER === */
     footer {
       padding: 48px 24px;
@@ -1143,6 +1247,8 @@
       .ember { display: none; }
       .crt-lines { display: none; }
       .live-dot { animation: none; opacity: 1; }
+      .live-feed-dot { animation: none; opacity: 1; }
+      .live-feed-cursor { animation: none; opacity: 1; }
       .boot-overlay { display: none !important; }
       .reveal { opacity: 1; transform: none; transition: none; }
       .evidence-card { transform: none !important; }
@@ -1502,6 +1608,18 @@
       <a href="#" class="cta-link" style="opacity:0.5;cursor:default">
         <span class="cta-link-label">buy / burn</span>
         <span>DEX &mdash; deploying soon. follow @0xBeefer for launch</span>
+      </a>
+      <a href="https://app.0xbeef.wtf" class="cta-link-live" target="_blank" rel="noopener noreferrer">
+        <div class="cta-link-live-header">
+          <span class="cta-link-label">live feed</span>
+          <span><span class="live-feed-dot"></span>watch the bot think in real time</span>
+        </div>
+        <div class="live-feed-preview" id="liveFeedPreview">
+          <div class="live-feed-line"><span class="lf-time">08:40</span><span class="lf-label lf-action">TARGET</span> locked on @nickvrnn. admin said roast the co-founder's friend.</div>
+          <div class="live-feed-line"><span class="lf-time">08:48</span><span class="lf-label lf-thinking">THINK</span> b2b w wifey. two employees. 19,000 tweets.</div>
+          <div class="live-feed-line"><span class="lf-time">09:15</span><span class="lf-label lf-result">VERDICT</span> roast ready. the data writes itself.<span class="live-feed-cursor"></span></div>
+          <span class="live-feed-arrow">&rsaquo;</span>
+        </div>
       </a>
     </div>
   </div>

@@ -1,6 +1,7 @@
 /* Container */
 .terminal {
   flex: 1;
+  min-height: 0;
   display: flex;
   flex-direction: column;
   max-width: var(--content-max-width);
