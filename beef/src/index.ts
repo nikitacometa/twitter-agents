@@ -77,6 +77,10 @@ const resetCount = queueRepo.resetProcessing();
 if (resetCount > 0) {
   logger.warn({ resetCount }, 'Reset stuck processing queue items back to pending');
 }
+const rescuedCount = queueRepo.rescueFailedMentions();
+if (rescuedCount > 0) {
+  logger.info({ rescuedCount }, 'Rescued failed mention queue items back to pending');
+}
 
 // --- LLM Providers (optional — bot works without them for manual eval) ---
 let provider: ProviderManager | null = null;
@@ -389,6 +393,19 @@ if (engagementTracker) {
     },
   });
 }
+
+// Rescue failed mentions back to pending (every hour)
+scheduler.register({
+  name: 'mention-rescue',
+  cronTime: '30 * * * *',
+  jitterMs: 0,
+  handler: async () => {
+    const rescued = queueRepo.rescueFailedMentions();
+    if (rescued > 0) {
+      logger.info({ rescued }, 'Rescued failed mention queue items');
+    }
+  },
+});
 
 // --- Telegram Bot ---
 let bot: ReturnType<typeof createBot> | null = null;

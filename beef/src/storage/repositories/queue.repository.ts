@@ -31,6 +31,7 @@ export class QueueRepository {
   private readonly pendingCountStmt: Database.Statement;
   private readonly topStmt: Database.Statement;
   private readonly resetProcessingStmt: Database.Statement;
+  private readonly rescueMentionsStmt: Database.Statement;
 
   constructor(db: Database.Database) {
     this.insertStmt = db.prepare(`
@@ -77,6 +78,12 @@ export class QueueRepository {
       UPDATE queue SET status = 'pending', updated_at = datetime('now')
       WHERE status = 'processing'
     `);
+
+    this.rescueMentionsStmt = db.prepare(`
+      UPDATE queue
+      SET status = 'pending', attempts = 0, error_message = NULL, updated_at = datetime('now')
+      WHERE status = 'failed' AND source = 'mention'
+    `);
   }
 
   enqueue(item: NewQueueItem): number {
@@ -122,6 +129,15 @@ export class QueueRepository {
    */
   resetProcessing(): number {
     const result = this.resetProcessingStmt.run();
+    return result.changes;
+  }
+
+  /**
+   * Rescue permanently failed mention items back to pending.
+   * Mentions must always be answered — transient failures shouldn't kill them.
+   */
+  rescueFailedMentions(): number {
+    const result = this.rescueMentionsStmt.run();
     return result.changes;
   }
 }
