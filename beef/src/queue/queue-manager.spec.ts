@@ -7,6 +7,7 @@ import {
   extractTriggerText,
   extractHandleFromTarget,
   extractMentionTweetId,
+  extractParentTweetId,
   parseTweetUrl,
   isTweetUrl,
 } from './queue-manager.js';
@@ -190,6 +191,26 @@ describe('isTweetUrl', () => {
     'x.com/user/likes',
   ])('returns false for "%s"', (input) => {
     expect(isTweetUrl(input)).toBe(false);
+  });
+});
+
+describe('extractParentTweetId', () => {
+  it.each([
+    ['reply_to:1|by:@user|parent:555666777', '555666777'],
+    ['reply_to:1|by:@a|mention:1|parent:999|media:https://a.com', '999'],
+    ['reply_to:1|by:@a|parent:42|handle:@x', '42'],
+  ])('extracts parent tweet id from "%s" → "%s"', (ctx, expected) => {
+    expect(extractParentTweetId(ctx)).toBe(expected);
+  });
+
+  it.each([
+    [null],
+    [''],
+    ['reply_to:1|by:@user'],
+    ['reply_to:1|by:@user|mention:123'],
+    ['parent:123'],
+  ])('returns undefined for %s', (ctx) => {
+    expect(extractParentTweetId(ctx)).toBeUndefined();
   });
 });
 

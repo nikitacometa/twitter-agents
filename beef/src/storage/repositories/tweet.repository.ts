@@ -18,6 +18,7 @@ export class TweetRepository {
   private readonly existsStmt: Database.Statement;
   private readonly getByTweetIdStmt: Database.Statement;
   private readonly byAuthorStmt: Database.Statement;
+  private readonly byAuthorNameStmt: Database.Statement;
   private readonly searchStmt: Database.Statement;
   private readonly recentStmt: Database.Statement;
 
@@ -32,6 +33,10 @@ export class TweetRepository {
 
     this.byAuthorStmt = db.prepare(`
       SELECT * FROM tweets_observed WHERE author_id = ? ORDER BY created_at DESC LIMIT ?
+    `);
+
+    this.byAuthorNameStmt = db.prepare(`
+      SELECT * FROM tweets_observed WHERE author_name = ? COLLATE NOCASE ORDER BY created_at DESC LIMIT ?
     `);
 
     this.searchStmt = db.prepare(`
@@ -78,6 +83,10 @@ export class TweetRepository {
 
   getByAuthor(authorId: string, limit: number): ObservedTweet[] {
     return (this.byAuthorStmt.all(authorId, limit) as TweetRow[]).map(mapRow);
+  }
+
+  getByAuthorName(authorName: string, limit: number): ObservedTweet[] {
+    return (this.byAuthorNameStmt.all(authorName, limit) as TweetRow[]).map(mapRow);
   }
 
   searchByText(query: string, limit = 10): ObservedTweet[] {

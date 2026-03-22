@@ -1388,7 +1388,46 @@ export function createBot(opts: {
           await ctx.answerCallbackQuery({ text: 'Failed — already handled or no Twitter', show_alert: true });
         }
       } catch (error) {
+        const errMsg = getErrorMessage(error);
         logger.error({ err: error, roastId }, 'Approve callback failed');
+        if (errMsg.includes('403')) {
+          // Reply forbidden — offer standalone posting
+          await ctx.editMessageReplyMarkup({
+            reply_markup: new InlineKeyboard()
+              .text('Post standalone', `standalone:${String(roastId)}`)
+              .text('Skip', `reject:${String(roastId)}`)
+              .text('🔄 Regen', `regenerate:${String(roastId)}`),
+          });
+          await ctx.answerCallbackQuery({
+            text: 'Reply blocked (403) — use "Post standalone" to post without reply',
+            show_alert: true,
+          });
+        } else {
+          await ctx.answerCallbackQuery({
+            text: `Error: ${errMsg.slice(0, 100)}`,
+            show_alert: true,
+          });
+        }
+      }
+    } else if (data.startsWith('standalone:') && queueManager) {
+      const roastId = parseInt(data.slice(11), 10);
+      if (Number.isNaN(roastId)) {
+        await ctx.answerCallbackQuery({ text: 'Invalid roast ID', show_alert: true });
+        return;
+      }
+      try {
+        const result = await queueManager.approveRoastStandalone(roastId);
+        if (result) {
+          await ctx.editMessageText(
+            `<b>Posted standalone!</b>\nTweet: <code>${escapeHtml(result.tweetId)}</code>\n\n<code>${escapeHtml(result.text)}</code>`,
+            { parse_mode: 'HTML' },
+          );
+          await ctx.answerCallbackQuery({ text: 'Posted standalone!' });
+        } else {
+          await ctx.answerCallbackQuery({ text: 'Failed — already handled or no Twitter', show_alert: true });
+        }
+      } catch (error) {
+        logger.error({ err: error, roastId }, 'Standalone approve failed');
         await ctx.answerCallbackQuery({
           text: `Error: ${getErrorMessage(error).slice(0, 100)}`,
           show_alert: true,

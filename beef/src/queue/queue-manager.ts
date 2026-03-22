@@ -870,6 +870,43 @@ export class QueueManager {
   }
 
   /**
+   * Approve a pending roast — post as standalone tweet (no reply), ignoring replyToId.
+   * Used as fallback when reply is blocked (403).
+   */
+  async approveRoastStandalone(roastId: number): Promise<{ tweetId: string; text: string } | null> {
+    if (this.approvingIds.has(roastId)) return null;
+    this.approvingIds.add(roastId);
+    try {
+      const roast = this.roastRepo.getById(roastId);
+      if (!roast || roast.status !== 'pending_approval') return null;
+      if (!this.twitter) return null;
+
+      const postResult = await this.twitter.postTweet(roast.tweetText);
+      if (!postResult) return null;
+
+      this.roastRepo.updateStatus(roastId, 'posted', postResult.tweetId);
+
+      const pending = this.pendingApprovals.get(roastId);
+      if (this.stockpile) {
+        if (pending?.stockpileId) {
+          this.stockpile.markServed(pending.stockpileId, 'bot');
+        } else {
+          const available = this.stockpile.getAvailable(roast.targetName, 20);
+          const match = available.find((s) => s.tweetText === roast.tweetText);
+          if (match) this.stockpile.markServed(match.id, 'bot');
+        }
+      }
+
+      this.activityLogger?.emit({ type: 'posted', data: { target: roast.targetName, tweetId: postResult.tweetId } });
+      this.pendingApprovals.delete(roastId);
+      this.logger.info({ roastId, tweetId: postResult.tweetId }, 'Roast posted standalone (403 fallback)');
+      return { tweetId: postResult.tweetId, text: roast.tweetText };
+    } finally {
+      this.approvingIds.delete(roastId);
+    }
+  }
+
+  /**
    * Reject a pending roast. Stockpile entry stays available for future use.
    */
   rejectRoast(roastId: number): boolean {
@@ -926,11 +963,18 @@ export class QueueManager {
         }
 
         // Look up the parent tweet text (independent of mention lookup)
+        // replyToId now points to the mention tweet, so look for the roast target's tweet instead
         if (this.tweetRepo) {
-          const parentTweet = this.tweetRepo.getByTweetId(oldRoast.replyToId);
-          if (parentTweet) {
-            contextLines.push(`\nParent tweet by @${parentTweet.authorName}:`);
-            contextLines.push(`"${parentTweet.text}"`);
+          const parentAuthor = extractParentAuthorFromTarget(oldRoast.targetName);
+          const targetHandle = extractHandleFromTarget(oldRoast.targetName);
+          const targetUsername = parentAuthor ?? targetHandle;
+          if (targetUsername) {
+            const targetTweets = this.tweetRepo.getByAuthorName(targetUsername, 1);
+            const parentTweet = targetTweets[0];
+            if (parentTweet) {
+              contextLines.push(`\nParent tweet by @${parentTweet.authorName}:`);
+              contextLines.push(`"${parentTweet.text}"`);
+            }
           }
         }
 
@@ -1016,8 +1060,10 @@ export class QueueManager {
     }
 
     // Look up the full parent tweet text (may be longer than the 120-char snippet in targetName)
-    if (replyToId && this.tweetRepo) {
-      const parentTweet = this.tweetRepo.getByTweetId(replyToId);
+    // Prefer explicit parent: field (new format), fall back to replyToId (legacy)
+    const parentId = extractParentTweetId(context) ?? replyToId;
+    if (parentId && this.tweetRepo) {
+      const parentTweet = this.tweetRepo.getByTweetId(parentId);
       if (parentTweet) {
         lines.push(`\nParent tweet by @${parentTweet.authorName}:`);
         lines.push(`"${parentTweet.text}"`);
@@ -1088,6 +1134,12 @@ export function extractHandleFromTarget(targetName: string): string | undefined 
 export function extractMentionTweetId(context: string | null): string | undefined {
   if (!context) return undefined;
   const match = context.match(/\|mention:(\d+)/);
+  return match?.[1];
+}
+
+export function extractParentTweetId(context: string | null): string | undefined {
+  if (!context) return undefined;
+  const match = context.match(/\|parent:(\d+)/);
   return match?.[1];
 }
 
