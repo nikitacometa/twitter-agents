@@ -251,6 +251,11 @@ if (provider) {
     twitter,
     profileFetcher,
     stockpile: stockpileRepo,
+    exampleRepo,
+    patternRepo,
+    farmAttemptRepo,
+    mentionRepo,
+    tweetRepo,
     logger,
     dailyLimit: config.ROASTS_PER_DAY,
     mentionReplyLimit: config.MENTION_REPLIES_PER_DAY,
@@ -298,7 +303,11 @@ async function notifyQueueResult(
   // Pending approval — send with inline buttons
   if (result.pendingApproval && result.roastId) {
     const stockpileTag = result.fromStockpile ? ' [stockpile]' : '';
-    lines.push(`🔍 <b>Review${stockpileTag}</b> — ${escHtml(result.target ?? '?')} <i>(${source})</i>`);
+    const isReply = result.roastSource && ['mention', 'reply_guy', 'casual_reply'].includes(result.roastSource);
+    const typeEmoji = isReply ? '💬' : '📢';
+    const sourceLabel = result.roastSource ?? source;
+    lines.push(`${typeEmoji} <b>Review${stockpileTag}</b> — ${escHtml(result.target ?? '?')} <i>(${sourceLabel})</i>`);
+    if (result.replyToId) lines.push(`Reply to: <code>${escHtml(result.replyToId)}</code>`);
     if (result.evaluationScore) lines.push(`Eval: <b>${result.evaluationScore.toFixed(1)}</b>/5`);
     if (result.newStockpileCount) lines.push(`Stockpiled: <b>${String(result.newStockpileCount)}</b> new`);
 
@@ -331,7 +340,8 @@ async function notifyQueueResult(
     const emoji = result.posted ? '✅' : '📝';
     const label = result.posted ? 'Posted' : 'Saved (no Twitter)';
     const stockpileTag = result.fromStockpile ? ' [stockpile]' : '';
-    lines.push(`${emoji} <b>${label}${stockpileTag}</b> — ${escHtml(result.target ?? '?')} <i>(${source})</i>`);
+    const sourceLabel = result.roastSource ?? source;
+    lines.push(`${emoji} <b>${label}${stockpileTag}</b> — ${escHtml(result.target ?? '?')} <i>(${sourceLabel})</i>`);
     if (result.tweetId) lines.push(`Tweet: <code>${escHtml(result.tweetId)}</code>`);
     if (result.evaluationScore) lines.push(`Eval: <b>${result.evaluationScore.toFixed(1)}</b>/5`);
     if (result.newStockpileCount === 0 && !result.fromStockpile) {

@@ -16,6 +16,7 @@ interface TweetRow {
 export class TweetRepository {
   private readonly insertStmt: Database.Statement;
   private readonly existsStmt: Database.Statement;
+  private readonly getByTweetIdStmt: Database.Statement;
   private readonly byAuthorStmt: Database.Statement;
   private readonly searchStmt: Database.Statement;
   private readonly recentStmt: Database.Statement;
@@ -27,6 +28,7 @@ export class TweetRepository {
     `);
 
     this.existsStmt = db.prepare('SELECT 1 FROM tweets_observed WHERE tweet_id = ?');
+    this.getByTweetIdStmt = db.prepare('SELECT * FROM tweets_observed WHERE tweet_id = ?');
 
     this.byAuthorStmt = db.prepare(`
       SELECT * FROM tweets_observed WHERE author_id = ? ORDER BY created_at DESC LIMIT ?
@@ -67,6 +69,11 @@ export class TweetRepository {
 
   exists(tweetId: string): boolean {
     return this.existsStmt.get(tweetId) !== undefined;
+  }
+
+  getByTweetId(tweetId: string): ObservedTweet | undefined {
+    const row = this.getByTweetIdStmt.get(tweetId) as TweetRow | undefined;
+    return row ? mapRow(row) : undefined;
   }
 
   getByAuthor(authorId: string, limit: number): ObservedTweet[] {

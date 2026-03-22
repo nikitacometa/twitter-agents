@@ -18,6 +18,7 @@ export class MentionRepository {
   private readonly markProcessedStmt: Database.Statement;
   private readonly unprocessedStmt: Database.Statement;
   private readonly existsStmt: Database.Statement;
+  private readonly getByTweetIdStmt: Database.Statement;
 
   constructor(db: Database.Database) {
     this.insertStmt = db.prepare(`
@@ -34,6 +35,7 @@ export class MentionRepository {
     `);
 
     this.existsStmt = db.prepare('SELECT 1 FROM mentions WHERE tweet_id = ?');
+    this.getByTweetIdStmt = db.prepare('SELECT * FROM mentions WHERE tweet_id = ?');
   }
 
   insert(mention: {
@@ -62,6 +64,11 @@ export class MentionRepository {
 
   exists(tweetId: string): boolean {
     return this.existsStmt.get(tweetId) !== undefined;
+  }
+
+  getByTweetId(tweetId: string): Mention | undefined {
+    const row = this.getByTweetIdStmt.get(tweetId) as MentionRow | undefined;
+    return row ? mapRow(row) : undefined;
   }
 }
 

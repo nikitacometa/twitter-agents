@@ -4,7 +4,12 @@ import type { QueueRepository } from '@storage/repositories/queue.repository.js'
 import type { RoastRepository } from '@storage/repositories/roast.repository.js';
 import type { ConfigRepository } from '@storage/repositories/config.repository.js';
 import type { FeedbackRepository } from '@storage/repositories/feedback.repository.js';
+import type { ExternalExampleRepository } from '@storage/repositories/external-example.repository.js';
+import type { RoastPatternRepository } from '@storage/repositories/roast-pattern.repository.js';
+import type { FarmAttemptRepository } from '@storage/repositories/farm-attempt.repository.js';
 import type { StockpileRepository } from '@storage/repositories/stockpile.repository.js';
+import type { MentionRepository } from '@storage/repositories/mention.repository.js';
+import type { TweetRepository } from '@storage/repositories/tweet.repository.js';
 import type { ProviderManager } from '@agent/provider-manager.js';
 import type { ITwitterClient } from '@twitter/twitter-client.interface.js';
 import type { IProfileFetcher } from '@twitter/twitter-client.interface.js';
@@ -33,6 +38,8 @@ export interface QueueProcessResult {
   newStockpileCount?: number;
   postedText?: string;
   stockpiledVariants?: Array<{ text: string; score: number; angle: string }>;
+  roastSource?: RoastSource;
+  replyToId?: string;
 }
 
 export class QueueManager {
@@ -44,6 +51,11 @@ export class QueueManager {
   private readonly twitter?: ITwitterClient;
   private readonly profileFetcher?: IProfileFetcher;
   private readonly stockpile?: StockpileRepository;
+  private readonly exampleRepo?: ExternalExampleRepository;
+  private readonly patternRepo?: RoastPatternRepository;
+  private readonly farmAttemptRepo?: FarmAttemptRepository;
+  private readonly mentionRepo?: MentionRepository;
+  private readonly tweetRepo?: TweetRepository;
   private readonly logger: Logger;
   private readonly dailyLimit: number;
   private readonly mentionReplyLimit: number;
@@ -65,6 +77,11 @@ export class QueueManager {
     twitter?: ITwitterClient;
     profileFetcher?: IProfileFetcher;
     stockpile?: StockpileRepository;
+    exampleRepo?: ExternalExampleRepository;
+    patternRepo?: RoastPatternRepository;
+    farmAttemptRepo?: FarmAttemptRepository;
+    mentionRepo?: MentionRepository;
+    tweetRepo?: TweetRepository;
     logger: Logger;
     dailyLimit: number;
     mentionReplyLimit?: number;
@@ -81,6 +98,11 @@ export class QueueManager {
     this.twitter = opts.twitter;
     this.profileFetcher = opts.profileFetcher;
     this.stockpile = opts.stockpile;
+    this.exampleRepo = opts.exampleRepo;
+    this.patternRepo = opts.patternRepo;
+    this.farmAttemptRepo = opts.farmAttemptRepo;
+    this.mentionRepo = opts.mentionRepo;
+    this.tweetRepo = opts.tweetRepo;
     this.logger = opts.logger;
     this.dailyLimit = opts.dailyLimit;
     this.mentionReplyLimit = opts.mentionReplyLimit ?? 20;
@@ -218,7 +240,7 @@ export class QueueManager {
             contextData: stockpiled.researchNotes ?? undefined,
           });
 
-          const postResult = await this.postOrSkip(stockpiled.tweetText, replyToId);
+          const postResult = await this.postOrSkip(stockpiled.tweetText, replyToId, item.source);
 
           if (postResult === 'pending_approval') {
             this.pendingApprovals.set(roastId, { stockpileId: stockpiled.id });
@@ -230,6 +252,7 @@ export class QueueManager {
             return {
               dequeued: true, pendingApproval: true, roastId, target: item.targetName,
               fromStockpile: true, postedText: stockpiled.tweetText,
+              roastSource: item.source, replyToId,
             };
           }
 
@@ -281,15 +304,24 @@ export class QueueManager {
 
       const imagePaths = downloaded?.paths.length ? downloaded.paths : undefined;
 
-      // Profile enrichment for Scenario 2 (parent tweet) and Scenario 3 (tagged handle)
+      // Profile enrichment for all scenarios
       let profileContext: string | undefined;
       if (this.profileFetcher) {
         const handle = extractHandleFromContext(item.context);
         const parentAuthor = extractParentAuthorFromTarget(item.targetName);
-        const username = handle ?? parentAuthor;
+        const targetHandle = extractHandleFromTarget(item.targetName);
+        const username = handle ?? parentAuthor ?? targetHandle;
         if (username && username !== 'anon') {
           profileContext = await this.buildProfileContext(username);
         }
+      }
+
+      // Mention context enrichment — look up original mention and parent tweet from DB
+      const mentionContext = this.buildMentionContext(item.context);
+      if (mentionContext) {
+        profileContext = profileContext
+          ? `${profileContext}\n\n--- Mention context ---\n${mentionContext}`
+          : mentionContext;
       }
 
       this.activityLogger?.emit({ type: 'target_locked', data: { target: item.targetName } });
@@ -298,8 +330,8 @@ export class QueueManager {
       // Full farm flow: generate (3 strategies × 2 variants + mutations) → evaluate → stockpile → post best
       const output = await generateRoasts(
         item.targetName, this.provider, this.logger, this.feedbackRepo,
-        'farm-generate', 2, undefined, undefined, undefined, imagePaths, profileContext,
-        undefined, this.stockpile, 2,
+        'farm-generate', 2, this.configRepo, this.exampleRepo, this.patternRepo,
+        imagePaths, profileContext, undefined, this.stockpile, 2, this.farmAttemptRepo,
       );
 
       if (output.variants.length === 0) {
@@ -530,7 +562,7 @@ export class QueueManager {
       agentOutput: JSON.stringify(output),
     });
 
-    const postResult = await this.postOrSkip(tweetText, replyToId);
+    const postResult = await this.postOrSkip(tweetText, replyToId, item.source);
 
     if (postResult === 'pending_approval') {
       this.pendingApprovals.set(roastId, {});
@@ -542,6 +574,7 @@ export class QueueManager {
       return {
         dequeued: true, pendingApproval: true, roastId, target: item.targetName,
         evaluationScore, newStockpileCount, postedText: tweetText, stockpiledVariants,
+        roastSource: item.source, replyToId,
       };
     }
 
@@ -583,6 +616,7 @@ export class QueueManager {
       return {
         dequeued: true, posted: true, tweetId: postResult.tweetId, target: item.targetName,
         evaluationScore, newStockpileCount, postedText: tweetText, stockpiledVariants,
+        roastSource: item.source, replyToId,
       };
     }
 
@@ -627,6 +661,14 @@ export class QueueManager {
       profileContext = await this.buildProfileContext(authorUsername);
     }
 
+    // Mention context enrichment — get full mention text from DB
+    const mentionContext = this.buildMentionContext(item.context);
+    if (mentionContext) {
+      profileContext = profileContext
+        ? `${profileContext}\n\n--- Mention context ---\n${mentionContext}`
+        : mentionContext;
+    }
+
     const engine = this.getRoastEngine();
     const result = await engine.generateCasualReply(
       triggerText ?? item.targetName,
@@ -646,7 +688,7 @@ export class QueueManager {
       agentOutput: JSON.stringify(result),
     });
 
-    const postResult = await this.postOrSkip(result.text, replyToId);
+    const postResult = await this.postOrSkip(result.text, replyToId, 'casual_reply');
 
     if (postResult === 'pending_approval') {
       this.pendingApprovals.set(roastId, {});
@@ -655,7 +697,7 @@ export class QueueManager {
         { queueId: item.id, roastId, target: item.targetName, tone: result.tone },
         'Casual reply pending approval',
       );
-      return { dequeued: true, pendingApproval: true, roastId, target: item.targetName, postedText: result.text };
+      return { dequeued: true, pendingApproval: true, roastId, target: item.targetName, postedText: result.text, roastSource: 'casual_reply', replyToId };
     }
 
     if (postResult === 'no_twitter') {
@@ -683,15 +725,19 @@ export class QueueManager {
     return { dequeued: true, posted: false, target: item.targetName, error: 'Twitter post returned null' };
   }
 
-  private isApproveMode(): boolean {
-    return this.configRepo.getRuntime().approveMode;
+  private requiresApproval(source: RoastSource): boolean {
+    const runtime = this.configRepo.getRuntime();
+    const replySources: RoastSource[] = ['mention', 'reply_guy', 'casual_reply'];
+    if (replySources.includes(source)) return runtime.approveMentions;
+    return runtime.approveMode;
   }
 
   private async postOrSkip(
     text: string,
-    replyToId?: string,
+    replyToId: string | undefined,
+    source: RoastSource,
   ): Promise<{ tweetId: string } | null | 'no_twitter' | 'pending_approval'> {
-    if (this.isApproveMode()) return 'pending_approval';
+    if (this.requiresApproval(source)) return 'pending_approval';
     if (!this.twitter) return 'no_twitter';
     return replyToId
       ? this.twitter.replyToTweet(text, replyToId)
@@ -768,6 +814,37 @@ export class QueueManager {
     return true;
   }
 
+  /**
+   * Build enriched context from DB for mention-triggered queue items.
+   * Looks up the original mention text and parent tweet from stored data.
+   */
+  private buildMentionContext(context: string | null): string | undefined {
+    const mentionTweetId = extractMentionTweetId(context);
+    const replyToId = extractReplyToId(context);
+    const lines: string[] = [];
+
+    // Look up the original mention (who requested and what they said)
+    if (mentionTweetId && this.mentionRepo) {
+      const mention = this.mentionRepo.getByTweetId(mentionTweetId);
+      if (mention) {
+        lines.push(`Requested by: @${mention.authorName}`);
+        lines.push(`Request type: ${mention.requestType ?? 'unknown'}`);
+        lines.push(`Mention text: "${mention.text}"`);
+      }
+    }
+
+    // Look up the full parent tweet text (may be longer than the 120-char snippet in targetName)
+    if (replyToId && this.tweetRepo) {
+      const parentTweet = this.tweetRepo.getByTweetId(replyToId);
+      if (parentTweet) {
+        lines.push(`\nParent tweet by @${parentTweet.authorName}:`);
+        lines.push(`"${parentTweet.text}"`);
+      }
+    }
+
+    return lines.length > 0 ? lines.join('\n') : undefined;
+  }
+
   private async buildProfileContext(username: string): Promise<string | undefined> {
     try {
       const profile = await this.profileFetcher!.getProfile(username);
@@ -814,6 +891,22 @@ export function extractTriggerText(context: string | null): string | undefined {
   // text: is always the last segment in context, so grab everything after it
   const match = context.match(/\|text:(.+)$/);
   return match?.[1] || undefined;
+}
+
+/** Extract a Twitter handle from targetName (e.g. "@elonmusk" → "elonmusk", "$SOL" → "SOL"). */
+export function extractHandleFromTarget(targetName: string): string | undefined {
+  // @handle format (from S1 explicit "roast @X" or S3 enqueueHandleRoast)
+  const atMatch = targetName.match(/^@(\w+)$/);
+  if (atMatch?.[1]) return atMatch[1];
+  // Plain word that looks like a handle (alphanumeric, 3+ chars, no spaces)
+  if (/^\w{3,15}$/.test(targetName) && !/^tweet by/.test(targetName)) return targetName;
+  return undefined;
+}
+
+export function extractMentionTweetId(context: string | null): string | undefined {
+  if (!context) return undefined;
+  const match = context.match(/\|mention:(\d+)/);
+  return match?.[1];
 }
 
 export function extractMediaUrls(context: string | null): string[] {

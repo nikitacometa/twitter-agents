@@ -159,7 +159,8 @@ export function createBot(opts: {
         '<code>/queue &lt;target&gt;</code> — add target to posting queue',
         '<code>/trigger</code> — force-process next queue item',
         '<code>/poll</code> — check for new mentions',
-        '<code>/approve on|off</code> — require manual approval before posting',
+        '<code>/approve on|off</code> — require approval for feed posts',
+        '<code>/approve_mentions on|off</code> — require approval for mention replies',
         '<code>/pause</code> / <code>/resume</code> — toggle autonomous posting',
         '',
         '<b>📊 Monitoring</b>',
@@ -525,7 +526,8 @@ export function createBot(opts: {
         '',
         providerStatus,
         runtime?.paused ? '⏸ <b>PAUSED</b>' : '',
-        runtime?.approveMode ? '🔍 <b>APPROVE MODE</b>' : '',
+        runtime?.approveMode ? '🔍 <b>APPROVE FEED</b>' : '',
+        runtime?.approveMentions ? '💬 <b>APPROVE MENTIONS</b>' : '',
         `Twitter: <b>${opts.twitterEnabled ? 'enabled' : 'disabled'}</b>`,
         postingStr,
         `Ratings: <b>${String(stats.total)}</b>`,
@@ -1171,18 +1173,44 @@ export function createBot(opts: {
     const arg = ctx.match?.trim().toLowerCase();
     if (arg === 'on' || arg === 'true') {
       configRepo.setApproveMode(true);
-      await ctx.reply('Approve mode ON — roasts will require manual approval before posting.');
+      await ctx.reply('Approve mode ON — feed posts (autonomous, burn_request) require manual approval.');
       return;
     }
     if (arg === 'off' || arg === 'false') {
       configRepo.setApproveMode(false);
-      await ctx.reply('Approve mode OFF — roasts post automatically.');
+      await ctx.reply('Approve mode OFF — feed posts go out automatically.');
       return;
     }
 
     const runtime = configRepo.getRuntime();
     await ctx.reply(
-      `Approve mode: <b>${runtime.approveMode ? 'ON' : 'OFF'}</b>\n\n<code>/approve on</code> — require approval\n<code>/approve off</code> — auto-post`,
+      `Approve feed: <b>${runtime.approveMode ? 'ON' : 'OFF'}</b>\nApprove mentions: <b>${runtime.approveMentions ? 'ON' : 'OFF'}</b>\n\n<code>/approve on|off</code> — feed posts\n<code>/approve_mentions on|off</code> — mention replies`,
+      { parse_mode: 'HTML' },
+    );
+  });
+
+  // --- Approve mentions toggle ---
+  bot.command('approve_mentions', async (ctx) => {
+    if (!configRepo) {
+      await ctx.reply('Config not available.');
+      return;
+    }
+
+    const arg = ctx.match?.trim().toLowerCase();
+    if (arg === 'on' || arg === 'true') {
+      configRepo.setApproveMentions(true);
+      await ctx.reply('Approve mentions ON — mention replies will require manual approval.');
+      return;
+    }
+    if (arg === 'off' || arg === 'false') {
+      configRepo.setApproveMentions(false);
+      await ctx.reply('Approve mentions OFF — mention replies post automatically.');
+      return;
+    }
+
+    const runtime = configRepo.getRuntime();
+    await ctx.reply(
+      `Approve mentions: <b>${runtime.approveMentions ? 'ON' : 'OFF'}</b>\n\n<code>/approve_mentions on</code> — require approval for replies\n<code>/approve_mentions off</code> — auto-post replies`,
       { parse_mode: 'HTML' },
     );
   });
@@ -1201,7 +1229,10 @@ export function createBot(opts: {
     }
 
     for (const roast of pending) {
-      const header = `🔍 <b>Pending</b> — ${escapeHtml(roast.targetName)} <i>(${escapeHtml(roast.source)})</i>\nID: ${String(roast.id)} | ${escapeHtml(roast.createdAt)}`;
+      const isReply = ['mention', 'reply_guy', 'casual_reply'].includes(roast.source);
+      const typeEmoji = isReply ? '💬' : '📢';
+      const replyInfo = roast.replyToId ? `\nReply to: <code>${escapeHtml(roast.replyToId)}</code>` : '';
+      const header = `${typeEmoji} <b>Pending</b> — ${escapeHtml(roast.targetName)} <i>(${escapeHtml(roast.source)})</i>\nID: ${String(roast.id)} | ${escapeHtml(roast.createdAt)}${replyInfo}`;
       await ctx.reply(header, { parse_mode: 'HTML' });
 
       const keyboard = new InlineKeyboard()

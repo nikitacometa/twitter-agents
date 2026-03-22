@@ -5,6 +5,8 @@ import {
   extractParentAuthorFromTarget,
   extractMediaUrls,
   extractTriggerText,
+  extractHandleFromTarget,
+  extractMentionTweetId,
 } from './queue-manager.js';
 
 describe('extractReplyToId', () => {
@@ -108,5 +110,55 @@ describe('extractTriggerText', () => {
     ['reply_to:1|by:@user'],
   ])('returns undefined for %s', (ctx) => {
     expect(extractTriggerText(ctx)).toBeUndefined();
+  });
+});
+
+describe('extractHandleFromTarget', () => {
+  it.each([
+    ['@elonmusk', 'elonmusk'],
+    ['@vitalik', 'vitalik'],
+    ['@user_123', 'user_123'],
+  ])('extracts handle from @-prefixed "%s" → "%s"', (target, expected) => {
+    expect(extractHandleFromTarget(target)).toBe(expected);
+  });
+
+  it.each([
+    ['solana', 'solana'],
+    ['vitalik', 'vitalik'],
+    ['abc', 'abc'],
+    ['user_name_long', 'user_name_long'],
+  ])('extracts plain word handle from "%s" → "%s"', (target, expected) => {
+    expect(extractHandleFromTarget(target)).toBe(expected);
+  });
+
+  it.each([
+    ['tweet by @solana: "launched again"'],
+    ['Ethereum is a blockchain'],
+    ['$SOL'],
+    ['ab'],
+    [''],
+    ['this has spaces'],
+    ['a'.repeat(16)],
+  ])('returns undefined for "%s"', (target) => {
+    expect(extractHandleFromTarget(target)).toBeUndefined();
+  });
+});
+
+describe('extractMentionTweetId', () => {
+  it.each([
+    ['reply_to:1|by:@user|mention:999888777', '999888777'],
+    ['reply_to:1|mention:123|handle:@x', '123'],
+    ['reply_to:1|by:@a|mention:1', '1'],
+  ])('extracts mention tweet id from "%s" → "%s"', (ctx, expected) => {
+    expect(extractMentionTweetId(ctx)).toBe(expected);
+  });
+
+  it.each([
+    [null],
+    [''],
+    ['reply_to:1|by:@user'],
+    ['mention:123'],
+  ])('returns undefined for %s', (ctx) => {
+    expect(extractMentionTweetId(ctx)).toBeUndefined();
   });
 });

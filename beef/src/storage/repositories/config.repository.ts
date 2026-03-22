@@ -29,12 +29,15 @@ export class ConfigRepository {
   }
 
   getRuntime(): RuntimeConfig {
+    const approveMode = this.get('approve_mode') === 'true';
+    const approveMentionsRaw = this.get('approve_mentions');
     return {
       paused: this.get('paused') === 'true',
       dailyLimit: parseInt(this.get('daily_limit') ?? '10', 10),
       mentionSinceId: this.get('mention_since_id') ?? null,
       moderationMode: this.get('moderation_mode') === 'true',
-      approveMode: this.get('approve_mode') === 'true',
+      approveMode,
+      approveMentions: approveMentionsRaw !== undefined ? approveMentionsRaw === 'true' : approveMode,
     };
   }
 
@@ -44,6 +47,10 @@ export class ConfigRepository {
 
   setApproveMode(enabled: boolean): void {
     this.set('approve_mode', String(enabled));
+  }
+
+  setApproveMentions(enabled: boolean): void {
+    this.set('approve_mentions', String(enabled));
   }
 
   setMentionSinceId(sinceId: string): void {

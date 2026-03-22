@@ -247,6 +247,7 @@ export interface RuntimeConfig {
   mentionSinceId: string | null;
   moderationMode: boolean;
   approveMode: boolean;
+  approveMentions: boolean;
 }
 
 // --- Tweet observation ---
