@@ -244,7 +244,7 @@ export class MentionHandler {
       targetType: 'project',
       source: 'mention',
       priority: 3,
-      context: `reply_to:${m.tweetId}|by:@${m.authorName}|mention:${m.tweetId}|parent:${m.inReplyToTweetId!}${mediaPart}`,
+      context: `reply_to:${m.inReplyToTweetId!}|by:@${m.authorName}|mention:${m.tweetId}${mediaPart}`,
     });
     this.logger.info(
       {

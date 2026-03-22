@@ -25,6 +25,10 @@ import {
   formatStockpileList,
 } from './formatters.js';
 
+function tweetLink(tweetId: string, username: string): string {
+  return `<a href="https://x.com/${username}/status/${tweetId}">Tweet</a>`;
+}
+
 interface ParsedFlags {
   target: string;
   eval: boolean;
@@ -85,8 +89,10 @@ export function createBot(opts: {
   getSchedulerJobs?: () => JobInfo[];
   twitterEnabled?: boolean;
   beefEnv?: string;
+  twitterUsername?: string;
 }): Bot {
   const { token, adminIds, openAccess, feedbackRepo, provider, logger, queueManager, configRepo, exampleRepo, patternRepo, stockpileRepo, farmAttemptRepo, roastRepo, postingMode, pollMentions } = opts;
+  const twitterUsername = opts.twitterUsername || '0xBeefer';
   const bot = new Bot(token);
 
   // --- Admin guard (skip if openAccess or no IDs configured) ---
@@ -799,7 +805,7 @@ export function createBot(opts: {
           const newStockpileInfo = result.newStockpileCount
             ? `\nStockpiled: <b>${String(result.newStockpileCount)}</b> new`
             : '';
-          const tweetIdLine = result.tweetId ? `\nTweet ID: <code>${escapeHtml(result.tweetId)}</code>` : '';
+          const tweetIdLine = result.tweetId ? `\n${tweetLink(result.tweetId, twitterUsername)}` : '';
           await api.editMessageText(
             chatId,
             statusMsg.message_id,
@@ -1405,7 +1411,7 @@ export function createBot(opts: {
         const result = await queueManager.approveRoast(roastId);
         if (result) {
           await ctx.editMessageText(
-            `<b>Posted!</b>\nTweet: <code>${escapeHtml(result.tweetId)}</code>\n\n<code>${escapeHtml(result.text)}</code>`,
+            `<b>Posted!</b>\n${tweetLink(result.tweetId, twitterUsername)}\n\n<code>${escapeHtml(result.text)}</code>`,
             { parse_mode: 'HTML' },
           );
           await ctx.answerCallbackQuery({ text: 'Posted!' });
@@ -1444,7 +1450,7 @@ export function createBot(opts: {
         const result = await queueManager.approveRoastStandalone(roastId);
         if (result) {
           await ctx.editMessageText(
-            `<b>Posted standalone!</b>\nTweet: <code>${escapeHtml(result.tweetId)}</code>\n\n<code>${escapeHtml(result.text)}</code>`,
+            `<b>Posted standalone!</b>\n${tweetLink(result.tweetId, twitterUsername)}\n\n<code>${escapeHtml(result.text)}</code>`,
             { parse_mode: 'HTML' },
           );
           await ctx.answerCallbackQuery({ text: 'Posted standalone!' });

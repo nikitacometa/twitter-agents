@@ -512,6 +512,7 @@ if (config.TELEGRAM_BOT_TOKEN) {
     getSchedulerJobs: () => scheduler.getJobsInfo(),
     twitterEnabled: config.ENABLE_TWITTER,
     beefEnv: config.BEEF_ENV,
+    twitterUsername: botUsername,
   });
 
   void bot.start({

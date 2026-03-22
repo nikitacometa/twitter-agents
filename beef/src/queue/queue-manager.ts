@@ -65,7 +65,7 @@ export class QueueManager {
   private readonly activityLogger?: ActivityLogger;
   private cachedRoastEngine: RoastEngine | null = null;
   private cachedEvaluator: SelfEvaluator | null = null;
-  private readonly pendingApprovals = new Map<number, { stockpileId?: number }>();
+  private readonly pendingApprovals = new Map<number, { stockpileId?: number; mentionTweetId?: string }>();
   private readonly approvingIds = new Set<number>();
   private readonly regeneratingIds = new Set<number>();
 
@@ -260,6 +260,7 @@ export class QueueManager {
 
     // Determine reply context early
     const replyToId = extractReplyToId(item.context);
+    const mentionTweetId = extractMentionTweetId(item.context);
     const isReply = !!replyToId;
 
     // Daily limit for mention replies (separate from autonomous limit)
@@ -300,7 +301,7 @@ export class QueueManager {
           const postResult = await this.postOrSkip(stockpiled.tweetText, replyToId, item.source);
 
           if (postResult === 'pending_approval') {
-            this.pendingApprovals.set(roastId, { stockpileId: stockpiled.id });
+            this.pendingApprovals.set(roastId, { stockpileId: stockpiled.id, mentionTweetId });
             this.queueRepo.complete(item.id);
             this.logger.info(
               { queueId: item.id, roastId, target: item.targetName, fromStockpile: true },
@@ -622,7 +623,7 @@ export class QueueManager {
     const postResult = await this.postOrSkip(tweetText, replyToId, item.source);
 
     if (postResult === 'pending_approval') {
-      this.pendingApprovals.set(roastId, {});
+      this.pendingApprovals.set(roastId, { mentionTweetId: extractMentionTweetId(item.context) });
       this.queueRepo.complete(item.id);
       this.logger.info(
         { queueId: item.id, roastId, target: item.targetName, evaluationScore, newStockpileCount },
@@ -840,15 +841,32 @@ export class QueueManager {
         return null;
       }
 
-      const postResult = replyToId
-        ? await this.twitter.replyToTweet(roast.tweetText, replyToId)
-        : await this.twitter.postTweet(roast.tweetText);
+      let postResult;
+      if (replyToId) {
+        try {
+          postResult = await this.twitter.replyToTweet(roast.tweetText, replyToId);
+        } catch (error) {
+          const errMsg = getErrorMessage(error);
+          // 403 = reply restricted. Auto-fallback: try replying to the mention tweet instead.
+          const pending = this.pendingApprovals.get(roastId);
+          if (errMsg.includes('403') && pending?.mentionTweetId && pending.mentionTweetId !== replyToId) {
+            this.logger.warn(
+              { roastId, parentTweetId: replyToId, mentionTweetId: pending.mentionTweetId },
+              'Reply to parent tweet blocked (403) — falling back to mention tweet',
+            );
+            postResult = await this.twitter.replyToTweet(roast.tweetText, pending.mentionTweetId);
+          } else {
+            throw error;
+          }
+        }
+      } else {
+        postResult = await this.twitter.postTweet(roast.tweetText);
+      }
 
       if (!postResult) return null;
 
       this.roastRepo.updateStatus(roastId, 'posted', postResult.tweetId);
 
-      // Mark stockpile entry as served (prefer stored ID, fallback to text match)
       const pending = this.pendingApprovals.get(roastId);
       if (this.stockpile) {
         if (pending?.stockpileId) {
@@ -933,6 +951,9 @@ export class QueueManager {
     try {
       const oldRoast = this.roastRepo.getById(oldRoastId);
       if (!oldRoast || oldRoast.status !== 'pending_approval') return null;
+
+      // Save mentionTweetId before reject clears pendingApprovals
+      const oldMentionTweetId = this.pendingApprovals.get(oldRoastId)?.mentionTweetId;
 
       // Reject old roast immediately (before long-running generation)
       this.rejectRoast(oldRoastId);
@@ -1019,7 +1040,7 @@ export class QueueManager {
         agentOutput: JSON.stringify(output),
       });
 
-      this.pendingApprovals.set(newRoastId, {});
+      this.pendingApprovals.set(newRoastId, { mentionTweetId: oldMentionTweetId });
 
       this.logger.info(
         { oldRoastId, newRoastId, target: oldRoast.targetName, evalScore, newStockpileCount },
