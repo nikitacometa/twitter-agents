@@ -42,6 +42,7 @@ export interface RoastResult {
   durationMs: number;
   provider: string;
   evaluation?: EvaluationOutput;
+  diaryThought?: string;
 }
 
 export interface CasualReplyResult {
@@ -50,6 +51,7 @@ export interface CasualReplyResult {
   mentionsBeef: boolean;
   durationMs: number;
   provider: string;
+  diaryThought?: string;
 }
 
 export class RoastEngine {
@@ -260,6 +262,7 @@ export class RoastEngine {
       durationMs: strategyResults.durationMs,
       provider: strategyResults.provider,
       evaluation: bestEvaluation,
+      diaryThought: strategyResults.diaryThought,
     };
   }
 
@@ -302,6 +305,7 @@ export class RoastEngine {
       mentionsBeef: data.mentionsBeef,
       durationMs: result.durationMs,
       provider: result.provider,
+      diaryThought: data.diaryThought,
     };
   }
 
@@ -321,6 +325,7 @@ export class RoastEngine {
         text: obj['text'],
         tone: obj['tone'],
         mentionsBeef: (obj['mentionsBeef'] as boolean) ?? false,
+        diaryThought: typeof obj['diaryThought'] === 'string' ? obj['diaryThought'] : undefined,
       };
     }
 
@@ -361,15 +366,15 @@ export class RoastEngine {
     variants: Array<{ text: string; score: number; angle: string }>;
     researchNotes: string | null;
     factCheckPassed: boolean;
+    diaryThought?: string;
     durationMs: number;
     provider: string;
     strategiesSucceeded: PromptStrategy[];
     error?: unknown;
   }> {
-    const mutations = mutationCount && mutationCount > 0 ? pickMutations(mutationCount) : [];
-    const mutationSection = formatMutationSection(mutations);
-
     const strategyPrompts = PROMPT_STRATEGIES.map((strategy) => {
+      const mutations = mutationCount && mutationCount > 0 ? pickMutations(mutationCount) : [];
+      const mutationSection = formatMutationSection(mutations);
       const base = this.buildStrategyPrompt(strategy, targetName, variantCount, true, memory, imagePaths);
       return {
         strategy,
@@ -396,6 +401,7 @@ export class RoastEngine {
     const allVariants: Array<{ text: string; score: number; angle: string }> = [];
     let researchNotes: string | null = null;
     let factCheckPassed = true;
+    let diaryThought: string | undefined;
     let maxDurationMs = 0;
     let lastProvider = '';
     const strategiesSucceeded: PromptStrategy[] = [];
@@ -411,6 +417,7 @@ export class RoastEngine {
           this.validateOutput(data, `${taskId}-${strategy}`);
           allVariants.push(...data.variants);
           if (data.researchNotes && !researchNotes) researchNotes = data.researchNotes;
+          if (data.diaryThought && !diaryThought) diaryThought = data.diaryThought;
           if (!data.factCheckPassed) factCheckPassed = false;
           lastProvider = result.value.provider;
           maxDurationMs = Math.max(maxDurationMs, result.value.durationMs);
@@ -436,6 +443,7 @@ export class RoastEngine {
       variants: allVariants,
       researchNotes,
       factCheckPassed,
+      diaryThought,
       durationMs: maxDurationMs,
       provider: lastProvider,
       strategiesSucceeded,
