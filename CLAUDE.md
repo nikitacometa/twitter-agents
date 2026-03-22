@@ -6,11 +6,14 @@ Umbrella project for AI-powered Twitter agents in the crypto space. Each agent l
 
 ```
 twitter-agents/
-├── beef/              # $BEEF — AI Crypto Roast Bot
+├── beef/              # $BEEF — AI Crypto Roast Bot (backend)
 │   ├── docs/          # Research, strategy, playbooks
 │   ├── characters/    # Bot personality configuration
 │   ├── contracts/     # Solidity smart contracts (Foundry) — future
 │   └── src/           # TypeScript source (custom stack)
+├── beef-web/          # $BEEF — Web presence (landing pages + future app)
+│   ├── public/        # Static landing pages (0xbeef.wtf)
+│   └── docs/          # Design briefs and references
 └── (future agents)
 ```
 
@@ -19,6 +22,7 @@ twitter-agents/
 | Agent | Concept | Status |
 |-------|---------|--------|
 | **$BEEF** | AI roast bot — roasts crypto projects, burn-to-request, community accountability | Setup |
+| **$BEEF Web** | Landing pages and web app for $BEEF — [0xbeef.wtf](https://0xbeef.wtf) | Live |
 
 ## Conventions
 
