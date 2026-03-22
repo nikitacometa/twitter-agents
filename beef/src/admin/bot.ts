@@ -971,12 +971,20 @@ export function createBot(opts: {
         await ctx.answerCallbackQuery({ text: 'Invalid roast ID', show_alert: true });
         return;
       }
-      const rejected = queueManager.rejectRoast(roastId);
-      if (rejected) {
-        await ctx.editMessageText('<b>Rejected</b>', { parse_mode: 'HTML' });
-        await ctx.answerCallbackQuery({ text: 'Rejected' });
-      } else {
-        await ctx.answerCallbackQuery({ text: 'Not found or already handled', show_alert: true });
+      try {
+        const rejected = queueManager.rejectRoast(roastId);
+        if (rejected) {
+          await ctx.editMessageText('<b>Rejected</b>', { parse_mode: 'HTML' });
+          await ctx.answerCallbackQuery({ text: 'Rejected' });
+        } else {
+          await ctx.answerCallbackQuery({ text: 'Not found or already handled', show_alert: true });
+        }
+      } catch (error) {
+        logger.error({ err: error, roastId }, 'Reject callback failed');
+        await ctx.answerCallbackQuery({
+          text: `Error: ${getErrorMessage(error).slice(0, 100)}`,
+          show_alert: true,
+        });
       }
     }
   });
