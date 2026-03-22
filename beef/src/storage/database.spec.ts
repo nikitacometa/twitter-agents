@@ -28,7 +28,7 @@ describe('createDatabase', () => {
   it('applies all migrations', () => {
     const db = createDatabase(dbPath, logger);
     const migrations = db.prepare('SELECT name FROM _migrations ORDER BY id').all() as Array<{ name: string }>;
-    expect(migrations).toHaveLength(7);
+    expect(migrations).toHaveLength(8);
     expect(migrations[0]!.name).toBe('001-initial.sql');
     expect(migrations[1]!.name).toBe('002-extended.sql');
     expect(migrations[2]!.name).toBe('003-human-feedback.sql');
@@ -36,6 +36,7 @@ describe('createDatabase', () => {
     expect(migrations[4]!.name).toBe('005-roast-farm.sql');
     expect(migrations[5]!.name).toBe('006-human-review.sql');
     expect(migrations[6]!.name).toBe('007-roast-rejected-status.sql');
+    expect(migrations[7]!.name).toBe('008-roast-reply-to-id.sql');
     db.close();
   });
 
@@ -84,7 +85,7 @@ describe('createDatabase', () => {
 
     const db2 = createDatabase(dbPath, logger);
     const migrations = db2.prepare('SELECT COUNT(*) as count FROM _migrations').get() as { count: number };
-    expect(migrations.count).toBe(7);
+    expect(migrations.count).toBe(8);
     db2.close();
   });
 

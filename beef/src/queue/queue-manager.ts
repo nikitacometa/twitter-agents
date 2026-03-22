@@ -53,7 +53,7 @@ export class QueueManager {
   private readonly activityLogger?: ActivityLogger;
   private cachedRoastEngine: RoastEngine | null = null;
   private cachedEvaluator: SelfEvaluator | null = null;
-  private readonly pendingApprovals = new Map<number, { replyToId?: string; stockpileId?: number }>();
+  private readonly pendingApprovals = new Map<number, { stockpileId?: number }>();
   private readonly approvingIds = new Set<number>();
 
   constructor(opts: {
@@ -102,7 +102,6 @@ export class QueueManager {
 
     if (isQuietHour()) {
       this.logger.debug('Quiet hours — skipping queue processing');
-      this.activityLogger?.emit({ type: 'sleep', data: { reason: 'quiet_hours' } });
       return { dequeued: false, error: 'Quiet hours (2-7 UTC)' };
     }
 
@@ -156,7 +155,6 @@ export class QueueManager {
     }
 
     this.logger.info({ queueId: item.id, target: item.targetName, source: item.source }, 'Processing queue item');
-    this.activityLogger?.emit({ type: 'hunt', data: { target: item.targetName, source: item.source } });
 
     // M3.4: Idempotency — skip if a roast for this target was already posted recently (crash recovery)
     const existing = this.roastRepo.findRecentByTarget(item.targetName, item.source);
@@ -213,6 +211,7 @@ export class QueueManager {
             targetName: item.targetName,
             targetType: item.targetType,
             tweetText: stockpiled.tweetText,
+            replyToId,
             source: item.source,
             status: 'pending_approval',
             factChecked: true,
@@ -222,7 +221,7 @@ export class QueueManager {
           const postResult = await this.postOrSkip(stockpiled.tweetText, replyToId);
 
           if (postResult === 'pending_approval') {
-            this.pendingApprovals.set(roastId, { replyToId, stockpileId: stockpiled.id });
+            this.pendingApprovals.set(roastId, { stockpileId: stockpiled.id });
             this.queueRepo.complete(item.id);
             this.logger.info(
               { queueId: item.id, roastId, target: item.targetName, fromStockpile: true },
@@ -523,6 +522,7 @@ export class QueueManager {
       targetName: item.targetName,
       targetType: item.targetType,
       tweetText,
+      replyToId,
       source: item.source,
       status: 'pending_approval',
       factChecked: output.factCheckPassed,
@@ -533,7 +533,7 @@ export class QueueManager {
     const postResult = await this.postOrSkip(tweetText, replyToId);
 
     if (postResult === 'pending_approval') {
-      this.pendingApprovals.set(roastId, { replyToId });
+      this.pendingApprovals.set(roastId, {});
       this.queueRepo.complete(item.id);
       this.logger.info(
         { queueId: item.id, roastId, target: item.targetName, evaluationScore, newStockpileCount },
@@ -639,6 +639,7 @@ export class QueueManager {
       targetName: item.targetName,
       targetType: 'person',
       tweetText: result.text,
+      replyToId,
       source: 'casual_reply',
       status: 'pending_approval',
       factChecked: true,
@@ -648,7 +649,7 @@ export class QueueManager {
     const postResult = await this.postOrSkip(result.text, replyToId);
 
     if (postResult === 'pending_approval') {
-      this.pendingApprovals.set(roastId, { replyToId });
+      this.pendingApprovals.set(roastId, {});
       this.queueRepo.complete(item.id);
       this.logger.info(
         { queueId: item.id, roastId, target: item.targetName, tone: result.tone },
@@ -714,7 +715,7 @@ export class QueueManager {
 
   /**
    * Approve a pending roast — post to Twitter and update status.
-   * Works even after restart (reads from DB, loses only replyToId).
+   * Works even after restart (reads replyToId from DB).
    */
   async approveRoast(roastId: number): Promise<{ tweetId: string; text: string } | null> {
     if (this.approvingIds.has(roastId)) return null;
@@ -724,8 +725,7 @@ export class QueueManager {
       if (!roast || roast.status !== 'pending_approval') return null;
       if (!this.twitter) return null;
 
-      const pending = this.pendingApprovals.get(roastId);
-      const replyToId = pending?.replyToId;
+      const replyToId = roast.replyToId ?? undefined;
 
       const postResult = replyToId
         ? await this.twitter.replyToTweet(roast.tweetText, replyToId)
@@ -736,6 +736,7 @@ export class QueueManager {
       this.roastRepo.updateStatus(roastId, 'posted', postResult.tweetId);
 
       // Mark stockpile entry as served (prefer stored ID, fallback to text match)
+      const pending = this.pendingApprovals.get(roastId);
       if (this.stockpile) {
         if (pending?.stockpileId) {
           this.stockpile.markServed(pending.stockpileId, 'bot');

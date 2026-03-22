@@ -153,12 +153,13 @@ export class MentionHandler {
         const target = extractTarget(m.text);
         if (target) {
           // Scenario 1: explicit "roast @X" / "roast $TOKEN"
+          const replyTarget = m.inReplyToTweetId ?? m.tweetId;
           this.queueRepo.enqueue({
             targetName: target,
             targetType: 'project',
             source: 'mention',
             priority: 3,
-            context: `reply_to:${m.tweetId}|by:@${m.authorName}`,
+            context: `reply_to:${replyTarget}|by:@${m.authorName}|mention:${m.tweetId}`,
           });
           queued = true;
           queueTarget = target;
@@ -243,7 +244,7 @@ export class MentionHandler {
       targetType: 'project',
       source: 'mention',
       priority: 3,
-      context: `reply_to:${m.tweetId}|by:@${m.authorName}|parent:${m.inReplyToTweetId!}${mediaPart}`,
+      context: `reply_to:${m.inReplyToTweetId!}|by:@${m.authorName}|mention:${m.tweetId}${mediaPart}`,
     });
     this.logger.info(
       {
@@ -277,12 +278,13 @@ export class MentionHandler {
 
   private enqueueHandleRoast(m: MentionData, handle: string): string {
     const targetName = `@${handle}`;
+    const replyTarget = m.inReplyToTweetId ?? m.tweetId;
     this.queueRepo.enqueue({
       targetName,
       targetType: 'project',
       source: 'mention',
       priority: 3,
-      context: `reply_to:${m.tweetId}|by:@${m.authorName}|handle:@${handle}`,
+      context: `reply_to:${replyTarget}|by:@${m.authorName}|mention:${m.tweetId}|handle:@${handle}`,
     });
     this.logger.info(
       { tweetId: m.tweetId, handle, author: m.authorName },

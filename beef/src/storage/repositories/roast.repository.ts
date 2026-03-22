@@ -6,6 +6,7 @@ export interface InsertRoast {
   targetType: TargetType;
   tweetText: string;
   tweetId?: string;
+  replyToId?: string;
   source: RoastSource;
   status?: RoastStatus;
   factChecked?: boolean;
@@ -19,6 +20,7 @@ interface RoastRow {
   target_type: string;
   tweet_text: string;
   tweet_id: string | null;
+  reply_to_id: string | null;
   source: string;
   status: string;
   fact_checked: number;
@@ -46,8 +48,8 @@ export class RoastRepository {
 
   constructor(db: Database.Database) {
     this.insertStmt = db.prepare(`
-      INSERT INTO roasts (target_name, target_type, tweet_text, tweet_id, source, status, fact_checked, context_data, agent_output)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO roasts (target_name, target_type, tweet_text, tweet_id, reply_to_id, source, status, fact_checked, context_data, agent_output)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
     this.getByIdStmt = db.prepare('SELECT * FROM roasts WHERE id = ?');
@@ -106,6 +108,7 @@ export class RoastRepository {
       roast.targetType,
       roast.tweetText,
       roast.tweetId ?? null,
+      roast.replyToId ?? null,
       roast.source,
       roast.status ?? 'posted',
       roast.factChecked ? 1 : 0,
@@ -179,6 +182,7 @@ function mapRow(row: RoastRow): PostedRoast {
     targetType: row.target_type as TargetType,
     tweetText: row.tweet_text,
     tweetId: row.tweet_id,
+    replyToId: row.reply_to_id,
     source: row.source as RoastSource,
     status: row.status as RoastStatus,
     factChecked: row.fact_checked === 1,
