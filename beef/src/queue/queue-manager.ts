@@ -142,6 +142,9 @@ export class QueueManager {
   }
 
   private async dequeueAndProcess(force = false): Promise<QueueProcessResult> {
+    // Retry loop: skip items rejected for systemic reasons (posting mode disabled)
+    // without wasting the entire scheduler tick. Max 5 skips to avoid runaway loops.
+    for (let skipped = 0; skipped < 5; skipped++) {
     const item = this.queueRepo.dequeue();
     if (!item) {
       this.logger.debug('Queue empty');
@@ -178,16 +181,17 @@ export class QueueManager {
     const isReply = !!replyToId;
 
     // Check posting mode before serving stockpile or generating (force bypasses for Telegram /trigger)
+    // Use reject() (permanent) for systemic config issues — fail() retries and blocks the queue
     if (!force) {
       if (isReply && !this.enableMentionReplies) {
         this.logger.info({ queueId: item.id, target: item.targetName }, 'Mention reply skipped — ENABLE_MENTION_REPLIES=false');
-        this.queueRepo.fail(item.id, 'Mention replies disabled');
-        return { dequeued: true, posted: false, target: item.targetName, error: 'Mention replies disabled' };
+        this.queueRepo.reject(item.id);
+        continue; // try next item instead of wasting the tick
       }
       if (!isReply && !this.enableAutonomousPosting) {
         this.logger.info({ queueId: item.id, target: item.targetName }, 'Autonomous post skipped — ENABLE_AUTONOMOUS_POSTING=false');
-        this.queueRepo.fail(item.id, 'Autonomous posting disabled');
-        return { dequeued: true, posted: false, target: item.targetName, error: 'Autonomous posting disabled' };
+        this.queueRepo.reject(item.id);
+        continue; // try next item instead of wasting the tick
       }
 
       // M3.3: Daily limit for mention replies (separate from autonomous limit)
@@ -329,6 +333,11 @@ export class QueueManager {
         });
       }
     }
+    } // end for-loop (skip rejected items)
+
+    // All dequeued items were rejected — queue effectively empty for allowed sources
+    this.logger.debug('All dequeued items rejected by posting mode');
+    return { dequeued: false, error: 'No processable items in queue' };
   }
 
   private getRoastEngine(): RoastEngine {
