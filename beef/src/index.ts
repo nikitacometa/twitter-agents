@@ -19,6 +19,7 @@ import { UserRepository } from './storage/repositories/user.repository.js';
 import { ExternalExampleRepository } from './storage/repositories/external-example.repository.js';
 import { RoastPatternRepository } from './storage/repositories/roast-pattern.repository.js';
 import { StockpileRepository } from './storage/repositories/stockpile.repository.js';
+import { FarmAttemptRepository } from './storage/repositories/farm-attempt.repository.js';
 import { TweetRepository } from './storage/repositories/tweet.repository.js';
 import { TargetRepository } from './storage/repositories/target.repository.js';
 import { ClaudeCodeProvider } from './agent/claude-code.provider.js';
@@ -67,6 +68,7 @@ const userRepo = new UserRepository(db);
 const exampleRepo = new ExternalExampleRepository(db);
 const patternRepo = new RoastPatternRepository(db);
 const stockpileRepo = new StockpileRepository(db);
+const farmAttemptRepo = new FarmAttemptRepository(db);
 const tweetRepo = new TweetRepository(db);
 const targetRepo = new TargetRepository(db);
 
@@ -371,6 +373,7 @@ if (config.TELEGRAM_BOT_TOKEN) {
     exampleRepo,
     patternRepo,
     stockpileRepo,
+    farmAttemptRepo,
     postingMode: {
       autonomous: config.ENABLE_AUTONOMOUS_POSTING,
       mentionReplies: config.ENABLE_MENTION_REPLIES,

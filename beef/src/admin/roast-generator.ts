@@ -6,6 +6,7 @@ import type { ConfigRepository } from '@storage/repositories/config.repository.j
 import type { ExternalExampleRepository } from '@storage/repositories/external-example.repository.js';
 import type { RoastPatternRepository } from '@storage/repositories/roast-pattern.repository.js';
 import type { StockpileRepository } from '@storage/repositories/stockpile.repository.js';
+import type { FarmAttemptRepository } from '@storage/repositories/farm-attempt.repository.js';
 import { RoastEngine } from '@roast/roast-engine.js';
 import type { EvaluationMode } from '@roast/roast-engine.js';
 import { buildCreativeMemory } from '@roast/creative-memory.js';
@@ -13,16 +14,21 @@ import type { EvaluationOutput } from '@evaluation/evaluator.js';
 
 let cachedEngine: RoastEngine | null = null;
 let cachedEvaluationMode: EvaluationMode = 'none';
+let cachedThreshold: number | undefined;
 
-function getEngine(provider: ProviderManager, logger: Logger, evaluationMode: EvaluationMode = 'none'): RoastEngine {
-  if (!cachedEngine || cachedEvaluationMode !== evaluationMode) {
-    cachedEngine = new RoastEngine({ provider, logger, evaluationMode });
+function getEngine(
+  provider: ProviderManager,
+  logger: Logger,
+  evaluationMode: EvaluationMode = 'none',
+  evaluationThreshold?: number,
+): RoastEngine {
+  if (!cachedEngine || cachedEvaluationMode !== evaluationMode || cachedThreshold !== evaluationThreshold) {
+    cachedEngine = new RoastEngine({ provider, logger, evaluationMode, evaluationThreshold });
     cachedEvaluationMode = evaluationMode;
+    cachedThreshold = evaluationThreshold;
   }
   return cachedEngine;
 }
-
-// buildCreativeMemory is imported from @roast/creative-memory.js
 
 export interface GenerateRoastsResult extends AgentRoastOutput {
   evaluation?: EvaluationOutput;
@@ -43,8 +49,10 @@ export async function generateRoasts(
   evaluationMode?: EvaluationMode,
   stockpileRepo?: StockpileRepository,
   mutationCount?: number,
+  farmAttemptRepo?: FarmAttemptRepository,
+  evaluationThreshold?: number,
 ): Promise<GenerateRoastsResult> {
-  const engine = getEngine(provider, logger, evaluationMode);
+  const engine = getEngine(provider, logger, evaluationMode, evaluationThreshold);
 
   let memory = buildCreativeMemory({
     targetName,
@@ -54,6 +62,7 @@ export async function generateRoasts(
     exampleRepo,
     patternRepo,
     stockpileRepo,
+    farmAttemptRepo,
   });
   if (profileContext && memory) {
     memory = { ...memory, profileContext };

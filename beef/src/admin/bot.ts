@@ -3,7 +3,6 @@ import type { Context } from 'grammy';
 import type { Logger } from 'pino';
 import type { ProviderManager } from '@agent/provider-manager.js';
 import type { TaskProfile } from '@agent/agent.types.js';
-import type { HumanVerdict } from '@common/types/index.js';
 import { getErrorMessage } from '@common/utils/error.util.js';
 import type { FeedbackRepository } from '@storage/repositories/feedback.repository.js';
 import type { QueueManager } from '@queue/queue-manager.js';
@@ -11,28 +10,52 @@ import type { ConfigRepository } from '@storage/repositories/config.repository.j
 import type { ExternalExampleRepository } from '@storage/repositories/external-example.repository.js';
 import type { RoastPatternRepository } from '@storage/repositories/roast-pattern.repository.js';
 import type { StockpileRepository } from '@storage/repositories/stockpile.repository.js';
-import { ratingKeyboard, sessionDoneKeyboard } from './keyboards.js';
-import { SessionStore } from './session-store.js';
-import type { RoastSession } from './types.js';
+import type { FarmAttemptRepository } from '@storage/repositories/farm-attempt.repository.js';
 import { generateRoasts } from './roast-generator.js';
+import type { GenerateRoastsResult } from './roast-generator.js';
 import type { EvaluationMode } from '@roast/roast-engine.js';
 import type { PollResult } from '@twitter/mention-handler.js';
 import type { JobInfo } from '@scheduler/scheduler.js';
 import {
   escapeHtml,
-  formatSessionSummary,
   formatStatsMessage,
-  formatVariantMessage,
-  RATING_LEGEND,
 } from './formatters.js';
 
-const VALID_VERDICTS = new Set<HumanVerdict>(['fire', 'post', 'iterate', 'reject']);
+interface ParsedFlags {
+  target: string;
+  eval: boolean;
+  mutate: boolean;
+  quick: boolean;
+  variants?: number;
+  mutations?: number;
+  threshold?: number;
+}
 
-function parseRoastFlags(input: string): { target: string; eval: boolean; mutate: boolean } {
+function parseRoastFlags(input: string): ParsedFlags {
   const hasEval = /\s--eval\b/.test(input);
   const hasMutate = /\s--mutate\b/.test(input);
-  const target = input.replace(/\s--(?:eval|mutate)\b/g, '').trim();
-  return { target, eval: hasEval, mutate: hasMutate };
+  const hasQuick = /\s--quick\b/.test(input);
+
+  const variantsMatch = /\s--variants\s+(\d+)/.exec(input);
+  const mutationsMatch = /\s--mutations\s+(\d+)/.exec(input);
+  const thresholdMatch = /\s--threshold\s+([\d.]+)/.exec(input);
+
+  const target = input
+    .replace(/\s--(?:eval|mutate|quick)\b/g, '')
+    .replace(/\s--variants\s+\d+/g, '')
+    .replace(/\s--mutations\s+\d+/g, '')
+    .replace(/\s--threshold\s+[\d.]+/g, '')
+    .trim();
+
+  return {
+    target,
+    eval: hasEval,
+    mutate: hasMutate,
+    quick: hasQuick,
+    variants: variantsMatch ? parseInt(variantsMatch[1]!, 10) : undefined,
+    mutations: mutationsMatch ? parseInt(mutationsMatch[1]!, 10) : undefined,
+    threshold: thresholdMatch ? parseFloat(thresholdMatch[1]!) : undefined,
+  };
 }
 
 function isGroupChat(ctx: Context): boolean {
@@ -51,16 +74,15 @@ export function createBot(opts: {
   exampleRepo?: ExternalExampleRepository;
   patternRepo?: RoastPatternRepository;
   stockpileRepo?: StockpileRepository;
+  farmAttemptRepo?: FarmAttemptRepository;
   postingMode?: { autonomous: boolean; mentionReplies: boolean };
   pollMentions?: () => Promise<PollResult>;
   getSchedulerJobs?: () => JobInfo[];
   twitterEnabled?: boolean;
   beefEnv?: string;
 }): Bot {
-  const { token, adminIds, openAccess, feedbackRepo, provider, logger, queueManager, configRepo, exampleRepo, patternRepo, stockpileRepo, postingMode, pollMentions } = opts;
+  const { token, adminIds, openAccess, feedbackRepo, provider, logger, queueManager, configRepo, exampleRepo, patternRepo, stockpileRepo, farmAttemptRepo, postingMode, pollMentions } = opts;
   const bot = new Bot(token);
-
-  const sessions = new SessionStore();
 
   // --- Admin guard (skip if openAccess or no IDs configured) ---
   if (!openAccess && adminIds.length > 0) {
@@ -90,13 +112,13 @@ export function createBot(opts: {
       [
         '<b>🥩 $BEEF Roast Evaluator</b>',
         '',
-        '/roast &lt;target&gt; [--eval] [--mutate] — generate roasts',
-        '/power &lt;target&gt; — Opus + quick eval (5 variants)',
-        '/farm &lt;target&gt; — farm-quality (serious eval, mutations)',
-        '/stats — feedback statistics',
-        '/promote &lt;id&gt; — promote stockpiled roast to CreativeMemory',
-        '/status — bot health',
-        '/help — full command list',
+        '<b>Generation:</b>',
+        '/roast &lt;target&gt; — Sonnet, 9 variants (3×3)',
+        '/power &lt;target&gt; — Opus, 6 variants + quick eval',
+        '/farm &lt;target&gt; — 6 variants + mutations + serious eval',
+        '',
+        '<b>Management:</b>',
+        '/stats · /status · /help',
       ].join('\n'),
       { parse_mode: 'HTML' },
     );
@@ -105,54 +127,75 @@ export function createBot(opts: {
   bot.command('help', async (ctx) => {
     await ctx.reply(
       [
-        '<b>🥩 $BEEF Roast Evaluator — Help</b>',
+        '<b>🥩 $BEEF — Command Reference</b>',
         '',
-        '<b>Generate roasts:</b>',
-        '<code>/roast hyperliquid</code> — Sonnet, 3 variants',
-        '<code>/roast hyper --eval</code> — + quick AI evaluation',
-        '<code>/roast hyper --mutate</code> — + creative mutations',
-        '<code>/power hyperliquid</code> — Opus, 5 variants, quick eval',
-        '<code>/farm hyperliquid</code> — farm-quality (serious eval, mutations)',
+        '━━━━━━━━━━━━━━━━━━━━━━',
+        '<b>📝 /roast</b> &lt;target&gt; [flags]',
+        'Sonnet · 3 strategies × 3 = <b>9 variants</b> · no eval',
+        '  <code>--eval</code>        add quick eval (1 judge)',
+        '  <code>--mutate</code>      add creative mutations',
+        '  <code>--variants N</code>  per strategy <i>(default: 3, total: N×3)</i>',
+        '  <code>--mutations N</code> mutation count <i>(default: 1)</i>',
         '',
-        '<b>Rating scale:</b>',
-        '🔥 GOLD — best quality, used as training example',
-        '✅ GOOD — good enough to post',
-        '❌ BAD — not good enough',
-        '✏️ EDIT — write your own version (saved as gold)',
+        '<b>⚡ /power</b> &lt;target&gt; [flags]',
+        'Opus · 3 strategies × 2 = <b>6 variants</b> · quick eval (1 judge)',
+        '  <code>--mutate</code>      add creative mutations',
+        '  <code>--variants N</code>  per strategy <i>(default: 2, total: N×3)</i>',
+        '  <code>--mutations N</code> mutation count <i>(default: 1)</i>',
         '',
-        '<b>Other commands:</b>',
-        '<code>/stats</code> — feedback statistics',
-        '<code>/status</code> — bot health + provider info',
+        '<b>🌾 /farm</b> &lt;target&gt; [flags]',
+        'Farm · 3 strategies × 2 = <b>6 variants</b> · 2 mutations · serious eval (5 judges)',
+        '  <code>--variants N</code>  per strategy <i>(default: 2, total: N×3)</i>',
+        '  <code>--mutations N</code> creative mutations <i>(default: 2)</i>',
+        '  <code>--threshold N</code> stockpile min score <i>(default: 3.5)</i>',
+        '  <code>--quick</code>       1-judge eval instead of 5-judge',
+        '',
+        '━━━━━━━━━━━━━━━━━━━━━━',
+        '<b>📋 Queue &amp; Posting</b>',
         '<code>/queue &lt;target&gt;</code> — add target to posting queue',
-        '<code>/poll</code> — check for new mentions now',
         '<code>/trigger</code> — force-process next queue item',
-        '<code>/promote &lt;id&gt;</code> — promote stockpiled roast to CreativeMemory',
-        '<code>/diagnose</code> — provider status + health check',
-        '<code>/reset</code> — force-reset provider to primary mode',
+        '<code>/poll</code> — check for new mentions',
         '<code>/pause</code> / <code>/resume</code> — toggle autonomous posting',
+        '',
+        '<b>📊 Monitoring</b>',
+        '<code>/status</code> — bot health, queue, stockpile',
+        '<code>/stats</code> — feedback statistics',
+        '<code>/diagnose</code> — provider health check',
+        '<code>/reset</code> — force-reset provider to primary',
+        '',
+        '<b>🏆 Curation</b>',
+        '<code>/promote &lt;id&gt;</code> — stockpile → CreativeMemory',
       ].join('\n'),
       { parse_mode: 'HTML' },
     );
   });
 
-  function handleRoastCommand(
-    ctx: Context,
-    target: string,
-    profile: TaskProfile,
-    variantCount: number,
-    progressEmoji: string,
-    progressLabel: string,
-    evaluationMode?: EvaluationMode,
-    mutationCount?: number,
-  ): void {
-    const chatId = ctx.chat!.id;
-    const api = ctx.api;
+  interface RoastCommandOpts {
+    ctx: Context;
+    target: string;
+    profile: TaskProfile;
+    variantCount: number;
+    progressEmoji: string;
+    progressLabel: string;
+    evaluationMode?: EvaluationMode;
+    mutationCount?: number;
+    evaluationThreshold?: number;
+    settingsLines?: string[];
+  }
+
+  function handleRoastCommand(o: RoastCommandOpts): void {
+    const chatId = o.ctx.chat!.id;
+    const api = o.ctx.api;
 
     // Fire-and-forget: don't block grammY's update loop during generation
     void (async () => {
+      // Build initial status with optional settings block
+      const settingsBlock = o.settingsLines && o.settingsLines.length > 0
+        ? '\n' + o.settingsLines.join('\n')
+        : '';
       const statusMsg = await api.sendMessage(
         chatId,
-        `${progressEmoji} ${progressLabel} <b>${escapeHtml(target)}</b>...`,
+        `${o.progressEmoji} ${o.progressLabel} <b>${escapeHtml(o.target)}</b>...${settingsBlock}`,
         { parse_mode: 'HTML' },
       );
 
@@ -163,7 +206,7 @@ export function createBot(opts: {
           .editMessageText(
             chatId,
             statusMsg.message_id,
-            `${progressEmoji} ${progressLabel} <b>${escapeHtml(target)}</b>... <i>(${String(elapsed)}s)</i>`,
+            `${o.progressEmoji} ${o.progressLabel} <b>${escapeHtml(o.target)}</b>... <i>(${String(elapsed)}s)</i>${settingsBlock}`,
             { parse_mode: 'HTML' },
           )
           .catch(() => {});
@@ -171,67 +214,33 @@ export function createBot(opts: {
 
       try {
         const output = await generateRoasts(
-          target, provider!, logger, feedbackRepo, profile, variantCount,
+          o.target, provider!, logger, feedbackRepo, o.profile, o.variantCount,
           configRepo, exampleRepo, patternRepo,
-          undefined, undefined, evaluationMode, stockpileRepo, mutationCount,
-        );
-
-        // Create session
-        const session = sessions.createSession(
-          target,
-          'generate',
-          output.variants.map((v) => ({
-            text: v.text,
-            angle: v.angle,
-            score: v.score,
-          })),
-          chatId,
+          undefined, undefined, o.evaluationMode, stockpileRepo, o.mutationCount,
+          farmAttemptRepo, o.evaluationThreshold,
         );
 
         clearInterval(progressInterval);
+        const elapsed = Math.round((Date.now() - startTime) / 1000);
 
-        // Update status message
+        // Update status message with completion info
         const researchNote = output.researchNotes
-          ? `\n\n<i>📝 ${escapeHtml(output.researchNotes.slice(0, 200))}</i>`
-          : '';
-        const evalNote = output.evaluation
-          ? `\n🤖 AI eval: composite <b>${output.evaluation.compositeScore.toFixed(1)}</b>/5 · verdict: <b>${output.evaluation.verdict}</b>`
+          ? `\n<i>${escapeHtml(output.researchNotes.slice(0, 200))}</i>\n`
           : '';
         await api.editMessageText(
           chatId,
           statusMsg.message_id,
-          `✅ Generated ${String(output.variants.length)} variants for <b>${escapeHtml(target)}</b>${researchNote}${evalNote}\n\n<i>${RATING_LEGEND}</i>`,
+          `✅ <b>${escapeHtml(o.target)}</b> — ${String(output.variants.length)} variants, ${String(elapsed)}s${researchNote ? '\n' + researchNote : ''}`,
           { parse_mode: 'HTML' },
         );
 
-        // Send each variant with rating buttons
-        for (let i = 0; i < session.variants.length; i++) {
-          const variant = session.variants[i];
-          if (!variant) continue;
-          const msg = await api.sendMessage(
-            chatId,
-            formatVariantMessage(variant.text, i, variant.angle, variant.score, session.variants.length),
-            {
-              parse_mode: 'HTML',
-              reply_markup: ratingKeyboard(session.id, i),
-            },
-          );
-          variant.messageId = msg.message_id;
-        }
-
-        // Session control message with Done button
-        await api.sendMessage(
-          chatId,
-          '<i>Rate the variants above, then press Done for a summary.</i>',
-          {
-            parse_mode: 'HTML',
-            reply_markup: sessionDoneKeyboard(session.id),
-          },
-        );
+        // Format and send results as plain text — matching local farm output
+        const message = formatRoastOutput(o.target, output, o.evaluationMode);
+        await api.sendMessage(chatId, message, { parse_mode: 'HTML' });
       } catch (error) {
         clearInterval(progressInterval);
         const elapsed = Math.round((Date.now() - startTime) / 1000);
-        logger.error({ err: error, target, profile, elapsedSec: elapsed }, 'Roast generation failed');
+        logger.error({ err: error, target: o.target, profile: o.profile, elapsedSec: elapsed }, 'Roast generation failed');
         await api
           .editMessageText(
             chatId,
@@ -244,10 +253,90 @@ export function createBot(opts: {
     })();
   }
 
+  /**
+   * Formats roast output as plain text matching local farm pipeline style.
+   * No buttons, no sessions — just the roasts with scores.
+   */
+  function formatRoastOutput(
+    target: string,
+    output: GenerateRoastsResult,
+    evaluationMode?: EvaluationMode,
+  ): string {
+    const hasEval = evaluationMode && evaluationMode !== 'none' && output.evaluation;
+    const variants = output.variants;
+
+    // No evaluation — just show all variants as plain text
+    if (!hasEval) {
+      const lines: string[] = [];
+      for (let i = 0; i < variants.length; i++) {
+        const v = variants[i]!;
+        const header = `<b>${String(i + 1)}.</b> <i>${escapeHtml(v.angle)}</i>`;
+        lines.push(`${header}\n<code>${escapeHtml(v.text)}</code>`);
+      }
+      return lines.join('\n\n');
+    }
+
+    // With evaluation — split into stockpile/discard like local farm
+    const eval_ = output.evaluation!;
+    const bestScore = eval_.compositeScore;
+    const verdict = eval_.verdict;
+
+    if (verdict === 'stockpile') {
+      // Best variant passed — show it as stockpiled, show rest as extras
+      const best = variants[0]!;
+      const lines: string[] = [
+        `✓ <b>${escapeHtml(target)}</b>: ${bestScore.toFixed(1)} → stockpile`,
+        '',
+        `<code>${escapeHtml(best.text)}</code>`,
+        `<i>${escapeHtml(best.angle)} · ${String(best.text.length)} chars</i>`,
+      ];
+
+      // Show remaining variants without individual scores (they weren't evaluated)
+      if (variants.length > 1) {
+        lines.push('');
+        lines.push(`<i>${String(variants.length - 1)} more variant(s):</i>`);
+        for (let i = 1; i < variants.length; i++) {
+          const v = variants[i]!;
+          lines.push('');
+          lines.push(`<b>${String(i + 1)}.</b> <i>${escapeHtml(v.angle)}</i>`);
+          lines.push(`<code>${escapeHtml(v.text)}</code>`);
+        }
+      }
+
+      return lines.join('\n');
+    }
+
+    // All discarded — show best with its score and a warning
+    const best = variants[0]!;
+    const vetoInfo = eval_.vetoReasons && eval_.vetoReasons.length > 0
+      ? `\n<i>Veto: ${escapeHtml(eval_.vetoReasons[0]!)}</i>`
+      : '';
+
+    const lines: string[] = [
+      `✗ All ${String(variants.length)} variants scored below threshold`,
+      `Best: ${bestScore.toFixed(1)}/5${vetoInfo}`,
+      '',
+      `<code>${escapeHtml(best.text)}</code>`,
+      `<i>${escapeHtml(best.angle)} · ${String(best.text.length)} chars</i>`,
+    ];
+
+    // Show other variants too so user can pick manually
+    if (variants.length > 1) {
+      lines.push('');
+      for (let i = 1; i < variants.length; i++) {
+        const v = variants[i]!;
+        lines.push(`<b>${String(i + 1)}.</b> <i>${escapeHtml(v.angle)}</i>`);
+        lines.push(`<code>${escapeHtml(v.text)}</code>`);
+      }
+    }
+
+    return lines.join('\n');
+  }
+
   bot.command('roast', async (ctx) => {
     const raw = ctx.match?.trim();
     if (!raw) {
-      await ctx.reply('Usage: /roast &lt;target&gt; [--eval] [--mutate]\nExample: /roast hyperliquid --eval', {
+      await ctx.reply('Usage: /roast &lt;target&gt; [--eval] [--mutate] [--variants N]\nExample: /roast hyperliquid --eval', {
         parse_mode: 'HTML',
       });
       return;
@@ -260,22 +349,27 @@ export function createBot(opts: {
 
     const flags = parseRoastFlags(raw);
     if (!flags.target) {
-      await ctx.reply('Usage: /roast &lt;target&gt; [--eval] [--mutate]\nExample: /roast hyperliquid --eval', {
+      await ctx.reply('Usage: /roast &lt;target&gt; [--eval] [--mutate] [--variants N]\nExample: /roast hyperliquid --eval', {
         parse_mode: 'HTML',
       });
       return;
     }
-    handleRoastCommand(
-      ctx, flags.target, 'roast-research', 3, '🔍', 'Researching',
-      flags.eval ? 'quick' : undefined,
-      flags.mutate ? 1 : undefined,
-    );
+
+    const variants = flags.variants ?? 3;
+    const evalMode = flags.eval ? 'quick' as const : undefined;
+    const mutations = flags.mutate ? (flags.mutations ?? 1) : undefined;
+
+    handleRoastCommand({
+      ctx, target: flags.target, profile: 'roast-research',
+      variantCount: variants, progressEmoji: '🔍', progressLabel: 'Researching',
+      evaluationMode: evalMode, mutationCount: mutations,
+    });
   });
 
   bot.command('power', async (ctx) => {
     const raw = ctx.match?.trim();
     if (!raw) {
-      await ctx.reply('Usage: /power &lt;target&gt; [--mutate]\nExample: /power hyperliquid', {
+      await ctx.reply('Usage: /power &lt;target&gt; [--mutate] [--variants N]\nExample: /power hyperliquid', {
         parse_mode: 'HTML',
       });
       return;
@@ -288,24 +382,39 @@ export function createBot(opts: {
 
     const flags = parseRoastFlags(raw);
     if (!flags.target) {
-      await ctx.reply('Usage: /power &lt;target&gt; [--mutate]\nExample: /power hyperliquid', {
+      await ctx.reply('Usage: /power &lt;target&gt; [--mutate] [--variants N]\nExample: /power hyperliquid', {
         parse_mode: 'HTML',
       });
       return;
     }
-    handleRoastCommand(
-      ctx, flags.target, 'roast-power', 5, '⚡', 'Power mode (Opus) —',
-      'quick',
-      flags.mutate ? 1 : undefined,
-    );
+
+    const variants = flags.variants ?? 2;
+    const mutations = flags.mutate ? (flags.mutations ?? 1) : undefined;
+
+    handleRoastCommand({
+      ctx, target: flags.target, profile: 'roast-power',
+      variantCount: variants, progressEmoji: '⚡', progressLabel: 'Power mode (Opus) —',
+      evaluationMode: 'quick', mutationCount: mutations,
+    });
   });
 
   bot.command('farm', async (ctx) => {
-    const target = ctx.match?.trim();
-    if (!target) {
-      await ctx.reply('Usage: /farm &lt;target&gt;\nFarm-quality: 3 strategies, mutations, serious eval.', {
-        parse_mode: 'HTML',
-      });
+    const raw = ctx.match?.trim();
+    if (!raw) {
+      await ctx.reply(
+        [
+          'Usage: /farm &lt;target&gt; [flags]',
+          '',
+          'Flags:',
+          '  <code>--variants N</code>  — variants per strategy (default 2)',
+          '  <code>--mutations N</code> — creative mutations (default 2)',
+          '  <code>--threshold N</code> — stockpile threshold (default 3.5)',
+          '  <code>--quick</code>       — quick eval (1 judge) instead of serious (5)',
+          '',
+          'Example: /farm hyperliquid --variants 4 --threshold 3.8',
+        ].join('\n'),
+        { parse_mode: 'HTML' },
+      );
       return;
     }
 
@@ -314,7 +423,29 @@ export function createBot(opts: {
       return;
     }
 
-    handleRoastCommand(ctx, target, 'farm-generate', 2, '🌾', 'Farm-quality generation —', 'serious', 2);
+    const flags = parseRoastFlags(raw);
+    if (!flags.target) {
+      await ctx.reply('Usage: /farm &lt;target&gt;');
+      return;
+    }
+
+    const variants = flags.variants ?? 2;
+    const mutations = flags.mutations ?? 2;
+    const threshold = flags.threshold ?? 3.5;
+    const evalMode: EvaluationMode = flags.quick ? 'quick' : 'serious';
+    const judgeCount = evalMode === 'quick' ? 1 : 5;
+
+    const total = variants * 3;
+    const settingsLines = [
+      `<i>⚙️ ${String(variants)}×3 = ${String(total)} variants · ${String(mutations)} mutations · ${evalMode} (${String(judgeCount)}J) · threshold ${threshold.toFixed(1)}</i>`,
+    ];
+
+    handleRoastCommand({
+      ctx, target: flags.target, profile: 'farm-generate',
+      variantCount: variants, progressEmoji: '🌾', progressLabel: 'Farm-quality generation —',
+      evaluationMode: evalMode, mutationCount: mutations,
+      evaluationThreshold: threshold, settingsLines,
+    });
   });
 
   bot.command('stats', async (ctx) => {
@@ -709,450 +840,5 @@ export function createBot(opts: {
     );
   });
 
-  // --- Callback: rating buttons ---
-
-  bot.on('callback_query:data', async (ctx) => {
-    const data = ctx.callbackQuery.data;
-
-    // Parse: rate:{sessionId}:{variantIdx}:{verdict}
-    if (data.startsWith('rate:')) {
-      const parts = data.split(':');
-      if (parts.length !== 4) {
-        try { await ctx.answerCallbackQuery({ text: 'Invalid callback data' }); } catch { /* expired */ }
-        return;
-      }
-      const sessionId = parts[1]!;
-      const variantIdx = parseInt(parts[2]!, 10);
-      const verdict = parts[3] as HumanVerdict;
-
-      if (!VALID_VERDICTS.has(verdict) || isNaN(variantIdx)) {
-        try { await ctx.answerCallbackQuery({ text: 'Invalid rating' }); } catch { /* expired */ }
-        return;
-      }
-
-      const session = sessions.get(sessionId);
-      if (!session) {
-        try { await ctx.answerCallbackQuery({ text: 'Session expired' }); } catch { /* expired */ }
-        return;
-      }
-
-      const evaluatorId = ctx.from.id;
-      const evaluatorName = ctx.from.username ?? ctx.from.first_name;
-
-      // Answer callback query first (must happen within 30s of button click)
-      const existingRating = sessions.getRating(sessionId, evaluatorId, variantIdx);
-      const ackText = existingRating
-        ? `Updated: ${verdict.toUpperCase()}`
-        : `Rated: ${verdict.toUpperCase()}`;
-      try { await ctx.answerCallbackQuery({ text: ackText }); } catch { /* expired */ }
-
-      // Store in session
-      sessions.addRating(sessionId, evaluatorId, variantIdx, verdict);
-
-      // Store in database
-      const variant = session.variants[variantIdx];
-      if (variant) {
-        feedbackRepo.insert({
-          sessionId,
-          variantIndex: variantIdx,
-          roastText: variant.text,
-          targetName: session.targetName,
-          angle: variant.angle,
-          llmSelfScore: variant.score ? Math.round(variant.score) : undefined,
-          evaluatorTelegramId: evaluatorId,
-          evaluatorName,
-          verdict,
-        });
-      }
-
-      // Update message to show ratings
-      if (variant?.messageId && ctx.chat) {
-        const ratingLabels = buildRatingLabels(session, variantIdx, evaluatorId, evaluatorName);
-        const originalText = formatVariantMessage(variant.text, variantIdx, variant.angle, variant.score, session.variants.length);
-        const ratingsLine = `\n\n<b>Ratings:</b> ${ratingLabels.join(' · ')}`;
-
-        try {
-          await ctx.api.editMessageText(
-            ctx.chat.id,
-            variant.messageId,
-            originalText + ratingsLine,
-            { parse_mode: 'HTML', reply_markup: ratingKeyboard(sessionId, variantIdx) },
-          );
-        } catch { /* message not modified */ }
-      }
-
-      // Auto-summary if all variants rated
-      const evaluatorRatings = session.ratings.get(evaluatorId);
-      if (evaluatorRatings && evaluatorRatings.size === session.variants.length) {
-        await sendSessionReport(ctx, session, feedbackRepo);
-      }
-
-      return;
-    }
-
-    // --- Callback: EDIT button ---
-    if (data.startsWith('edit:')) {
-      const parts = data.split(':');
-      if (parts.length !== 3) {
-        try { await ctx.answerCallbackQuery({ text: 'Invalid edit data' }); } catch { /* expired */ }
-        return;
-      }
-      const sessionId = parts[1]!;
-      const variantIdx = parseInt(parts[2]!, 10);
-
-      const session = sessions.get(sessionId);
-      if (!session) {
-        try { await ctx.answerCallbackQuery({ text: 'Session expired' }); } catch { /* expired */ }
-        return;
-      }
-
-      if (isNaN(variantIdx) || variantIdx < 0 || variantIdx >= session.variants.length) {
-        try { await ctx.answerCallbackQuery({ text: 'Invalid variant' }); } catch { /* expired */ }
-        return;
-      }
-
-      sessions.setPendingEdit(ctx.from.id, sessionId, variantIdx);
-      try { await ctx.answerCallbackQuery({ text: 'Send your version as a text message' }); } catch { /* expired */ }
-
-      const variant = session.variants[variantIdx];
-      const originalPreview = variant ? variant.text.slice(0, 100) : '';
-      await ctx.reply(
-        `✏️ <b>Edit mode</b>\n\nOriginal: <code>${escapeHtml(originalPreview)}${variant && variant.text.length > 100 ? '...' : ''}</code>\n\nSend your improved version (50-280 chars):`,
-        { parse_mode: 'HTML' },
-      );
-
-      return;
-    }
-
-    // --- Callback: STOCKPILE button ---
-    if (data.startsWith('stockpile:')) {
-      const parts = data.split(':');
-      if (parts.length !== 3) {
-        try { await ctx.answerCallbackQuery({ text: 'Invalid stockpile data' }); } catch { /* expired */ }
-        return;
-      }
-      const sessionId = parts[1]!;
-      const variantIdx = parseInt(parts[2]!, 10);
-
-      const session = sessions.get(sessionId);
-      if (!session) {
-        try { await ctx.answerCallbackQuery({ text: 'Session expired' }); } catch { /* expired */ }
-        return;
-      }
-
-      const variant = session.variants[variantIdx];
-      if (!variant || !stockpileRepo) {
-        try { await ctx.answerCallbackQuery({ text: stockpileRepo ? 'Invalid variant' : 'Stockpile not configured' }); } catch { /* expired */ }
-        return;
-      }
-
-      stockpileRepo.insert({
-        targetName: session.targetName,
-        targetType: 'project',
-        tweetText: variant.text,
-        angle: variant.angle,
-        qualityScore: variant.score ?? 3.0,
-        freshnessType: 'evergreen',
-      });
-
-      const available = stockpileRepo.getStats().byStatus['available'] ?? 0;
-      try { await ctx.answerCallbackQuery({ text: `Added to stockpile (${String(available)} available)` }); } catch { /* expired */ }
-      return;
-    }
-
-    // --- Callback: Done button ---
-    if (data.startsWith('done:')) {
-      const sessionId = data.slice(5);
-      const session = sessions.get(sessionId);
-      if (!session) {
-        try { await ctx.answerCallbackQuery({ text: 'Session expired' }); } catch { /* expired */ }
-        return;
-      }
-
-      try { await ctx.answerCallbackQuery({ text: 'Session finished' }); } catch { /* expired */ }
-
-      // Remove the Done button from the control message
-      if (ctx.chat && ctx.callbackQuery.message) {
-        try {
-          await ctx.api.editMessageText(
-            ctx.chat.id,
-            ctx.callbackQuery.message.message_id,
-            '<i>Session completed.</i>',
-            { parse_mode: 'HTML' },
-          );
-        } catch { /* message not modified */ }
-      }
-
-      await sendSessionReport(ctx, session, feedbackRepo);
-      sessions.delete(sessionId);
-      return;
-    }
-
-    try { await ctx.answerCallbackQuery({ text: 'Unknown action' }); } catch { /* expired */ }
-  });
-
-  // --- Text messages: manual evaluation ---
-  // In private chats: any text becomes a roast to evaluate
-  // In groups: only text that's a reply to the bot's message
-
-  bot.on('message:text', async (ctx) => {
-    const text = ctx.message.text.trim();
-
-    // Skip if it looks like a command
-    if (text.startsWith('/')) return;
-
-    // In group chats: only respond if message is a reply to the bot
-    if (isGroupChat(ctx)) {
-      const replyTo = ctx.message.reply_to_message;
-      if (!replyTo || replyTo.from?.id !== bot.botInfo.id) {
-        return; // Silently ignore non-reply messages in groups
-      }
-    }
-
-    // --- Handle pending edits ---
-    const pendingEdit = sessions.getPendingEdit(ctx.from.id);
-    if (pendingEdit) {
-      sessions.clearPendingEdit(ctx.from.id);
-
-      if (text.length < 50 || text.length > 280) {
-        await ctx.reply('Edit must be 50-280 characters. Try again with /roast or click ✏️ EDIT again.');
-        return;
-      }
-
-      const session = sessions.get(pendingEdit.sessionId);
-      if (!session) {
-        await ctx.reply('Session expired. Generate a new roast with /roast.');
-        return;
-      }
-
-      const variant = session.variants[pendingEdit.variantIdx];
-      if (!variant) {
-        await ctx.reply('Variant not found.');
-        return;
-      }
-
-      const evaluatorId = ctx.from.id;
-      const evaluatorName = ctx.from.username ?? ctx.from.first_name;
-
-      // Save user's version as a fire example
-      feedbackRepo.insert({
-        sessionId: pendingEdit.sessionId,
-        variantIndex: pendingEdit.variantIdx,
-        roastText: text,
-        targetName: session.targetName,
-        angle: variant.angle,
-        llmSelfScore: variant.score ? Math.round(variant.score) : undefined,
-        evaluatorTelegramId: evaluatorId,
-        evaluatorName,
-        verdict: 'fire',
-        notes: `user_edit|original:${variant.text.slice(0, 100)}`,
-      });
-
-      // Update session rating
-      sessions.addRating(pendingEdit.sessionId, evaluatorId, pendingEdit.variantIdx, 'fire');
-
-      // Update variant message to show edit rating
-      if (variant.messageId && ctx.chat) {
-        const originalText = formatVariantMessage(
-          variant.text,
-          pendingEdit.variantIdx,
-          variant.angle,
-          variant.score,
-          session.variants.length,
-        );
-        try {
-          await ctx.api.editMessageText(
-            ctx.chat.id,
-            variant.messageId,
-            originalText + `\n\n<b>Ratings:</b> ✏️ ${escapeHtml(evaluatorName)}`,
-            { parse_mode: 'HTML' },
-          );
-        } catch {
-          // Message not modified — ignore
-        }
-      }
-
-      const goldCount = (feedbackRepo.getStats().byVerdict['fire'] ?? 0);
-      await ctx.reply(
-        [
-          `✅ <b>Edit saved as gold example</b>`,
-          '',
-          `<code>${escapeHtml(text)}</code>`,
-          '',
-          `<i>📚 Total gold examples: ${String(goldCount)}</i>`,
-        ].join('\n'),
-        { parse_mode: 'HTML' },
-      );
-
-      // Check if all variants rated → send summary
-      const evaluatorRatings = session.ratings.get(evaluatorId);
-      if (evaluatorRatings && evaluatorRatings.size === session.variants.length) {
-        await sendSessionReport(ctx, session, feedbackRepo);
-      }
-
-      return;
-    }
-  });
-
   return bot;
-}
-
-function buildRatingLabels(
-  session: RoastSession,
-  variantIdx: number,
-  currentEvaluatorId: number,
-  currentEvaluatorName: string,
-): string[] {
-  const labels: string[] = [];
-  for (const [eid, evaluatorRatings] of session.ratings) {
-    const v = evaluatorRatings.get(variantIdx);
-    if (v) {
-      const name = eid === currentEvaluatorId ? currentEvaluatorName : String(eid);
-      const emoji = v === 'fire' ? '🔥' : v === 'post' ? '✅' : v === 'iterate' ? '🔄' : '❌';
-      labels.push(`${emoji} ${name}`);
-    }
-  }
-  return labels;
-}
-
-async function sendSessionReport(
-  ctx: Context,
-  session: RoastSession,
-  feedbackRepo: FeedbackRepository,
-): Promise<void> {
-  const summary = formatSessionSummary(session);
-
-  const stats = feedbackRepo.getStats();
-  const goldCount = stats.byVerdict['fire'] ?? 0;
-  const goldForTarget = feedbackRepo.getFireExamplesForTarget(session.targetName, 100).length;
-
-  // Collect new golds from this session
-  const newGolds: Array<{ angle: string; text: string }> = [];
-  for (const [, eRatings] of session.ratings) {
-    for (const [idx, v] of eRatings) {
-      if (v === 'fire') {
-        const va = session.variants[idx];
-        if (va) newGolds.push({ angle: va.angle, text: va.text });
-      }
-    }
-  }
-
-  const ratedCount = new Set(
-    [...session.ratings.values()].flatMap((m) => [...m.keys()]),
-  ).size;
-
-  const lines: string[] = [summary];
-
-  // --- Section: Learning delta ---
-  lines.push('<b>🧠 What the bot learned:</b>');
-
-  if (newGolds.length > 0) {
-    for (const g of newGolds) {
-      const preview = g.text.length > 60 ? g.text.slice(0, 60) + '...' : g.text;
-      lines.push(`  🔥 New gold [${escapeHtml(g.angle)}]: <code>${escapeHtml(preview)}</code>`);
-    }
-  } else {
-    lines.push('  No new gold examples from this session');
-  }
-
-  lines.push(`  Gold library: <b>${String(goldCount)}</b> total (${String(goldForTarget)} for ${escapeHtml(session.targetName)})`);
-  lines.push(`  Rated: ${String(ratedCount)}/${String(session.variants.length)} variants`);
-  lines.push('');
-
-  // --- Section: Angle performance ---
-  const anglePerf = feedbackRepo.getAnglePerformance();
-  if (anglePerf.length > 0) {
-    lines.push('<b>📐 Angle performance (all sessions):</b>');
-    for (const a of anglePerf.slice(0, 7)) {
-      const fireRate = Math.round((a.fireCount / a.total) * 100);
-      const rejectRate = Math.round((a.rejectCount / a.total) * 100);
-      lines.push(`  ${escapeHtml(a.angle)} — 🔥${String(fireRate)}% · ❌${String(rejectRate)}% (${String(a.total)} ratings)`);
-    }
-    lines.push('');
-  }
-
-  // --- Section: Prompt impact ---
-  const targetExamples = feedbackRepo.getFireExamplesForTarget(session.targetName, 1);
-  const allFireExamples = feedbackRepo.getFireExamples(5);
-  const otherExamples = allFireExamples
-    .filter((e) => e.target.toLowerCase() !== session.targetName.toLowerCase())
-    .slice(0, 2 - targetExamples.length);
-  const promptExamples = [...targetExamples, ...otherExamples];
-
-  lines.push(`<b>🔮 Next prompt for ${escapeHtml(session.targetName)}:</b>`);
-
-  if (promptExamples.length > 0) {
-    lines.push(`  Dynamic examples (${String(promptExamples.length)}/5 few-shot slots):`);
-    for (const ex of promptExamples) {
-      const preview = ex.text.length > 50 ? ex.text.slice(0, 50) + '...' : ex.text;
-      lines.push(`  · [${escapeHtml(ex.angle)}] <code>${escapeHtml(preview)}</code>`);
-    }
-    lines.push(`  + ${String(5 - promptExamples.length)} static examples from character`);
-  } else {
-    lines.push('  No dynamic examples yet — using 5 static character examples');
-  }
-
-  const targetSessions = feedbackRepo.getTargetSessionCount(session.targetName);
-  const targetAngles = feedbackRepo.getTargetAngleHistory(session.targetName);
-  if (targetSessions >= 3) {
-    const angleSummary = targetAngles.map((a) => `${a.angle} (${String(a.count)}x)`).join(', ');
-    lines.push(`  Context injected: "${escapeHtml(session.targetName)}" roasted ${String(targetSessions)}x, angles: ${angleSummary}`);
-  } else if (targetSessions > 0) {
-    lines.push(`  ${escapeHtml(session.targetName)}: ${String(targetSessions)} session(s) — context line unlocks at 3`);
-  }
-
-  // --- Section: Insights ---
-  const insights = generateInsights(anglePerf, newGolds.length, goldCount, session);
-  if (insights.length > 0) {
-    lines.push('');
-    lines.push('<b>💡 Insights:</b>');
-    for (const insight of insights) {
-      lines.push(`  ${insight}`);
-    }
-  }
-
-  await ctx.reply(lines.join('\n'), { parse_mode: 'HTML' });
-}
-
-function generateInsights(
-  anglePerf: Array<{ angle: string; total: number; fireCount: number; rejectCount: number }>,
-  newGoldsCount: number,
-  totalGold: number,
-  session: RoastSession,
-): string[] {
-  const insights: string[] = [];
-
-  // Find best and worst angles (min 3 ratings to be meaningful)
-  const significant = anglePerf.filter((a) => a.total >= 3);
-  if (significant.length >= 2) {
-    const best = significant.reduce((a, b) => (a.fireCount / a.total > b.fireCount / b.total ? a : b));
-    const worst = significant.reduce((a, b) => (a.rejectCount / a.total > b.rejectCount / b.total ? a : b));
-    const bestRate = Math.round((best.fireCount / best.total) * 100);
-    const worstRate = Math.round((worst.rejectCount / worst.total) * 100);
-
-    if (bestRate > 40) {
-      insights.push(`Best angle: ${best.angle} (${String(bestRate)}% fire rate)`);
-    }
-    if (worstRate > 40) {
-      insights.push(`Weakest angle: ${worst.angle} (${String(worstRate)}% reject rate)`);
-    }
-  }
-
-  // Gold ratio insight
-  const totalRatings = anglePerf.reduce((sum, a) => sum + a.total, 0);
-  if (totalRatings >= 5) {
-    const goldRatio = Math.round((totalGold / totalRatings) * 100);
-    if (goldRatio < 15) {
-      insights.push(`Gold rate ${String(goldRatio)}% — consider being more generous with 🔥`);
-    } else if (goldRatio > 50) {
-      insights.push(`Gold rate ${String(goldRatio)}% — high quality! Prompt learning is strong`);
-    }
-  }
-
-  // Session coverage
-  if (session.variants.length > 0 && newGoldsCount === 0) {
-    insights.push('No gold this session — bot will use existing examples');
-  }
-
-  return insights;
 }
