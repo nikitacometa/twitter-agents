@@ -6,7 +6,6 @@ import {
   type LLMProvider,
   type ProviderCapabilities,
   type ProviderName,
-  ProviderUnavailableError,
   TaskRequiresResearchError,
 } from './agent.types.js';
 
@@ -125,20 +124,19 @@ describe('ProviderManager', () => {
     );
   });
 
-  it('pauses when no fallback available for research tasks', async () => {
+  it('retries primary on every call even after threshold failures (no fallback)', async () => {
     const managerNoFallback = new ProviderManager(primary, null, alerter, mockLogger);
     primary.run.mockRejectedValue(new Error('CLI down'));
 
-    for (let i = 0; i < 3; i++) {
+    for (let i = 0; i < 4; i++) {
       await expect(
         managerNoFallback.run(`fail-${String(i)}`, makeTask(false)),
-      ).rejects.toThrow();
+      ).rejects.toThrow('CLI down');
     }
 
-    expect(managerNoFallback.mode).toBe('paused');
-    await expect(managerNoFallback.run('any', makeTask(false))).rejects.toThrow(
-      ProviderUnavailableError,
-    );
+    // All 4 calls tried primary — no blocking
+    expect(primary.run).toHaveBeenCalledTimes(4);
+    expect(managerNoFallback.mode).toBe('primary');
   });
 
   it('recovers to primary mode after successful primary call', async () => {

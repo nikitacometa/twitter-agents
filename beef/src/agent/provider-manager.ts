@@ -6,7 +6,6 @@ import {
   type ProviderCapabilities,
   type ProviderMode,
   type ProviderName,
-  ProviderUnavailableError,
   TaskRequiresResearchError,
 } from './agent.types.js';
 import { getErrorMessage } from '@common/utils/error.util.js';
@@ -48,11 +47,6 @@ export class ProviderManager implements LLMProvider {
       throw new TaskRequiresResearchError(taskId);
     }
 
-    // In paused mode, only recovery timer can bring us back
-    if (this._mode === 'paused') {
-      throw new ProviderUnavailableError(taskId);
-    }
-
     // Try primary provider
     let primaryError: unknown;
     try {
@@ -81,9 +75,8 @@ export class ProviderManager implements LLMProvider {
       return this.fallback.run<T>(taskId, task);
     }
 
-    // No fallback or research required: pause
-    await this.enterPausedMode();
-    throw new ProviderUnavailableError(taskId);
+    // No fallback available (or research required): throw original error
+    throw primaryError;
   }
 
   async healthCheck(): Promise<boolean> {
@@ -96,7 +89,7 @@ export class ProviderManager implements LLMProvider {
 
   /**
    * Force-reset provider to primary mode.
-   * Use when provider is stuck in paused/degraded mode after transient failures.
+   * Use when provider is stuck in degraded mode after transient failures.
    */
   forceReset(): void {
     const prev = this._mode;
@@ -149,15 +142,6 @@ export class ProviderManager implements LLMProvider {
     this.logger.warn('Entering degraded mode — only non-research tasks via SDK fallback');
     await this.alerter.send(
       '⚠️ Claude Code CLI unavailable. Degraded mode: only simple replies. Research tasks queued.',
-    );
-  }
-
-  private async enterPausedMode(): Promise<void> {
-    this._mode = 'paused';
-    this.startRecoveryTimer();
-    this.logger.error('Entering paused mode — all LLM tasks suspended');
-    await this.alerter.send(
-      '🚨 All LLM providers unavailable. Bot paused. Retrying every 15 min.',
     );
   }
 

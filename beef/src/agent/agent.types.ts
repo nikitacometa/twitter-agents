@@ -48,19 +48,12 @@ export interface LLMProvider {
   readonly capabilities: ProviderCapabilities;
 }
 
-export type ProviderMode = 'primary' | 'degraded' | 'paused';
+export type ProviderMode = 'primary' | 'degraded';
 
 export class TaskRequiresResearchError extends Error {
   constructor(taskId: string) {
     super(`Task "${taskId}" requires research tools — unavailable in degraded mode`);
     this.name = 'TaskRequiresResearchError';
-  }
-}
-
-export class ProviderUnavailableError extends Error {
-  constructor(taskId: string) {
-    super(`All providers exhausted for task "${taskId}"`);
-    this.name = 'ProviderUnavailableError';
   }
 }
 
