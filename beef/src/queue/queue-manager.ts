@@ -44,7 +44,6 @@ export class QueueManager {
   private readonly logger: Logger;
   private readonly dailyLimit: number;
   private readonly mentionReplyLimit: number;
-  private readonly enableAutonomousPosting: boolean;
   private readonly enableMentionReplies: boolean;
   private readonly casualReplyLimit: number;
   private readonly evaluationThreshold: number;
@@ -64,7 +63,6 @@ export class QueueManager {
     dailyLimit: number;
     mentionReplyLimit?: number;
     casualReplyLimit?: number;
-    enableAutonomousPosting: boolean;
     enableMentionReplies: boolean;
     evaluationThreshold?: number;
   }) {
@@ -80,7 +78,6 @@ export class QueueManager {
     this.dailyLimit = opts.dailyLimit;
     this.mentionReplyLimit = opts.mentionReplyLimit ?? 20;
     this.casualReplyLimit = opts.casualReplyLimit ?? 40;
-    this.enableAutonomousPosting = opts.enableAutonomousPosting;
     this.evaluationThreshold = opts.evaluationThreshold ?? 3.5;
     this.enableMentionReplies = opts.enableMentionReplies;
   }
@@ -142,9 +139,6 @@ export class QueueManager {
   }
 
   private async dequeueAndProcess(force = false): Promise<QueueProcessResult> {
-    // Retry loop: skip items rejected for systemic reasons (posting mode disabled)
-    // without wasting the entire scheduler tick. Max 5 skips to avoid runaway loops.
-    for (let skipped = 0; skipped < 5; skipped++) {
     const item = this.queueRepo.dequeue();
     if (!item) {
       this.logger.debug('Queue empty');
@@ -176,35 +170,20 @@ export class QueueManager {
       }
     }
 
-    // Determine reply context early — used by posting mode checks, stockpile, and generation
+    // Determine reply context early
     const replyToId = extractReplyToId(item.context);
     const isReply = !!replyToId;
 
-    // Check posting mode before serving stockpile or generating (force bypasses for Telegram /trigger)
-    // Use reject() (permanent) for systemic config issues — fail() retries and blocks the queue
-    if (!force) {
-      if (isReply && !this.enableMentionReplies) {
-        this.logger.info({ queueId: item.id, target: item.targetName }, 'Mention reply skipped — ENABLE_MENTION_REPLIES=false');
-        this.queueRepo.reject(item.id);
-        continue; // try next item instead of wasting the tick
-      }
-      if (!isReply && !this.enableAutonomousPosting) {
-        this.logger.info({ queueId: item.id, target: item.targetName }, 'Autonomous post skipped — ENABLE_AUTONOMOUS_POSTING=false');
-        this.queueRepo.reject(item.id);
-        continue; // try next item instead of wasting the tick
-      }
-
-      // M3.3: Daily limit for mention replies (separate from autonomous limit)
-      if (isReply) {
-        const mentionToday = this.roastRepo.getTodayCount('mention');
-        if (mentionToday >= this.mentionReplyLimit) {
-          this.logger.info(
-            { mentionToday, limit: this.mentionReplyLimit, queueId: item.id },
-            'Mention reply daily limit reached',
-          );
-          this.queueRepo.fail(item.id, 'Daily mention reply limit reached');
-          return { dequeued: true, posted: false, target: item.targetName, error: 'Mention reply limit reached' };
-        }
+    // Daily limit for mention replies (separate from autonomous limit)
+    if (!force && isReply) {
+      const mentionToday = this.roastRepo.getTodayCount('mention');
+      if (mentionToday >= this.mentionReplyLimit) {
+        this.logger.info(
+          { mentionToday, limit: this.mentionReplyLimit, queueId: item.id },
+          'Mention reply daily limit reached',
+        );
+        this.queueRepo.fail(item.id, 'Daily mention reply limit reached');
+        return { dequeued: true, posted: false, target: item.targetName, error: 'Mention reply limit reached' };
       }
     }
 
@@ -333,11 +312,6 @@ export class QueueManager {
         });
       }
     }
-    } // end for-loop (skip rejected items)
-
-    // All dequeued items were rejected — queue effectively empty for allowed sources
-    this.logger.debug('All dequeued items rejected by posting mode');
-    return { dequeued: false, error: 'No processable items in queue' };
   }
 
   private getRoastEngine(): RoastEngine {

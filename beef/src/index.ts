@@ -207,7 +207,6 @@ if (provider) {
     logger,
     dailyLimit: config.ROASTS_PER_DAY,
     mentionReplyLimit: config.MENTION_REPLIES_PER_DAY,
-    enableAutonomousPosting: config.ENABLE_AUTONOMOUS_POSTING,
     enableMentionReplies: config.ENABLE_MENTION_REPLIES,
   });
   logger.info({ dailyLimit: config.ROASTS_PER_DAY }, 'Queue manager initialized');
