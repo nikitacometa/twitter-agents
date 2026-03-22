@@ -5,6 +5,7 @@ import type { ProviderManager } from '@agent/provider-manager.js';
 import type { TaskProfile } from '@agent/agent.types.js';
 import { getErrorMessage } from '@common/utils/error.util.js';
 import type { FeedbackRepository } from '@storage/repositories/feedback.repository.js';
+import type { RoastRepository } from '@storage/repositories/roast.repository.js';
 import type { QueueManager } from '@queue/queue-manager.js';
 import type { ConfigRepository } from '@storage/repositories/config.repository.js';
 import type { ExternalExampleRepository } from '@storage/repositories/external-example.repository.js';
@@ -75,13 +76,14 @@ export function createBot(opts: {
   patternRepo?: RoastPatternRepository;
   stockpileRepo?: StockpileRepository;
   farmAttemptRepo?: FarmAttemptRepository;
+  roastRepo?: RoastRepository;
   postingMode?: { autonomous: boolean; mentionReplies: boolean };
   pollMentions?: () => Promise<PollResult>;
   getSchedulerJobs?: () => JobInfo[];
   twitterEnabled?: boolean;
   beefEnv?: string;
 }): Bot {
-  const { token, adminIds, openAccess, feedbackRepo, provider, logger, queueManager, configRepo, exampleRepo, patternRepo, stockpileRepo, farmAttemptRepo, postingMode, pollMentions } = opts;
+  const { token, adminIds, openAccess, feedbackRepo, provider, logger, queueManager, configRepo, exampleRepo, patternRepo, stockpileRepo, farmAttemptRepo, roastRepo, postingMode, pollMentions } = opts;
   const bot = new Bot(token);
 
   // --- Admin guard (skip if openAccess or no IDs configured) ---
@@ -906,6 +908,33 @@ export function createBot(opts: {
       `Approve mode: <b>${runtime.approveMode ? 'ON' : 'OFF'}</b>\n\n<code>/approve on</code> — require approval\n<code>/approve off</code> — auto-post`,
       { parse_mode: 'HTML' },
     );
+  });
+
+  // --- /pending: list roasts awaiting approval ---
+  bot.command('pending', async (ctx) => {
+    if (!roastRepo) {
+      await ctx.reply('Roast repository not available.');
+      return;
+    }
+
+    const pending = roastRepo.getPendingApproval();
+    if (pending.length === 0) {
+      await ctx.reply('No roasts pending approval.');
+      return;
+    }
+
+    for (const roast of pending) {
+      const header = `🔍 <b>Pending</b> — ${escapeHtml(roast.targetName)} <i>(${escapeHtml(roast.source)})</i>\nID: ${String(roast.id)} | ${escapeHtml(roast.createdAt)}`;
+      await ctx.reply(header, { parse_mode: 'HTML' });
+
+      const keyboard = new InlineKeyboard()
+        .text('Post', `approve:${String(roast.id)}`)
+        .text('Skip', `reject:${String(roast.id)}`);
+      await ctx.reply(
+        `<code>${escapeHtml(roast.tweetText)}</code>`,
+        { parse_mode: 'HTML', reply_markup: keyboard },
+      );
+    }
   });
 
   // --- Inline button callbacks (approve/reject roasts) ---

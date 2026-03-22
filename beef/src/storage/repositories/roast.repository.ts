@@ -40,6 +40,9 @@ export class RoastRepository {
   private readonly updateStatusStmt: Database.Statement;
   private readonly searchStmt: Database.Statement;
   private readonly findRecentByTargetStmt: Database.Statement;
+  private readonly totalCountStmt: Database.Statement;
+  private readonly totalLikesStmt: Database.Statement;
+  private readonly pendingApprovalStmt: Database.Statement;
 
   constructor(db: Database.Database) {
     this.insertStmt = db.prepare(`
@@ -83,6 +86,18 @@ export class RoastRepository {
       AND created_at >= datetime('now', '-1 hour')
       ORDER BY created_at DESC LIMIT 1
     `);
+
+    this.totalCountStmt = db.prepare(
+      "SELECT COUNT(*) as count FROM roasts WHERE status = 'posted'",
+    );
+
+    this.totalLikesStmt = db.prepare(
+      "SELECT COALESCE(SUM(likes), 0) as total FROM roasts WHERE status = 'posted'",
+    );
+
+    this.pendingApprovalStmt = db.prepare(
+      "SELECT * FROM roasts WHERE status = 'pending_approval' ORDER BY created_at DESC",
+    );
   }
 
   insert(roast: InsertRoast): number {
@@ -142,6 +157,18 @@ export class RoastRepository {
     return this.findRecentByTargetStmt.get(targetName, source) as
       | { id: number; tweetId: string | null; status: string }
       | undefined;
+  }
+
+  getTotalCount(): number {
+    return (this.totalCountStmt.get() as { count: number }).count;
+  }
+
+  getTotalLikes(): number {
+    return (this.totalLikesStmt.get() as { total: number }).total;
+  }
+
+  getPendingApproval(): PostedRoast[] {
+    return (this.pendingApprovalStmt.all() as RoastRow[]).map(mapRow);
   }
 }
 

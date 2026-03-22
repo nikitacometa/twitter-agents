@@ -429,6 +429,7 @@ if (config.TELEGRAM_BOT_TOKEN) {
     patternRepo,
     stockpileRepo,
     farmAttemptRepo,
+    roastRepo,
     postingMode: {
       autonomous: config.ENABLE_AUTONOMOUS_POSTING,
       mentionReplies: config.ENABLE_MENTION_REPLIES,
@@ -441,11 +442,33 @@ if (config.TELEGRAM_BOT_TOKEN) {
 
   void bot.start({
     drop_pending_updates: true,
-    onStart: () =>
+    onStart: async () => {
       logger.info(
         { admins: config.TELEGRAM_ADMIN_IDS, openAccess: config.TELEGRAM_OPEN_ACCESS },
         'Telegram bot polling started',
-      ),
+      );
+
+      // Recover orphaned pending_approval roasts after restart
+      const pending = roastRepo.getPendingApproval();
+      if (pending.length > 0) {
+        logger.info({ count: pending.length }, 'Found orphaned pending_approval roasts on startup');
+        const chatId = config.TELEGRAM_CHAT_ID ?? config.TELEGRAM_ADMIN_IDS[0];
+        if (chatId) {
+          try {
+            const lines = pending.map((r) =>
+              `• ${r.targetName} (ID ${String(r.id)}) — /pending to review`,
+            );
+            await bot!.api.sendMessage(
+              chatId,
+              `🔄 <b>${String(pending.length)} roast(s) pending approval</b> (recovered after restart)\n${lines.join('\n')}`,
+              { parse_mode: 'HTML' },
+            );
+          } catch (err) {
+            logger.warn({ err }, 'Failed to send pending approval recovery notification');
+          }
+        }
+      }
+    },
   });
 } else {
   logger.warn('TELEGRAM_BOT_TOKEN not set — Telegram bot disabled');
