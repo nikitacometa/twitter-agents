@@ -82,7 +82,7 @@ export class QueueRepository {
     this.rescueMentionsStmt = db.prepare(`
       UPDATE queue
       SET status = 'pending', attempts = 0, error_message = NULL, updated_at = datetime('now')
-      WHERE status = 'failed' AND source = 'mention'
+      WHERE status = 'failed' AND source IN ('mention', 'casual_reply')
     `);
   }
 
