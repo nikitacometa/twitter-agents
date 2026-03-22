@@ -153,13 +153,14 @@ export class MentionHandler {
         const target = extractTarget(m.text);
         if (target) {
           // Scenario 1: explicit "roast @X" / "roast $TOKEN"
-          const parentPart = m.inReplyToTweetId ? `|parent:${m.inReplyToTweetId}` : '';
+          // Reply to parent tweet (if under someone's tweet) so the roast appears in that thread
+          const replyTarget = m.inReplyToTweetId ?? m.tweetId;
           this.queueRepo.enqueue({
             targetName: target,
             targetType: 'project',
             source: 'mention',
             priority: 3,
-            context: `reply_to:${m.tweetId}|by:@${m.authorName}|mention:${m.tweetId}${parentPart}`,
+            context: `reply_to:${replyTarget}|by:@${m.authorName}|mention:${m.tweetId}`,
           });
           queued = true;
           queueTarget = target;
@@ -278,13 +279,14 @@ export class MentionHandler {
 
   private enqueueHandleRoast(m: MentionData, handle: string): string {
     const targetName = `@${handle}`;
-    const parentPart = m.inReplyToTweetId ? `|parent:${m.inReplyToTweetId}` : '';
+    // Reply to parent tweet (if under someone's tweet) so the roast appears in that thread
+    const replyTarget = m.inReplyToTweetId ?? m.tweetId;
     this.queueRepo.enqueue({
       targetName,
       targetType: 'project',
       source: 'mention',
       priority: 3,
-      context: `reply_to:${m.tweetId}|by:@${m.authorName}|mention:${m.tweetId}${parentPart}|handle:@${handle}`,
+      context: `reply_to:${replyTarget}|by:@${m.authorName}|mention:${m.tweetId}|handle:@${handle}`,
     });
     this.logger.info(
       { tweetId: m.tweetId, handle, author: m.authorName },
