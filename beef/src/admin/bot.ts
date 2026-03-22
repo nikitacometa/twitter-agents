@@ -173,6 +173,7 @@ export function createBot(opts: {
         '',
         '<b>📦 Stockpile</b>',
         '<code>/stockpile &lt;target&gt;</code> — list roasts for a target',
+        '<code>/stockpile top [N]</code> — top N ready to post <i>(default 5)</i>',
         '<code>/unrated</code> — roasts missing human score',
         '<code>/srate &lt;id&gt; &lt;1-5&gt;</code> — set human score',
         '<code>/sdel &lt;id&gt;</code> — delete from stockpile',
@@ -1009,8 +1010,32 @@ export function createBot(opts: {
       return;
     }
 
-    const target = ctx.match?.trim();
-    if (!target) {
+    const rawArg = ctx.match?.trim() ?? '';
+
+    // /stockpile top [N] — show top-N available roasts by score (default 5)
+    const topMatch = /^top(?:\s+(\d+))?$/i.exec(rawArg);
+    if (topMatch) {
+      const count = Math.min(Math.max(parseInt(topMatch[1] ?? '5', 10), 1), 20);
+      const roasts = stockpileRepo.getExportable(count);
+      if (roasts.length === 0) {
+        await ctx.reply('📦 No available roasts in stockpile.');
+        return;
+      }
+      const title = `<b>🏆 Top ${String(roasts.length)} Ready to Post</b>`;
+      const fullMessage = formatStockpileList(roasts, title);
+
+      if (fullMessage.length <= 4000) {
+        await ctx.reply(fullMessage, { parse_mode: 'HTML' });
+      } else {
+        await ctx.reply(title, { parse_mode: 'HTML' });
+        for (let i = 0; i < roasts.length; i++) {
+          await ctx.reply(formatStockpileRoast(roasts[i]!, i), { parse_mode: 'HTML' });
+        }
+      }
+      return;
+    }
+
+    if (!rawArg) {
       // No target — show overview: top targets with counts
       const topTargets = stockpileRepo.getTopTargets(15);
       if (topTargets.length === 0) {
@@ -1028,19 +1053,19 @@ export function createBot(opts: {
         lines.push(`  <b>${escapeHtml(t.name)}</b> — ${String(t.stockpileCount)} roasts (avg ${t.avgScore.toFixed(1)})`);
       }
       lines.push('');
-      lines.push('<i>Usage: /stockpile &lt;target&gt; to see roasts</i>');
+      lines.push('<i>Usage: /stockpile &lt;target&gt; | top [N]</i>');
       await ctx.reply(lines.join('\n'), { parse_mode: 'HTML' });
       return;
     }
 
-    const roasts = stockpileRepo.getByTarget(target);
+    const roasts = stockpileRepo.getByTarget(rawArg);
     if (roasts.length === 0) {
-      await ctx.reply(`📦 No roasts for <b>${escapeHtml(target)}</b>.`, { parse_mode: 'HTML' });
+      await ctx.reply(`📦 No roasts for <b>${escapeHtml(rawArg)}</b>.`, { parse_mode: 'HTML' });
       return;
     }
 
     // Telegram message limit is ~4096 chars — split if needed
-    const title = `<b>📦 Stockpile: ${escapeHtml(target)}</b>`;
+    const title = `<b>📦 Stockpile: ${escapeHtml(rawArg)}</b>`;
     const fullMessage = formatStockpileList(roasts, title);
 
     if (fullMessage.length <= 4000) {
@@ -1048,7 +1073,7 @@ export function createBot(opts: {
     } else {
       // Send roasts one by one with summary header
       const available = roasts.filter((r) => r.status === 'available');
-      const header = `<b>📦 ${escapeHtml(target)}</b> — ${String(roasts.length)} roasts (${String(available.length)} available)`;
+      const header = `<b>📦 ${escapeHtml(rawArg)}</b> — ${String(roasts.length)} roasts (${String(available.length)} available)`;
       await ctx.reply(header, { parse_mode: 'HTML' });
 
       for (let i = 0; i < roasts.length; i++) {
