@@ -1,7 +1,7 @@
 import { TwitterApi, ApiResponseError } from 'twitter-api-v2';
 import type { Logger } from 'pino';
 import type { TweetMetrics } from '@common/types/index.js';
-import type { ITwitterClient, IProfileFetcher, TwitterProfile, PostResult, MentionData } from './twitter-client.interface.js';
+import type { ITwitterClient, IProfileFetcher, TwitterProfile, PostResult, MentionData, TweetData } from './twitter-client.interface.js';
 import { retryWithBackoff, NonRetryableError } from '@common/utils/error.util.js';
 
 export interface TwitterCredentials {
@@ -287,6 +287,40 @@ export class TwitterClient implements ITwitterClient, IProfileFetcher {
     }
 
     return result;
+  }
+
+  async getTweet(tweetId: string): Promise<TweetData | null> {
+    if (!this.client) return null;
+
+    try {
+      const response = await this.client.v2.singleTweet(tweetId, {
+        expansions: ['author_id', 'attachments.media_keys'],
+        'tweet.fields': ['text', 'author_id'],
+        'user.fields': ['username'],
+        'media.fields': ['url', 'type', 'preview_image_url'],
+      });
+
+      const tweet = response.data;
+      const author = response.includes?.users?.[0];
+      const media = response.includes?.media ?? [];
+      const mediaUrls = media
+        .map((m) => m.url ?? m.preview_image_url)
+        .filter((u): u is string => !!u);
+
+      this.trackRead();
+      this.logger.info({ tweetId, author: author?.username }, 'Tweet fetched via API');
+
+      return {
+        tweetId: tweet.id,
+        authorId: tweet.author_id ?? 'unknown',
+        authorName: author?.username ?? 'unknown',
+        text: tweet.text,
+        mediaUrls: mediaUrls.length > 0 ? mediaUrls : undefined,
+      };
+    } catch (error) {
+      this.logger.error({ err: error, tweetId }, 'Failed to fetch tweet');
+      return null;
+    }
   }
 
   async getProfile(username: string): Promise<TwitterProfile | null> {

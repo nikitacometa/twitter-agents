@@ -170,6 +170,62 @@ export class QueueManager {
     return this.dequeueAndProcess(true);
   }
 
+  /**
+   * Enqueue a tweet URL for roasting (reply to that tweet).
+   * Fetches the tweet, saves to corpus, and enqueues with same context
+   * format as mention-triggered parent tweet roasts.
+   */
+  async enqueueTweetUrl(tweetUrl: string): Promise<{ queueId: number; targetName: string } | null> {
+    const tweetId = parseTweetUrl(tweetUrl);
+    if (!tweetId) return null;
+
+    if (!this.twitter?.getTweet) {
+      this.logger.warn('enqueueTweetUrl: getTweet not available on twitter client');
+      return null;
+    }
+
+    const tweet = await this.twitter.getTweet(tweetId);
+    if (!tweet) {
+      this.logger.warn({ tweetId }, 'enqueueTweetUrl: tweet not found');
+      return null;
+    }
+
+    // Save to tweet repo for corpus building
+    if (this.tweetRepo) {
+      this.tweetRepo.insert({
+        tweetId: tweet.tweetId,
+        authorId: tweet.authorId,
+        authorName: tweet.authorName,
+        text: tweet.text,
+        source: 'mention_poll',
+        createdAt: new Date().toISOString(),
+      });
+    }
+
+    const tweetSnippet = tweet.text.slice(0, 120);
+    const mediaPart = tweet.mediaUrls?.length
+      ? `|media:${tweet.mediaUrls.join(',')}`
+      : '';
+    const targetName = tweetSnippet
+      ? `tweet by @${tweet.authorName}: "${tweetSnippet}"`
+      : `tweet by @${tweet.authorName}`;
+
+    const queueId = this.queueRepo.enqueue({
+      targetName,
+      targetType: 'project',
+      source: 'mention',
+      priority: 1,
+      context: `reply_to:${tweet.tweetId}${mediaPart}`,
+    });
+
+    this.logger.info(
+      { queueId, tweetId: tweet.tweetId, author: tweet.authorName, targetName },
+      'Tweet URL enqueued for roasting',
+    );
+
+    return { queueId, targetName };
+  }
+
   private async dequeueAndProcess(force = false): Promise<QueueProcessResult> {
     const item = this.queueRepo.dequeue();
     if (!item) {
@@ -856,22 +912,30 @@ export class QueueManager {
       }
 
       // Mention context — reconstruct from replyToId if available
-      if (oldRoast.replyToId && this.mentionRepo) {
-        const mention = this.mentionRepo.getByTweetId(oldRoast.replyToId);
-        if (mention) {
-          const mentionLines: string[] = [
-            `Requested by: @${mention.authorName}`,
-            `Request type: ${mention.requestType ?? 'unknown'}`,
-            `Mention text: "${mention.text}"`,
-          ];
-          if (oldRoast.replyToId && this.tweetRepo) {
-            const parentTweet = this.tweetRepo.getByTweetId(oldRoast.replyToId);
-            if (parentTweet) {
-              mentionLines.push(`\nParent tweet by @${parentTweet.authorName}:`);
-              mentionLines.push(`"${parentTweet.text}"`);
-            }
+      if (oldRoast.replyToId) {
+        const contextLines: string[] = [];
+
+        // Look up the original mention (who requested the roast)
+        if (this.mentionRepo) {
+          const mention = this.mentionRepo.getByTweetId(oldRoast.replyToId);
+          if (mention) {
+            contextLines.push(`Requested by: @${mention.authorName}`);
+            contextLines.push(`Request type: ${mention.requestType ?? 'unknown'}`);
+            contextLines.push(`Mention text: "${mention.text}"`);
           }
-          const mentionContext = mentionLines.join('\n');
+        }
+
+        // Look up the parent tweet text (independent of mention lookup)
+        if (this.tweetRepo) {
+          const parentTweet = this.tweetRepo.getByTweetId(oldRoast.replyToId);
+          if (parentTweet) {
+            contextLines.push(`\nParent tweet by @${parentTweet.authorName}:`);
+            contextLines.push(`"${parentTweet.text}"`);
+          }
+        }
+
+        if (contextLines.length > 0) {
+          const mentionContext = contextLines.join('\n');
           profileContext = profileContext
             ? `${profileContext}\n\n--- Mention context ---\n${mentionContext}`
             : mentionContext;
@@ -1032,4 +1096,18 @@ export function extractMediaUrls(context: string | null): string[] {
   const match = context.match(/\|media:(.+?)(?:\||$)/);
   if (!match?.[1]) return [];
   return match[1].split(',').filter((url) => url.startsWith('http'));
+}
+
+/**
+ * Parse a tweet URL and extract the tweet ID.
+ * Supports: https://x.com/user/status/123, https://twitter.com/user/status/123
+ */
+export function parseTweetUrl(input: string): string | null {
+  const match = input.match(/(?:x\.com|twitter\.com)\/\w+\/status\/(\d+)/);
+  return match?.[1] ?? null;
+}
+
+/** Quick check if a string looks like a tweet URL. */
+export function isTweetUrl(input: string): boolean {
+  return /^(?:https?:\/\/)?(?:x\.com|twitter\.com)\/\w+\/status\/\d+/.test(input);
 }

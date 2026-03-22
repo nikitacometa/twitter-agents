@@ -4,6 +4,14 @@ export interface PostResult {
   tweetId: string;
 }
 
+export interface TweetData {
+  tweetId: string;
+  authorId: string;
+  authorName: string;
+  text: string;
+  mediaUrls?: string[];
+}
+
 export interface MentionData {
   tweetId: string;
   authorId: string;
@@ -25,6 +33,7 @@ export interface ITwitterClient {
   replyToTweet(text: string, replyToId: string): Promise<PostResult | null>;
   getMentions(sinceId?: string): Promise<MentionData[]>;
   getTweetMetrics(tweetIds: string[]): Promise<Map<string, TweetMetrics>>;
+  getTweet?(tweetId: string): Promise<TweetData | null>;
   shutdown?(): Promise<void>;
 }
 

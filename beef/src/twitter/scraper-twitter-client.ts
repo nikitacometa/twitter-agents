@@ -6,7 +6,7 @@ const CHROME_USER_AGENT =
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36';
 import type { Logger } from 'pino';
 import type { TweetMetrics } from '@common/types/index.js';
-import type { ITwitterClient, IProfileFetcher, TwitterProfile, PostResult, MentionData } from './twitter-client.interface.js';
+import type { ITwitterClient, IProfileFetcher, TwitterProfile, PostResult, MentionData, TweetData } from './twitter-client.interface.js';
 import { CookieStore } from './cookie-store.js';
 import { retryWithBackoff, NonRetryableError } from '@common/utils/error.util.js';
 
@@ -692,6 +692,33 @@ export class ScraperTwitterClient implements ITwitterClient, IProfileFetcher {
     }
 
     return results;
+  }
+
+  async getTweet(tweetId: string): Promise<TweetData | null> {
+    if (!(await this.ensureLoggedIn())) {
+      this.logger.debug('getTweet skipped — not logged in');
+      return null;
+    }
+
+    try {
+      const tweet = await this.scraper.getTweet(tweetId);
+      if (!tweet) return null;
+
+      const mediaUrls = tweet.photos?.map((p) => p.url).filter(Boolean) as string[] | undefined;
+
+      this.logger.info({ tweetId, author: tweet.username }, 'Tweet fetched via scraper');
+
+      return {
+        tweetId: tweet.id ?? tweetId,
+        authorId: tweet.userId ?? 'unknown',
+        authorName: tweet.username ?? 'unknown',
+        text: tweet.text ?? '',
+        mediaUrls: mediaUrls && mediaUrls.length > 0 ? mediaUrls : undefined,
+      };
+    } catch (error) {
+      this.logger.error({ err: error, tweetId }, 'Failed to fetch tweet via scraper');
+      return null;
+    }
   }
 
   async getTweetMetrics(tweetIds: string[]): Promise<Map<string, TweetMetrics>> {

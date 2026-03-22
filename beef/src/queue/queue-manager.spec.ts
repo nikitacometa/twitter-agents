@@ -7,6 +7,8 @@ import {
   extractTriggerText,
   extractHandleFromTarget,
   extractMentionTweetId,
+  parseTweetUrl,
+  isTweetUrl,
 } from './queue-manager.js';
 
 describe('extractReplyToId', () => {
@@ -141,6 +143,53 @@ describe('extractHandleFromTarget', () => {
     ['a'.repeat(16)],
   ])('returns undefined for "%s"', (target) => {
     expect(extractHandleFromTarget(target)).toBeUndefined();
+  });
+});
+
+describe('parseTweetUrl', () => {
+  it.each([
+    ['https://x.com/elonmusk/status/1234567890', '1234567890'],
+    ['https://twitter.com/vitalik/status/999', '999'],
+    ['https://x.com/user_123/status/1', '1'],
+    ['http://x.com/a/status/111', '111'],
+    ['x.com/user/status/555', '555'],
+    ['twitter.com/user/status/777', '777'],
+    ['check this https://x.com/abc/status/42 please', '42'],
+  ])('extracts id from "%s" → "%s"', (input, expected) => {
+    expect(parseTweetUrl(input)).toBe(expected);
+  });
+
+  it.each([
+    [''],
+    ['https://x.com/user/likes'],
+    ['https://example.com/user/status/123'],
+    ['just some random text'],
+    ['https://x.com/user/status/'],
+    ['https://x.com/user/status/abc'],
+  ])('returns null for "%s"', (input) => {
+    expect(parseTweetUrl(input)).toBeNull();
+  });
+});
+
+describe('isTweetUrl', () => {
+  it.each([
+    'https://x.com/user/status/123',
+    'https://twitter.com/user/status/456',
+    'http://x.com/user/status/789',
+    'x.com/user/status/111',
+    'twitter.com/user/status/222',
+  ])('returns true for "%s"', (input) => {
+    expect(isTweetUrl(input)).toBe(true);
+  });
+
+  it.each([
+    '',
+    'hello world',
+    'https://example.com/user/status/123',
+    'check this https://x.com/user/status/123',
+    'x.com/user/likes',
+  ])('returns false for "%s"', (input) => {
+    expect(isTweetUrl(input)).toBe(false);
   });
 });
 

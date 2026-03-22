@@ -7,6 +7,7 @@ import { getErrorMessage } from '@common/utils/error.util.js';
 import type { FeedbackRepository } from '@storage/repositories/feedback.repository.js';
 import type { RoastRepository } from '@storage/repositories/roast.repository.js';
 import type { QueueManager } from '@queue/queue-manager.js';
+import { isTweetUrl } from '@queue/queue-manager.js';
 import type { ConfigRepository } from '@storage/repositories/config.repository.js';
 import type { ExternalExampleRepository } from '@storage/repositories/external-example.repository.js';
 import type { RoastPatternRepository } from '@storage/repositories/roast-pattern.repository.js';
@@ -157,6 +158,7 @@ export function createBot(opts: {
         '━━━━━━━━━━━━━━━━━━━━━━',
         '<b>📋 Queue &amp; Posting</b>',
         '<code>/queue &lt;target&gt;</code> — add target to posting queue',
+        '<code>/queue &lt;tweet_url&gt;</code> — roast a specific tweet (reply)',
         '<code>/trigger</code> — force-process next queue item',
         '<code>/poll</code> — check for new mentions',
         '<code>/approve on|off</code> — require approval for feed posts',
@@ -531,19 +533,140 @@ export function createBot(opts: {
     }
 
     const target = ctx.match?.trim();
-    if (target) {
-      const id = queueManager.enqueueAutonomous(target);
-      await ctx.reply(
-        `✅ Added <b>${escapeHtml(target)}</b> to queue (id: ${String(id)})`,
-        { parse_mode: 'HTML' },
-      );
-    } else {
+    if (!target) {
       const count = queueManager.getPendingCount();
       await ctx.reply(
-        `📋 Queue: <b>${String(count)}</b> items pending\n\nUsage: <code>/queue &lt;target&gt;</code> to add`,
+        `📋 Queue: <b>${String(count)}</b> items pending\n\nUsage:\n<code>/queue &lt;target&gt;</code> — add target\n<code>/queue &lt;tweet_url&gt;</code> — roast a specific tweet`,
         { parse_mode: 'HTML' },
       );
+      return;
     }
+
+    // Tweet URL → fetch tweet, enqueue as reply, auto-trigger processing
+    if (isTweetUrl(target)) {
+      const chatId = ctx.chat?.id;
+      if (!chatId) return;
+      const api = ctx.api;
+      const qm = queueManager;
+
+      const statusMsg = await ctx.reply('🔍 Fetching tweet...');
+
+      // Fire-and-forget: don't block grammY's update loop
+      void (async () => {
+        try {
+          const enqueued = await qm.enqueueTweetUrl(target);
+          if (!enqueued) {
+            await api.editMessageText(
+              chatId,
+              statusMsg.message_id,
+              '❌ Failed to fetch tweet. Check the URL and try again.',
+            );
+            return;
+          }
+
+          await api.editMessageText(
+            chatId,
+            statusMsg.message_id,
+            `✅ Queued: <b>${escapeHtml(enqueued.targetName.slice(0, 100))}</b>\n⚡ Processing...`,
+            { parse_mode: 'HTML' },
+          );
+
+          // Auto-trigger processing
+          const startTime = Date.now();
+          const progressInterval = setInterval(() => {
+            const elapsed = Math.round((Date.now() - startTime) / 1000);
+            api
+              .editMessageText(
+                chatId,
+                statusMsg.message_id,
+                `✅ Queued: <b>${escapeHtml(enqueued.targetName.slice(0, 100))}</b>\n⚡ Processing... <i>(${String(elapsed)}s)</i>`,
+                { parse_mode: 'HTML' },
+              )
+              .catch(() => {});
+          }, 15_000);
+
+          try {
+            const result = await qm.processNextManual();
+            clearInterval(progressInterval);
+            const elapsed = Math.round((Date.now() - startTime) / 1000);
+
+            if (result.pendingApproval && result.roastId) {
+              const evalInfo = result.evaluationScore
+                ? `\nEval: <b>${result.evaluationScore.toFixed(1)}</b>/5`
+                : '';
+              await api.editMessageText(
+                chatId,
+                statusMsg.message_id,
+                `💬 <b>Review</b> — ${escapeHtml(result.target ?? '?')} <i>(${String(elapsed)}s)</i>${evalInfo}`,
+                { parse_mode: 'HTML' },
+              );
+
+              if (result.postedText) {
+                const keyboard = new InlineKeyboard()
+                  .text('Post', `approve:${String(result.roastId)}`)
+                  .text('Skip', `reject:${String(result.roastId)}`)
+                  .text('🔄 Regen', `regenerate:${String(result.roastId)}`);
+                await api.sendMessage(
+                  chatId,
+                  `<code>${escapeHtml(result.postedText)}</code>`,
+                  { parse_mode: 'HTML', reply_markup: keyboard },
+                );
+              }
+            } else if (result.posted || result.savedOnly) {
+              const statusEmoji = result.posted ? '✅' : '📝';
+              const statusLabel = result.posted ? 'Posted' : 'Generated (Twitter disabled)';
+              const evalInfo = result.evaluationScore
+                ? `\nEval: <b>${result.evaluationScore.toFixed(1)}</b>/5`
+                : '';
+              await api.editMessageText(
+                chatId,
+                statusMsg.message_id,
+                `${statusEmoji} ${statusLabel} in ${String(elapsed)}s\nTarget: <b>${escapeHtml(result.target ?? '?')}</b>${evalInfo}`,
+                { parse_mode: 'HTML' },
+              );
+              if (result.postedText) {
+                await api.sendMessage(chatId, `<code>${escapeHtml(result.postedText)}</code>`, { parse_mode: 'HTML' }).catch(() => {});
+              }
+            } else {
+              const reason = result.error ?? 'Processing failed';
+              await api.editMessageText(
+                chatId,
+                statusMsg.message_id,
+                `❌ ${escapeHtml(reason)}`,
+                { parse_mode: 'HTML' },
+              );
+            }
+          } catch (error) {
+            clearInterval(progressInterval);
+            await api
+              .editMessageText(
+                chatId,
+                statusMsg.message_id,
+                `❌ Processing failed: ${escapeHtml(getErrorMessage(error).slice(0, 200))}`,
+                { parse_mode: 'HTML' },
+              )
+              .catch(() => {});
+          }
+        } catch (error) {
+          await api
+            .editMessageText(
+              chatId,
+              statusMsg.message_id,
+              `❌ Failed: ${escapeHtml(getErrorMessage(error).slice(0, 200))}`,
+              { parse_mode: 'HTML' },
+            )
+            .catch(() => {});
+        }
+      })();
+      return;
+    }
+
+    // Regular target name → enqueue as autonomous
+    const id = queueManager.enqueueAutonomous(target);
+    await ctx.reply(
+      `✅ Added <b>${escapeHtml(target)}</b> to queue (id: ${String(id)})`,
+      { parse_mode: 'HTML' },
+    );
   });
 
   bot.command('poll', async (ctx) => {
@@ -1215,7 +1338,19 @@ export function createBot(opts: {
       const isReply = ['mention', 'reply_guy', 'casual_reply'].includes(roast.source);
       const typeEmoji = isReply ? '💬' : '📢';
       const replyInfo = roast.replyToId ? `\nReply to: <code>${escapeHtml(roast.replyToId)}</code>` : '';
-      const header = `${typeEmoji} <b>Pending</b> — ${escapeHtml(roast.targetName)} <i>(${escapeHtml(roast.source)})</i>\nID: ${String(roast.id)} | ${escapeHtml(roast.createdAt)}${replyInfo}`;
+
+      // Try to extract evaluation score from stored agent output
+      let evalInfo = '';
+      if (roast.agentOutput) {
+        try {
+          const output = JSON.parse(roast.agentOutput) as { evaluation?: { compositeScore?: number } };
+          if (output.evaluation?.compositeScore) {
+            evalInfo = `\nEval: <b>${output.evaluation.compositeScore.toFixed(1)}</b>/5`;
+          }
+        } catch { /* ignore parse errors */ }
+      }
+
+      const header = `${typeEmoji} <b>Pending</b> — ${escapeHtml(roast.targetName)} <i>(${escapeHtml(roast.source)})</i>\nID: ${String(roast.id)} | ${escapeHtml(roast.createdAt)}${replyInfo}${evalInfo}`;
       await ctx.reply(header, { parse_mode: 'HTML' });
 
       const keyboard = new InlineKeyboard()
