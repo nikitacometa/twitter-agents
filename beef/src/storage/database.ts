@@ -46,10 +46,13 @@ function runMigrations(db: Database.Database, logger: Logger): void {
     const sql = readFileSync(join(MIGRATIONS_DIR, file), 'utf-8');
     logger.info({ migration: file }, 'Applying migration');
 
+    // Temporarily disable FK checks — some migrations recreate tables with FK references
+    db.pragma('foreign_keys = OFF');
     db.transaction(() => {
       db.exec(sql);
       db.prepare('INSERT INTO _migrations (name) VALUES (?)').run(file);
     })();
+    db.pragma('foreign_keys = ON');
 
     logger.info({ migration: file }, 'Migration applied');
   }
