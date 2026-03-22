@@ -88,6 +88,26 @@ export async function generateRoasts(
 
   const result = await engine.generateRoast(targetName, 'telegram', memory, profile, variantCount, imagePaths, mutationCount);
 
+  // Record variants as farm_attempts for reject-example learning
+  if (farmAttemptRepo) {
+    for (const variant of result.draft.variants) {
+      try {
+        farmAttemptRepo.insert({
+          targetName,
+          targetType: 'project',
+          tweetText: variant.text,
+          angle: variant.angle,
+          strategy: 'rubric',
+          llmSelfScore: variant.score,
+          researchNotes: result.draft.researchNotes ?? undefined,
+          factCheckPassed: result.draft.factCheckPassed,
+        });
+      } catch (err) {
+        logger.warn({ err, target: targetName }, 'Failed to record farm attempt');
+      }
+    }
+  }
+
   return {
     variants: result.draft.variants,
     bestIndex: result.draft.bestIndex,

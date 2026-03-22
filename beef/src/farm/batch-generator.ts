@@ -16,6 +16,10 @@ import { buildCreativeMemory } from '@roast/creative-memory.js';
 import { filterRoast } from '@content/content-filter.js';
 import type { FarmAttemptRepository } from '@storage/repositories/farm-attempt.repository.js';
 import type { StockpileRepository } from '@storage/repositories/stockpile.repository.js';
+import type { FeedbackRepository } from '@storage/repositories/feedback.repository.js';
+import type { ConfigRepository } from '@storage/repositories/config.repository.js';
+import type { ExternalExampleRepository } from '@storage/repositories/external-example.repository.js';
+import type { RoastPatternRepository } from '@storage/repositories/roast-pattern.repository.js';
 import { pickMutations, formatMutationSection } from './mutations.js';
 import { classifyFreshness, calculateExpiry } from './freshness.js';
 import type { Mutation, InsertFarmAttempt } from './types.js';
@@ -28,6 +32,10 @@ export interface BatchGeneratorOptions {
   provider: ProviderManager;
   farmAttempt: FarmAttemptRepository;
   stockpile?: StockpileRepository;
+  feedbackRepo?: FeedbackRepository;
+  configRepo?: ConfigRepository;
+  exampleRepo?: ExternalExampleRepository;
+  patternRepo?: RoastPatternRepository;
   logger: Logger;
   characterPath?: string;
   variantsPerTarget?: number;
@@ -47,6 +55,10 @@ export class BatchGenerator {
   private readonly provider: ProviderManager;
   private readonly farmAttempt: FarmAttemptRepository;
   private readonly stockpile: StockpileRepository | null;
+  private readonly feedbackRepo: FeedbackRepository | undefined;
+  private readonly configRepo: ConfigRepository | undefined;
+  private readonly exampleRepo: ExternalExampleRepository | undefined;
+  private readonly patternRepo: RoastPatternRepository | undefined;
   private readonly logger: Logger;
   private readonly character: CharacterConfig;
   private readonly variantsPerTarget: number;
@@ -56,6 +68,10 @@ export class BatchGenerator {
     this.provider = opts.provider;
     this.farmAttempt = opts.farmAttempt;
     this.stockpile = opts.stockpile ?? null;
+    this.feedbackRepo = opts.feedbackRepo;
+    this.configRepo = opts.configRepo;
+    this.exampleRepo = opts.exampleRepo;
+    this.patternRepo = opts.patternRepo;
     this.logger = opts.logger;
     this.variantsPerTarget = opts.variantsPerTarget ?? 3;
     this.mutationCount = opts.mutationCount ?? 2;
@@ -229,6 +245,10 @@ export class BatchGenerator {
     const memory = buildCreativeMemory({
       targetName,
       logger: this.logger,
+      feedbackRepo: this.feedbackRepo,
+      configRepo: this.configRepo,
+      exampleRepo: this.exampleRepo,
+      patternRepo: this.patternRepo,
       stockpileRepo: this.stockpile ?? undefined,
       farmAttemptRepo: this.farmAttempt,
     });
