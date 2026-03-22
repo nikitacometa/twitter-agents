@@ -1060,7 +1060,7 @@
       flex-shrink: 0;
     }
 
-    /* === LIVE DASHBOARD STRIP (between hero & slaughterhouse) === */
+    /* === LIVE DASHBOARD SECTION === */
     .live-strip {
       display: block;
       text-decoration: none;
@@ -1071,23 +1071,27 @@
       cursor: pointer;
       overflow: hidden;
       background:
-        radial-gradient(ellipse at 50% 0%, rgba(204, 0, 0, 0.06) 0%, transparent 70%),
-        radial-gradient(ellipse at 50% 100%, rgba(204, 0, 0, 0.04) 0%, transparent 70%);
-      transition: background 0.3s;
+        radial-gradient(ellipse at 50% 0%, rgba(204, 0, 0, 0.14) 0%, transparent 55%),
+        radial-gradient(ellipse at 50% 100%, rgba(204, 0, 0, 0.10) 0%, transparent 55%),
+        radial-gradient(ellipse at 15% 50%, rgba(204, 0, 0, 0.05) 0%, transparent 50%),
+        radial-gradient(ellipse at 85% 50%, rgba(204, 0, 0, 0.05) 0%, transparent 50%);
+      transition: background 0.4s;
     }
     .live-strip:hover {
       background:
-        radial-gradient(ellipse at 50% 0%, rgba(204, 0, 0, 0.10) 0%, transparent 70%),
-        radial-gradient(ellipse at 50% 100%, rgba(204, 0, 0, 0.06) 0%, transparent 70%);
+        radial-gradient(ellipse at 50% 0%, rgba(204, 0, 0, 0.22) 0%, transparent 55%),
+        radial-gradient(ellipse at 50% 100%, rgba(204, 0, 0, 0.16) 0%, transparent 55%),
+        radial-gradient(ellipse at 15% 50%, rgba(204, 0, 0, 0.08) 0%, transparent 50%),
+        radial-gradient(ellipse at 85% 50%, rgba(204, 0, 0, 0.08) 0%, transparent 50%);
     }
     .live-strip::before,
     .live-strip::after {
       content: '';
       position: absolute;
       left: 0; right: 0;
-      height: 2px;
-      background: linear-gradient(90deg, transparent 0%, var(--red) 20%, var(--red-bright) 50%, var(--red) 80%, transparent 100%);
-      opacity: 0.5;
+      height: 3px;
+      background: linear-gradient(90deg, transparent 0%, var(--red) 15%, var(--red-bright) 50%, var(--red) 85%, transparent 100%);
+      opacity: 0.7;
       transition: opacity 0.3s;
     }
     .live-strip::before { top: 0; }
@@ -1098,73 +1102,115 @@
     .live-strip-inner {
       max-width: 1000px;
       margin: 0 auto;
-      padding: 40px 0;
+      padding: 80px 0;
+      text-align: center;
     }
-    .live-strip-header {
-      display: flex;
-      align-items: center;
-      gap: 16px;
-      margin-bottom: 16px;
+
+    /* Top badge row */
+    .live-strip-top {
+      margin-bottom: 20px;
     }
     .live-strip-badge {
       display: inline-flex;
       align-items: center;
-      gap: 6px;
-      font-size: 10px;
+      gap: 8px;
+      font-size: 13px;
       font-weight: 700;
-      letter-spacing: 0.12em;
+      letter-spacing: 0.14em;
       text-transform: uppercase;
       color: var(--green);
       background: var(--green-dim);
-      padding: 3px 10px;
-      border-radius: 2px;
-      flex-shrink: 0;
+      padding: 6px 16px;
+      border-radius: 3px;
+      box-shadow: 0 0 16px rgba(0, 204, 0, 0.15);
+      animation: badge-glow 2s ease-in-out infinite;
+    }
+    @keyframes badge-glow {
+      0%, 100% { box-shadow: 0 0 16px rgba(0, 204, 0, 0.15); }
+      50% { box-shadow: 0 0 28px rgba(0, 204, 0, 0.3), 0 0 8px rgba(0, 204, 0, 0.2); }
     }
     .live-strip-badge .live-dot {
+      width: 8px;
+      height: 8px;
+    }
+
+    /* Headline */
+    .live-strip-headline {
+      font-family: 'Zilla Slab', serif;
+      font-size: clamp(30px, 5vw, 48px);
+      font-weight: 700;
+      color: var(--text);
+      margin: 0 0 12px 0;
+      letter-spacing: -0.02em;
+      line-height: 1.15;
+    }
+
+    /* Subtitle */
+    .live-strip-subtitle {
+      font-size: 15px;
+      color: var(--text-muted);
+      margin: 0 0 36px 0;
+      letter-spacing: 0.02em;
+    }
+
+    /* Status bar above terminal */
+    .live-strip-status {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 8px;
+      padding: 0 4px;
+      text-align: left;
+    }
+    .live-strip-status-left {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+    .live-strip-status-left .live-dot {
       width: 6px;
       height: 6px;
     }
-    .live-strip-title {
-      font-size: 15px;
-      color: var(--text-dim);
-      flex: 1;
-    }
-    .live-strip-cta {
-      font-size: 12px;
-      color: var(--red);
+    .live-strip-status-right {
+      font-size: 11px;
+      color: var(--text-muted);
+      opacity: 0.5;
       letter-spacing: 0.06em;
-      transition: color 0.2s;
-      white-space: nowrap;
-      opacity: 0.7;
-    }
-    .live-strip:hover .live-strip-cta {
-      color: var(--red-bright);
-      opacity: 1;
     }
 
     /* Terminal window */
     .live-strip-terminal {
-      background: var(--bg);
-      border: 1px solid var(--border);
-      padding: 16px 20px;
-      font-size: 13px;
-      line-height: 2;
+      background: rgba(10, 10, 10, 0.8);
+      border: 1px solid rgba(204, 0, 0, 0.3);
+      padding: 24px 28px;
+      font-size: 14px;
+      line-height: 2.2;
       color: var(--text-dim);
       position: relative;
       overflow: hidden;
-      transition: border-color 0.3s, box-shadow 0.3s;
+      text-align: left;
+      transition: border-color 0.4s, box-shadow 0.4s;
+      box-shadow: 0 0 30px rgba(204, 0, 0, 0.08), 0 4px 60px rgba(0, 0, 0, 0.3);
+      animation: terminal-breathe 3s ease-in-out infinite;
+    }
+    @keyframes terminal-breathe {
+      0%, 100% { box-shadow: 0 0 30px rgba(204, 0, 0, 0.08), 0 4px 60px rgba(0, 0, 0, 0.3); }
+      50% { box-shadow: 0 0 50px rgba(204, 0, 0, 0.15), 0 0 100px rgba(204, 0, 0, 0.05), 0 4px 60px rgba(0, 0, 0, 0.3); }
     }
     .live-strip:hover .live-strip-terminal {
-      border-color: rgba(204, 0, 0, 0.4);
-      box-shadow: 0 0 30px rgba(204, 0, 0, 0.06), inset 0 0 30px rgba(204, 0, 0, 0.02);
+      border-color: rgba(204, 0, 0, 0.5);
+      box-shadow: 0 0 50px rgba(204, 0, 0, 0.2), 0 0 100px rgba(204, 0, 0, 0.06), inset 0 0 40px rgba(204, 0, 0, 0.03);
+      animation: none;
     }
 
     /* Scan line */
     .live-strip-scanline {
       position: absolute;
       left: 0; right: 0;
-      height: 1px;
-      background: linear-gradient(90deg, transparent, rgba(204, 0, 0, 0.3), transparent);
+      height: 2px;
+      background: linear-gradient(90deg, transparent, rgba(204, 0, 0, 0.4), transparent);
       animation: strip-scan 4s linear infinite;
       pointer-events: none;
     }
@@ -1182,25 +1228,25 @@
       opacity: 0;
       animation: strip-line-in 0.5s cubic-bezier(0.22,1,0.36,1) forwards;
     }
-    .live-strip-line:nth-child(1) { animation-delay: 0.3s; }
-    .live-strip-line:nth-child(2) { animation-delay: 1.0s; }
-    .live-strip-line:nth-child(3) { animation-delay: 1.8s; }
-    .live-strip-line:nth-child(4) { animation-delay: 2.6s; }
+    .live-strip-line:nth-child(2) { animation-delay: 0.3s; }
+    .live-strip-line:nth-child(3) { animation-delay: 1.0s; }
+    .live-strip-line:nth-child(4) { animation-delay: 1.8s; }
+    .live-strip-line:nth-child(5) { animation-delay: 2.6s; }
     @keyframes strip-line-in {
       from { opacity: 0; transform: translateY(4px); }
       to { opacity: 1; transform: translateY(0); }
     }
     .live-strip-line .lf-time {
       color: var(--text-muted);
-      margin-right: 4px;
+      margin-right: 6px;
     }
     .live-strip-line .lf-label {
-      font-weight: 600;
-      font-size: 10px;
-      letter-spacing: 0.04em;
-      padding: 1px 5px;
+      font-weight: 700;
+      font-size: 11px;
+      letter-spacing: 0.06em;
+      padding: 2px 7px;
       border-radius: 2px;
-      margin: 0 6px 0 0;
+      margin: 0 8px 0 0;
     }
     .lf-action { color: var(--red-bright); background: var(--red-dim); }
     .lf-result { color: var(--green); background: var(--green-dim); }
@@ -1209,37 +1255,56 @@
 
     .live-strip-cursor {
       display: inline-block;
-      width: 7px;
-      height: 14px;
+      width: 8px;
+      height: 16px;
       background: var(--red);
       vertical-align: middle;
       animation: cursor-blink 0.7s step-end infinite;
       margin-left: 4px;
     }
-    .live-strip-arrow {
-      position: absolute;
-      right: 20px;
-      bottom: 16px;
-      font-size: 11px;
-      color: var(--text-muted);
+
+    /* CTA button */
+    .live-strip-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      margin-top: 32px;
+      padding: 14px 36px;
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 14px;
+      font-weight: 600;
       letter-spacing: 0.06em;
-      transition: color 0.2s, transform 0.2s;
+      color: #fff;
+      background: var(--red);
+      border: none;
+      border-radius: 2px;
+      transition: transform 0.25s cubic-bezier(0.22,1,0.36,1), box-shadow 0.25s, background 0.25s;
+      box-shadow: 0 4px 24px rgba(204, 0, 0, 0.3);
     }
-    .live-strip:hover .live-strip-arrow {
-      color: var(--red);
-      transform: translateX(3px);
+    .live-strip:hover .live-strip-btn {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 40px rgba(204, 0, 0, 0.45);
+      background: var(--red-bright);
+    }
+    .live-strip-btn-arrow {
+      transition: transform 0.25s;
+    }
+    .live-strip:hover .live-strip-btn-arrow {
+      transform: translateX(4px);
     }
 
     @media (max-width: 768px) {
       .live-strip { padding: 0 16px; }
-      .live-strip-inner { padding: 24px 0; }
-      .live-strip-terminal { font-size: 11px; padding: 12px 14px; }
-      .live-strip-header { flex-wrap: wrap; gap: 8px; }
-      .live-strip-cta { display: none; }
+      .live-strip-inner { padding: 56px 0; }
+      .live-strip-terminal { font-size: 12px; padding: 16px 18px; line-height: 2; }
+      .live-strip-btn { padding: 12px 28px; font-size: 13px; }
+      .live-strip-status-right { display: none; }
     }
     @media (max-width: 640px) {
-      .live-strip-terminal { font-size: 10px; line-height: 1.8; padding: 10px 12px; }
-      .live-strip-arrow { font-size: 10px; right: 12px; bottom: 10px; }
+      .live-strip-inner { padding: 48px 0; }
+      .live-strip-headline { font-size: 26px; }
+      .live-strip-terminal { font-size: 11px; line-height: 1.9; padding: 14px 14px; }
+      .live-strip-btn { width: 100%; justify-content: center; padding: 14px 20px; }
     }
 
     /* === FOOTER === */
@@ -1328,6 +1393,8 @@
       .live-strip-scanline { animation: none; display: none; }
       .live-strip-cursor { animation: none; opacity: 1; }
       .live-strip-line { opacity: 1; animation: none; transform: none; }
+      .live-strip-badge { animation: none; }
+      .live-strip-terminal { animation: none; }
       .boot-overlay { display: none !important; }
       .reveal { opacity: 1; transform: none; transition: none; }
       .evidence-card { transform: none !important; }
@@ -1458,13 +1525,18 @@
   </div>
 </section>
 
-<!-- ====== LIVE DASHBOARD STRIP ====== -->
+<!-- ====== LIVE DASHBOARD SECTION ====== -->
 <a href="https://app.0xbeef.wtf" class="live-strip" target="_blank" rel="noopener noreferrer">
   <div class="live-strip-inner">
-    <div class="live-strip-header">
+    <div class="live-strip-top">
       <span class="live-strip-badge"><span class="live-dot"></span>LIVE</span>
-      <span class="live-strip-title">0xBeefer is running. see the logic.</span>
-      <span class="live-strip-cta">open dashboard &rarr;</span>
+    </div>
+    <h2 class="live-strip-headline">watch the bot think.</h2>
+    <p class="live-strip-subtitle">every audit step. every decision. real time.</p>
+
+    <div class="live-strip-status">
+      <span class="live-strip-status-left"><span class="live-dot"></span> processing targets</span>
+      <span class="live-strip-status-right">app.0xbeef.wtf</span>
     </div>
     <div class="live-strip-terminal">
       <div class="live-strip-scanline"></div>
@@ -1472,8 +1544,9 @@
       <div class="live-strip-line"><span class="lf-time">14:22</span><span class="lf-label lf-thinking">RESEARCH</span> reading whitepaper. 23 pages. 47 red flags so far.</div>
       <div class="live-strip-line"><span class="lf-time">14:24</span><span class="lf-label lf-action">COOKING</span> angle: &ldquo;decentralized&rdquo; but 3 wallets hold 84% of supply</div>
       <div class="live-strip-line"><span class="lf-time">14:25</span><span class="lf-label lf-result">VERDICT</span> roast cooked. severity: WELL DONE. score 9.2<span class="live-strip-cursor"></span></div>
-      <span class="live-strip-arrow">open dashboard &rsaquo;</span>
     </div>
+
+    <span class="live-strip-btn">open live dashboard <span class="live-strip-btn-arrow">&rarr;</span></span>
   </div>
 </a>
 
