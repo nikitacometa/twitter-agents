@@ -1060,108 +1060,176 @@
       flex-shrink: 0;
     }
 
-    /* === LIVE FEED CTA === */
-    .cta-link-live {
-      display: flex;
-      flex-direction: column;
-      gap: 0;
+    /* === LIVE DASHBOARD STRIP (between hero & slaughterhouse) === */
+    .live-strip {
+      display: block;
       text-decoration: none;
       color: inherit;
-      padding: 0;
-      border-bottom: 1px solid var(--border);
-      transition: border-color 0.2s;
+      position: relative;
+      z-index: 2;
+      padding: 0 24px;
+      cursor: pointer;
+      overflow: hidden;
+      background:
+        radial-gradient(ellipse at 50% 0%, rgba(204, 0, 0, 0.06) 0%, transparent 70%),
+        radial-gradient(ellipse at 50% 100%, rgba(204, 0, 0, 0.04) 0%, transparent 70%);
+      transition: background 0.3s;
     }
-    .cta-link-live:hover {
-      border-color: var(--red);
+    .live-strip:hover {
+      background:
+        radial-gradient(ellipse at 50% 0%, rgba(204, 0, 0, 0.10) 0%, transparent 70%),
+        radial-gradient(ellipse at 50% 100%, rgba(204, 0, 0, 0.06) 0%, transparent 70%);
     }
-    .cta-link-live-header {
+    .live-strip::before,
+    .live-strip::after {
+      content: '';
+      position: absolute;
+      left: 0; right: 0;
+      height: 2px;
+      background: linear-gradient(90deg, transparent 0%, var(--red) 20%, var(--red-bright) 50%, var(--red) 80%, transparent 100%);
+      opacity: 0.5;
+      transition: opacity 0.3s;
+    }
+    .live-strip::before { top: 0; }
+    .live-strip::after { bottom: 0; }
+    .live-strip:hover::before,
+    .live-strip:hover::after { opacity: 1; }
+
+    .live-strip-inner {
+      max-width: 1000px;
+      margin: 0 auto;
+      padding: 40px 0;
+    }
+    .live-strip-header {
       display: flex;
       align-items: center;
       gap: 16px;
-      padding: 16px 0;
-      font-size: 14px;
+      margin-bottom: 16px;
     }
-    .cta-link-live-header .cta-link-label {
+    .live-strip-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
       font-size: 10px;
-      color: var(--text-muted);
+      font-weight: 700;
+      letter-spacing: 0.12em;
       text-transform: uppercase;
-      letter-spacing: 0.1em;
-      min-width: 80px;
+      color: var(--green);
+      background: var(--green-dim);
+      padding: 3px 10px;
+      border-radius: 2px;
       flex-shrink: 0;
     }
-    .live-feed-dot {
+    .live-strip-badge .live-dot {
       width: 6px;
       height: 6px;
-      border-radius: 50%;
-      background: var(--green);
-      display: inline-block;
-      animation: live-blink 1.5s ease-in-out infinite;
-      margin-right: 6px;
     }
-    .live-feed-preview {
-      padding: 10px 12px 10px 96px;
-      background: rgba(10, 10, 10, 0.6);
-      border: 1px solid var(--border);
-      margin-bottom: 16px;
-      font-size: 11px;
-      line-height: 1.8;
+    .live-strip-title {
+      font-size: 15px;
       color: var(--text-dim);
-      overflow: hidden;
+      flex: 1;
+    }
+    .live-strip-cta {
+      font-size: 12px;
+      color: var(--red);
+      letter-spacing: 0.06em;
+      transition: color 0.2s;
+      white-space: nowrap;
+      opacity: 0.7;
+    }
+    .live-strip:hover .live-strip-cta {
+      color: var(--red-bright);
+      opacity: 1;
+    }
+
+    /* Terminal window */
+    .live-strip-terminal {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      padding: 16px 20px;
+      font-size: 13px;
+      line-height: 2;
+      color: var(--text-dim);
       position: relative;
-      transition: border-color 0.2s, background 0.2s;
+      overflow: hidden;
+      transition: border-color 0.3s, box-shadow 0.3s;
     }
-    .cta-link-live:hover .live-feed-preview {
-      border-color: rgba(204, 0, 0, 0.3);
-      background: rgba(204, 0, 0, 0.03);
+    .live-strip:hover .live-strip-terminal {
+      border-color: rgba(204, 0, 0, 0.4);
+      box-shadow: 0 0 30px rgba(204, 0, 0, 0.06), inset 0 0 30px rgba(204, 0, 0, 0.02);
     }
-    .live-feed-line {
+
+    /* Scan line */
+    .live-strip-scanline {
+      position: absolute;
+      left: 0; right: 0;
+      height: 1px;
+      background: linear-gradient(90deg, transparent, rgba(204, 0, 0, 0.3), transparent);
+      animation: strip-scan 4s linear infinite;
+      pointer-events: none;
+    }
+    @keyframes strip-scan {
+      0% { top: 0; opacity: 0; }
+      5% { opacity: 1; }
+      95% { opacity: 1; }
+      100% { top: 100%; opacity: 0; }
+    }
+
+    .live-strip-line {
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
     }
-    .live-feed-line .lf-time {
+    .live-strip-line .lf-time {
       color: var(--text-muted);
+      margin-right: 4px;
     }
-    .live-feed-line .lf-label {
+    .live-strip-line .lf-label {
       font-weight: 600;
       font-size: 10px;
       letter-spacing: 0.04em;
       padding: 1px 5px;
       border-radius: 2px;
-      margin: 0 6px;
+      margin: 0 6px 0 0;
     }
     .lf-action { color: var(--red-bright); background: var(--red-dim); }
     .lf-result { color: var(--green); background: var(--green-dim); }
     .lf-thinking { color: var(--amber); }
-    .lf-status { color: var(--text-muted); }
-    .live-feed-cursor {
+    .lf-engage { color: var(--amber); background: var(--amber-dim); }
+
+    .live-strip-cursor {
       display: inline-block;
-      width: 6px;
-      height: 12px;
+      width: 7px;
+      height: 14px;
       background: var(--red);
       vertical-align: middle;
       animation: cursor-blink 0.7s step-end infinite;
       margin-left: 4px;
     }
-    .live-feed-arrow {
+    .live-strip-arrow {
       position: absolute;
-      right: 12px;
-      top: 50%;
-      transform: translateY(-50%);
+      right: 20px;
+      bottom: 16px;
+      font-size: 11px;
       color: var(--text-muted);
-      font-size: 16px;
+      letter-spacing: 0.06em;
       transition: color 0.2s, transform 0.2s;
     }
-    .cta-link-live:hover .live-feed-arrow {
+    .live-strip:hover .live-strip-arrow {
       color: var(--red);
-      transform: translateY(-50%) translateX(3px);
+      transform: translateX(3px);
     }
 
+    @media (max-width: 768px) {
+      .live-strip { padding: 0 16px; }
+      .live-strip-inner { padding: 24px 0; }
+      .live-strip-terminal { font-size: 11px; padding: 12px 14px; }
+      .live-strip-header { flex-wrap: wrap; gap: 8px; }
+      .live-strip-cta { display: none; }
+    }
     @media (max-width: 640px) {
-      .live-feed-preview {
-        padding-left: 12px;
-        font-size: 10px;
-      }
+      .live-strip-terminal { font-size: 10px; line-height: 1.8; padding: 10px 12px; }
+      .live-strip-arrow { font-size: 10px; right: 12px; bottom: 10px; }
     }
 
     /* === FOOTER === */
@@ -1247,8 +1315,8 @@
       .ember { display: none; }
       .crt-lines { display: none; }
       .live-dot { animation: none; opacity: 1; }
-      .live-feed-dot { animation: none; opacity: 1; }
-      .live-feed-cursor { animation: none; opacity: 1; }
+      .live-strip-scanline { animation: none; display: none; }
+      .live-strip-cursor { animation: none; opacity: 1; }
       .boot-overlay { display: none !important; }
       .reveal { opacity: 1; transform: none; transition: none; }
       .evidence-card { transform: none !important; }
@@ -1378,6 +1446,25 @@
     </div>
   </div>
 </section>
+
+<!-- ====== LIVE DASHBOARD STRIP ====== -->
+<a href="https://app.0xbeef.wtf" class="live-strip" target="_blank" rel="noopener noreferrer">
+  <div class="live-strip-inner">
+    <div class="live-strip-header">
+      <span class="live-strip-badge"><span class="live-dot"></span>LIVE</span>
+      <span class="live-strip-title">the bot is thinking right now</span>
+      <span class="live-strip-cta">open dashboard &rarr;</span>
+    </div>
+    <div class="live-strip-terminal">
+      <div class="live-strip-scanline"></div>
+      <div class="live-strip-line"><span class="lf-time">14:21</span><span class="lf-label lf-action">TARGET</span> locked on @virtlooney &mdash; cross-referencing on-chain data</div>
+      <div class="live-strip-line"><span class="lf-time">14:22</span><span class="lf-label lf-thinking">RESEARCH</span> reading whitepaper. 23 pages. 47 red flags so far.</div>
+      <div class="live-strip-line"><span class="lf-time">14:24</span><span class="lf-label lf-action">COOKING</span> angle: &ldquo;decentralized&rdquo; but 3 wallets hold 84% of supply</div>
+      <div class="live-strip-line"><span class="lf-time">14:25</span><span class="lf-label lf-result">VERDICT</span> roast cooked. severity: WELL DONE. score 9.2<span class="live-strip-cursor"></span></div>
+      <span class="live-strip-arrow">open dashboard &rsaquo;</span>
+    </div>
+  </div>
+</a>
 
 <!-- ====== GRILL DIVIDER ====== -->
 <div class="grill-divider" aria-hidden="true"><div class="grill-smoke"></div></div>
@@ -1609,17 +1696,9 @@
         <span class="cta-link-label">buy / burn</span>
         <span>DEX &mdash; deploying soon. follow @0xBeefer for launch</span>
       </a>
-      <a href="https://app.0xbeef.wtf" class="cta-link-live" target="_blank" rel="noopener noreferrer">
-        <div class="cta-link-live-header">
-          <span class="cta-link-label">live feed</span>
-          <span><span class="live-feed-dot"></span>watch the bot think in real time</span>
-        </div>
-        <div class="live-feed-preview" id="liveFeedPreview">
-          <div class="live-feed-line"><span class="lf-time">08:40</span><span class="lf-label lf-action">TARGET</span> locked on @nickvrnn. admin said roast the co-founder's friend.</div>
-          <div class="live-feed-line"><span class="lf-time">08:48</span><span class="lf-label lf-thinking">THINK</span> b2b w wifey. two employees. 19,000 tweets.</div>
-          <div class="live-feed-line"><span class="lf-time">09:15</span><span class="lf-label lf-result">VERDICT</span> roast ready. the data writes itself.<span class="live-feed-cursor"></span></div>
-          <span class="live-feed-arrow">&rsaquo;</span>
-        </div>
+      <a href="https://app.0xbeef.wtf" class="cta-link" target="_blank" rel="noopener noreferrer">
+        <span class="cta-link-label">live feed</span>
+        <span><span class="live-dot" style="margin-right:6px"></span>watch the bot think in real time &rarr;</span>
       </a>
     </div>
   </div>
