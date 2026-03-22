@@ -267,8 +267,8 @@ export function createBot(opts: {
   }
 
   /**
-   * Formats roast output as plain text matching local farm pipeline style.
-   * No buttons, no sessions — just the roasts with scores.
+   * Formats roast output matching the farm pipeline Telegram style (notify.ts).
+   * Shows only stockpiled (good) roasts — no extras.
    */
   function formatRoastOutput(
     target: string,
@@ -277,6 +277,7 @@ export function createBot(opts: {
   ): string {
     const hasEval = evaluationMode && evaluationMode !== 'none' && output.evaluation;
     const variants = output.variants;
+    const divider = '────────────────────';
 
     // No evaluation — just show all variants as plain text
     if (!hasEval) {
@@ -289,62 +290,44 @@ export function createBot(opts: {
       return lines.join('\n\n');
     }
 
-    // With evaluation — split into stockpile/discard like local farm
     const eval_ = output.evaluation!;
     const bestScore = eval_.compositeScore;
     const verdict = eval_.verdict;
+    const lines: string[] = [];
 
+    // Evaluate section
+    lines.push(`⚖️ <b>EVALUATE</b>`);
+    lines.push('');
     if (verdict === 'stockpile') {
-      // Best variant passed — show it as stockpiled, show rest as extras
-      const best = variants[0]!;
-      const lines: string[] = [
-        `✓ <b>${escapeHtml(target)}</b>: ${bestScore.toFixed(1)} → stockpile`,
-        '',
-        `<code>${escapeHtml(best.text)}</code>`,
-        `<i>${escapeHtml(best.angle)} · ${String(best.text.length)} chars</i>`,
-      ];
-
-      // Show remaining variants without individual scores (they weren't evaluated)
-      if (variants.length > 1) {
-        lines.push('');
-        lines.push(`<i>${String(variants.length - 1)} more variant(s):</i>`);
-        for (let i = 1; i < variants.length; i++) {
-          const v = variants[i]!;
-          lines.push('');
-          lines.push(`<b>${String(i + 1)}.</b> <i>${escapeHtml(v.angle)}</i>`);
-          lines.push(`<code>${escapeHtml(v.text)}</code>`);
-        }
+      lines.push(`✅ Promoted: <b>${bestScore.toFixed(1)}</b>/5 → stockpile`);
+    } else {
+      const vetoInfo = eval_.vetoReasons && eval_.vetoReasons.length > 0
+        ? ` · Veto: ${escapeHtml(eval_.vetoReasons[0]!)}`
+        : '';
+      lines.push(`❌ Best: <b>${bestScore.toFixed(1)}</b>/5 → discard${vetoInfo}`);
+      if (eval_.preFilterReason) {
+        lines.push(`<i>Pre-filter: ${escapeHtml(eval_.preFilterReason)}</i>`);
       }
+    }
 
+    if (verdict !== 'stockpile') {
+      lines.push('');
+      lines.push(`<i>All ${String(variants.length)} variants scored below threshold.</i>`);
       return lines.join('\n');
     }
 
-    // All discarded — show best with its score and a warning
+    // Stockpile section — only the winning variant
     const best = variants[0]!;
-    const vetoInfo = eval_.vetoReasons && eval_.vetoReasons.length > 0
-      ? `\nVeto: ${escapeHtml(eval_.vetoReasons[0]!)}`
-      : '';
-    const preFilterInfo = eval_.preFilterReason
-      ? `\n<i>Pre-filter: ${escapeHtml(eval_.preFilterReason)}</i>`
-      : '';
-
-    const lines: string[] = [
-      `✗ All ${String(variants.length)} variants scored below threshold`,
-      `Best: ${bestScore.toFixed(1)}/5${vetoInfo}${preFilterInfo}`,
-      '',
-      `<code>${escapeHtml(best.text)}</code>`,
-      `<i>${escapeHtml(best.angle)} · ${String(best.text.length)} chars</i>`,
-    ];
-
-    // Show other variants too so user can pick manually
-    if (variants.length > 1) {
-      lines.push('');
-      for (let i = 1; i < variants.length; i++) {
-        const v = variants[i]!;
-        lines.push(`<b>${String(i + 1)}.</b> <i>${escapeHtml(v.angle)}</i>`);
-        lines.push(`<code>${escapeHtml(v.text)}</code>`);
-      }
-    }
+    lines.push('');
+    lines.push(divider);
+    lines.push('');
+    lines.push(`🗄 <b>STOCKPILE</b>`);
+    lines.push('');
+    lines.push(`<b>${escapeHtml(target)}</b>  AI: <code>?</code>`);
+    lines.push(`<pre>${escapeHtml(best.text)}</pre>`);
+    lines.push(`<i>${escapeHtml(best.angle)} · ${String(best.text.length)} chars</i>`);
+    lines.push('');
+    lines.push(`Rate: <code>1</code>  <code>2</code>  <code>3</code>  <code>4</code>  <code>5</code>`);
 
     return lines.join('\n');
   }
@@ -1238,6 +1221,9 @@ export function createBot(opts: {
       const keyboard = new InlineKeyboard()
         .text('Post', `approve:${String(roast.id)}`)
         .text('Skip', `reject:${String(roast.id)}`);
+      if (isReply) {
+        keyboard.text('🔄 Regen', `regenerate:${String(roast.id)}`);
+      }
       await ctx.reply(
         `<code>${escapeHtml(roast.tweetText)}</code>`,
         { parse_mode: 'HTML', reply_markup: keyboard },
@@ -1294,6 +1280,68 @@ export function createBot(opts: {
           show_alert: true,
         });
       }
+    } else if (data.startsWith('regenerate:') && queueManager) {
+      const roastId = parseInt(data.slice(11), 10);
+      if (Number.isNaN(roastId)) {
+        await ctx.answerCallbackQuery({ text: 'Invalid roast ID', show_alert: true });
+        return;
+      }
+
+      // Immediately respond and update UI — regeneration is long-running
+      await ctx.answerCallbackQuery({ text: 'Regenerating...' });
+      await ctx.editMessageText('🔄 <b>Regenerating...</b>', { parse_mode: 'HTML' });
+
+      // Fire-and-forget: run regeneration async, send new approval when done
+      void (async () => {
+        try {
+          const result = await queueManager.regenerateRoast(roastId);
+
+          if (!result || !result.pendingApproval || !result.roastId) {
+            await ctx.editMessageText(
+              `❌ <b>Regeneration failed</b> — ${escapeHtml(result?.error ?? 'no result')}`,
+              { parse_mode: 'HTML' },
+            );
+            return;
+          }
+
+          // Mark old message as regenerated
+          await ctx.editMessageText('🔄 <b>Regenerated</b> — see new message below', { parse_mode: 'HTML' });
+
+          // Send new approval message (same format as notifyQueueResult)
+          const chatId = ctx.chat?.id;
+          if (!chatId) return;
+
+          const isReply = result.roastSource && ['mention', 'reply_guy', 'casual_reply'].includes(result.roastSource);
+          const typeEmoji = isReply ? '💬' : '📢';
+          const sourceLabel = result.roastSource ?? 'regenerated';
+          const headerLines: string[] = [
+            `${typeEmoji} <b>Review [regenerated]</b> — ${escapeHtml(result.target ?? '?')} <i>(${sourceLabel})</i>`,
+          ];
+          if (result.replyToId) headerLines.push(`Reply to: <code>${escapeHtml(result.replyToId)}</code>`);
+          if (result.evaluationScore) headerLines.push(`Eval: <b>${result.evaluationScore.toFixed(1)}</b>/5`);
+          if (result.newStockpileCount) headerLines.push(`Stockpiled: <b>${String(result.newStockpileCount)}</b> new`);
+
+          await bot.api.sendMessage(chatId, headerLines.join('\n'), { parse_mode: 'HTML' });
+
+          if (result.postedText) {
+            const newKeyboard = new InlineKeyboard()
+              .text('Post', `approve:${String(result.roastId)}`)
+              .text('Skip', `reject:${String(result.roastId)}`)
+              .text('🔄 Regen', `regenerate:${String(result.roastId)}`);
+            await bot.api.sendMessage(
+              chatId,
+              `<code>${escapeHtml(result.postedText)}</code>`,
+              { parse_mode: 'HTML', reply_markup: newKeyboard },
+            );
+          }
+        } catch (error) {
+          logger.error({ err: error, roastId }, 'Regeneration callback failed');
+          await ctx.editMessageText(
+            `❌ <b>Regeneration failed:</b> ${escapeHtml(getErrorMessage(error).slice(0, 200))}`,
+            { parse_mode: 'HTML' },
+          ).catch(() => {});
+        }
+      })();
     }
   });
 

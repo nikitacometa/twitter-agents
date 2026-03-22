@@ -312,12 +312,15 @@ async function notifyQueueResult(
     if (result.newStockpileCount) lines.push(`Stockpiled: <b>${String(result.newStockpileCount)}</b> new`);
 
     const text = lines.join('\n');
-    const keyboard = {
-      inline_keyboard: [[
-        { text: 'Post', callback_data: `approve:${String(result.roastId)}` },
-        { text: 'Skip', callback_data: `reject:${String(result.roastId)}` },
-      ]],
-    };
+    const isReplySource = result.roastSource && ['mention', 'reply_guy', 'casual_reply'].includes(result.roastSource);
+    const buttons = [
+      { text: 'Post', callback_data: `approve:${String(result.roastId)}` },
+      { text: 'Skip', callback_data: `reject:${String(result.roastId)}` },
+    ];
+    if (isReplySource) {
+      buttons.push({ text: '🔄 Regenerate', callback_data: `regenerate:${String(result.roastId)}` });
+    }
+    const keyboard = { inline_keyboard: [buttons] };
 
     for (const target of targets) {
       try {

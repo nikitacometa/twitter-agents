@@ -67,6 +67,7 @@ export class QueueManager {
   private cachedEvaluator: SelfEvaluator | null = null;
   private readonly pendingApprovals = new Map<number, { stockpileId?: number }>();
   private readonly approvingIds = new Set<number>();
+  private readonly regeneratingIds = new Set<number>();
 
   constructor(opts: {
     queueRepo: QueueRepository;
@@ -822,6 +823,113 @@ export class QueueManager {
     this.roastRepo.updateStatus(roastId, 'rejected');
     this.pendingApprovals.delete(roastId);
     return true;
+  }
+
+  /**
+   * Regenerate a roast that is pending approval.
+   * Rejects the old roast, re-runs the full generation + evaluation pipeline,
+   * and returns a new pending_approval result.
+   *
+   * Guards against concurrent regeneration and concurrent approve via separate Sets.
+   */
+  async regenerateRoast(oldRoastId: number): Promise<QueueProcessResult | null> {
+    if (this.regeneratingIds.has(oldRoastId)) return null;
+    if (this.approvingIds.has(oldRoastId)) return null;
+
+    this.regeneratingIds.add(oldRoastId);
+    try {
+      const oldRoast = this.roastRepo.getById(oldRoastId);
+      if (!oldRoast || oldRoast.status !== 'pending_approval') return null;
+
+      // Reject old roast immediately (before long-running generation)
+      this.rejectRoast(oldRoastId);
+
+      // Profile enrichment
+      let profileContext: string | undefined;
+      if (this.profileFetcher) {
+        const parentAuthor = extractParentAuthorFromTarget(oldRoast.targetName);
+        const targetHandle = extractHandleFromTarget(oldRoast.targetName);
+        const username = parentAuthor ?? targetHandle;
+        if (username && username !== 'anon') {
+          profileContext = await this.buildProfileContext(username);
+        }
+      }
+
+      // Mention context — reconstruct from replyToId if available
+      if (oldRoast.replyToId && this.mentionRepo) {
+        const mention = this.mentionRepo.getByTweetId(oldRoast.replyToId);
+        if (mention) {
+          const mentionLines: string[] = [
+            `Requested by: @${mention.authorName}`,
+            `Request type: ${mention.requestType ?? 'unknown'}`,
+            `Mention text: "${mention.text}"`,
+          ];
+          if (oldRoast.replyToId && this.tweetRepo) {
+            const parentTweet = this.tweetRepo.getByTweetId(oldRoast.replyToId);
+            if (parentTweet) {
+              mentionLines.push(`\nParent tweet by @${parentTweet.authorName}:`);
+              mentionLines.push(`"${parentTweet.text}"`);
+            }
+          }
+          const mentionContext = mentionLines.join('\n');
+          profileContext = profileContext
+            ? `${profileContext}\n\n--- Mention context ---\n${mentionContext}`
+            : mentionContext;
+        }
+      }
+
+      this.activityLogger?.emit({ type: 'cooking', data: { target: oldRoast.targetName, regenerate: true } });
+
+      const output = await generateRoasts(
+        oldRoast.targetName, this.provider, this.logger, this.feedbackRepo,
+        'farm-generate', 2, this.configRepo, this.exampleRepo, this.patternRepo,
+        undefined, profileContext, undefined, this.stockpile, 2, this.farmAttemptRepo,
+      );
+
+      if (output.variants.length === 0) {
+        return { dequeued: true, posted: false, target: oldRoast.targetName, error: 'No variants generated on regeneration' };
+      }
+
+      const { best, newStockpileCount, bestScore, stockpiledVariants } = await this.evaluateAndStockpile(
+        output, oldRoast.targetName, oldRoast.targetType,
+      );
+
+      const tweetText = best
+        ? best.text
+        : (output.variants[output.bestIndex] ?? output.variants[0]!).text;
+      const evalScore = best ? bestScore : undefined;
+
+      const newRoastId = this.roastRepo.insert({
+        targetName: oldRoast.targetName,
+        targetType: oldRoast.targetType,
+        tweetText,
+        replyToId: oldRoast.replyToId ?? undefined,
+        source: oldRoast.source,
+        status: 'pending_approval',
+        factChecked: output.factCheckPassed,
+        contextData: output.researchNotes ?? undefined,
+        agentOutput: JSON.stringify(output),
+      });
+
+      this.pendingApprovals.set(newRoastId, {});
+
+      this.logger.info(
+        { oldRoastId, newRoastId, target: oldRoast.targetName, evalScore, newStockpileCount },
+        'Roast regenerated — new version pending approval',
+      );
+
+      return {
+        dequeued: true, pendingApproval: true, roastId: newRoastId,
+        target: oldRoast.targetName, evaluationScore: evalScore,
+        newStockpileCount, postedText: tweetText, stockpiledVariants,
+        roastSource: oldRoast.source, replyToId: oldRoast.replyToId ?? undefined,
+      };
+    } catch (error) {
+      this.logger.error({ err: error, oldRoastId }, 'Roast regeneration failed');
+      throw error;
+    } finally {
+      this.regeneratingIds.delete(oldRoastId);
+    }
   }
 
   /**
