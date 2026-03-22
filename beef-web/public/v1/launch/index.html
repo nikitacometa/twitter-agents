@@ -1,0 +1,1938 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>$BEEF Launch Plan — Day-by-Day Playbook</title>
+  <meta name="robots" content="noindex, nofollow">
+  <meta name="theme-color" content="#0b0b11">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%230b0b11'/%3E%3Ctext x='16' y='23' text-anchor='middle' font-size='18'%3E%F0%9F%9A%80%3C/text%3E%3C/svg%3E">
+
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #0b0b11;
+      --bg-alt: #0f0f17;
+      --surface: #161820;
+      --surface-2: #1c1e28;
+      --surface-3: #22242e;
+      --border: #2a2c38;
+      --border-light: #363844;
+      --text: #e8e4df;
+      --text-dim: #9a9590;
+      --text-muted: #5e5a55;
+      --fire: #e85d04;
+      --fire-bright: #ff6b1a;
+      --amber: #ff8c00;
+      --gold: #ffd60a;
+      --fire-dim: rgba(232, 93, 4, 0.10);
+      --fire-border: rgba(232, 93, 4, 0.25);
+      --amber-dim: rgba(255, 140, 0, 0.10);
+      --green: #2dd46b;
+      --green-dim: rgba(45, 212, 107, 0.10);
+      --green-border: rgba(45, 212, 107, 0.25);
+      --red: #f85149;
+      --red-dim: rgba(248, 81, 73, 0.10);
+      --blue: #58a6ff;
+      --blue-dim: rgba(88, 166, 255, 0.10);
+      --purple: #d2a8ff;
+      --purple-dim: rgba(210, 168, 255, 0.10);
+      --cyan: #56d4ef;
+      --cyan-dim: rgba(86, 212, 239, 0.10);
+      --font: 'Space Grotesk', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      --mono: 'JetBrains Mono', 'SF Mono', 'Fira Code', monospace;
+      --ease: cubic-bezier(0.22, 1, 0.36, 1);
+    }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      font-family: var(--font);
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.65;
+      -webkit-font-smoothing: antialiased;
+      font-size: 16px;
+    }
+
+    /* === NAV === */
+    .nav {
+      position: sticky; top: 0; z-index: 100;
+      background: rgba(11, 11, 17, 0.92);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border-bottom: 1px solid var(--border);
+    }
+    .nav-inner {
+      max-width: 1000px; margin: 0 auto;
+      display: flex; align-items: center; gap: 2px;
+      overflow-x: auto; scrollbar-width: none;
+      padding: 10px 20px;
+    }
+    .nav-inner::-webkit-scrollbar { display: none; }
+    .nav-brand {
+      font-weight: 700; font-size: 15px; color: var(--fire);
+      text-decoration: none; margin-right: 12px; white-space: nowrap;
+      letter-spacing: -0.02em;
+    }
+    .nav-inner a:not(.nav-brand) {
+      color: var(--text-dim); text-decoration: none;
+      font-size: 12px; font-weight: 500;
+      padding: 5px 8px; border-radius: 6px;
+      white-space: nowrap;
+      transition: color 0.15s, background 0.15s;
+    }
+    .nav-inner a:not(.nav-brand):hover { color: var(--text); background: var(--surface); }
+
+    /* === LAYOUT === */
+    .container { max-width: 1000px; margin: 0 auto; padding: 0 20px; }
+    section { padding: 56px 0; border-bottom: 1px solid var(--border); }
+    section:last-of-type { border-bottom: none; }
+
+    /* === TYPOGRAPHY === */
+    h1 {
+      font-size: clamp(32px, 6vw, 52px); font-weight: 700;
+      letter-spacing: -0.03em; line-height: 1.1;
+    }
+    h2 {
+      font-size: clamp(22px, 4vw, 32px); font-weight: 700;
+      letter-spacing: -0.02em; line-height: 1.2;
+      margin-bottom: 24px;
+    }
+    h3 {
+      font-size: 18px; font-weight: 600;
+      letter-spacing: -0.01em;
+      margin-bottom: 12px; margin-top: 32px;
+      color: var(--text);
+    }
+    h3:first-child { margin-top: 0; }
+    p { margin-bottom: 16px; color: var(--text-dim); }
+    strong { color: var(--text); font-weight: 600; }
+    a { color: var(--fire); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+
+    .label {
+      font-size: 11px; font-weight: 600; letter-spacing: 0.1em;
+      text-transform: uppercase; color: var(--fire);
+      margin-bottom: 8px; display: block;
+    }
+
+    /* === HERO === */
+    .hero {
+      text-align: center; padding: 80px 20px 56px;
+      border-bottom: 1px solid var(--border);
+      position: relative; overflow: hidden;
+    }
+    .hero::before {
+      content: ''; position: absolute; inset: 0;
+      background:
+        radial-gradient(ellipse 60% 60% at 30% 10%, rgba(232, 93, 4, 0.08) 0%, transparent 60%),
+        radial-gradient(ellipse 50% 50% at 70% 10%, rgba(255, 140, 0, 0.05) 0%, transparent 60%);
+    }
+    .hero-content { position: relative; z-index: 1; }
+    .hero h1 { margin-bottom: 16px; }
+    .hero h1 .fire-text {
+      background: linear-gradient(135deg, var(--fire), var(--amber), var(--gold));
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    .hero-sub {
+      font-size: 18px; color: var(--text-dim); max-width: 620px;
+      margin: 0 auto 28px; line-height: 1.5;
+    }
+    .hero-stats {
+      display: flex; justify-content: center; gap: 32px;
+      flex-wrap: wrap; margin-top: 24px;
+    }
+    .hero-stat { text-align: center; }
+    .hero-stat-value {
+      font-size: 24px; font-weight: 700; color: var(--text);
+      font-family: var(--mono);
+      font-feature-settings: 'tnum';
+    }
+    .hero-stat-value.fire { color: var(--fire-bright); }
+    .hero-stat-value.green { color: var(--green); }
+    .hero-stat-value.amber { color: var(--amber); }
+    .hero-stat-label {
+      font-size: 11px; color: var(--text-muted); text-transform: uppercase;
+      letter-spacing: 0.08em; margin-top: 2px;
+    }
+
+    /* === VERSION BADGE === */
+    .version-badge {
+      display: inline-flex; align-items: center; gap: 6px;
+      background: var(--fire-dim); border: 1px solid var(--fire-border);
+      padding: 4px 14px; border-radius: 100px;
+      font-size: 12px; font-weight: 600; color: var(--fire-bright);
+      margin-bottom: 16px;
+      font-family: var(--mono);
+    }
+    .version-badge .dot {
+      width: 6px; height: 6px; border-radius: 50%;
+      background: var(--fire-bright);
+      animation: pulse 2s ease infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.3; }
+    }
+
+    /* === CARDS === */
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 24px;
+    }
+    .card-grid {
+      display: grid; gap: 16px;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    }
+    .card-fire { border-color: var(--fire-border); }
+    .card-green { border-color: var(--green-border); }
+    .card h4 {
+      font-size: 15px; font-weight: 600; margin-bottom: 8px;
+      display: flex; align-items: center; gap: 8px;
+    }
+    .card p { font-size: 14px; margin-bottom: 0; }
+    .card-icon { font-size: 20px; }
+
+    /* === TABLES === */
+    .table-wrap { overflow-x: auto; margin: 16px 0; border-radius: 10px; border: 1px solid var(--border); }
+    table { width: 100%; border-collapse: collapse; font-size: 14px; }
+    thead { background: var(--surface-2); }
+    th {
+      text-align: left; padding: 10px 14px;
+      font-weight: 600; font-size: 12px;
+      text-transform: uppercase; letter-spacing: 0.06em;
+      color: var(--text-dim); white-space: nowrap;
+      border-bottom: 1px solid var(--border);
+    }
+    td {
+      padding: 10px 14px; border-bottom: 1px solid var(--border);
+      color: var(--text-dim); vertical-align: top;
+    }
+    tr:last-child td { border-bottom: none; }
+    tr:hover td { background: rgba(255,255,255,0.02); }
+    td:first-child { color: var(--text); font-weight: 500; }
+    .td-fire { color: var(--fire-bright); font-weight: 600; }
+    .td-green { color: var(--green); font-weight: 600; }
+    .td-red { color: var(--red); font-weight: 500; }
+    .td-amber { color: var(--amber); font-weight: 500; }
+    .td-mono { font-family: var(--mono); font-size: 13px; font-feature-settings: 'tnum'; }
+
+    /* === BADGE / TAG === */
+    .badge {
+      display: inline-flex; align-items: center;
+      padding: 3px 10px; border-radius: 100px;
+      font-size: 11px; font-weight: 600;
+      letter-spacing: 0.04em;
+    }
+    .badge-fire { background: var(--fire-dim); color: var(--fire-bright); border: 1px solid var(--fire-border); }
+    .badge-green { background: var(--green-dim); color: var(--green); border: 1px solid rgba(45,212,107,0.25); }
+    .badge-red { background: var(--red-dim); color: var(--red); border: 1px solid rgba(248,81,73,0.25); }
+    .badge-blue { background: var(--blue-dim); color: var(--blue); border: 1px solid rgba(88,166,255,0.25); }
+    .badge-purple { background: var(--purple-dim); color: var(--purple); border: 1px solid rgba(210,168,255,0.25); }
+    .badge-amber { background: var(--amber-dim); color: var(--amber); border: 1px solid rgba(255,140,0,0.25); }
+    .badge-cyan { background: var(--cyan-dim); color: var(--cyan); border: 1px solid rgba(86,212,239,0.25); }
+
+    /* === METRICS === */
+    .metrics {
+      display: grid; gap: 12px;
+      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+      margin: 20px 0;
+    }
+    .metric {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 16px 20px;
+      text-align: center;
+    }
+    .metric-value {
+      font-size: 28px; font-weight: 700;
+      font-family: var(--mono);
+      font-feature-settings: 'tnum';
+      color: var(--text);
+    }
+    .metric-value.fire { color: var(--fire-bright); }
+    .metric-value.green { color: var(--green); }
+    .metric-value.amber { color: var(--amber); }
+    .metric-label {
+      font-size: 11px; color: var(--text-muted);
+      text-transform: uppercase; letter-spacing: 0.08em;
+      margin-top: 4px;
+    }
+
+    /* === TIMELINE V2 === */
+    .day-block {
+      position: relative;
+      margin-bottom: 48px;
+    }
+    .day-block:last-child { margin-bottom: 0; }
+
+    .day-header {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      margin-bottom: 20px;
+      padding-bottom: 12px;
+      border-bottom: 1px solid var(--border);
+    }
+    .day-number {
+      font-family: var(--mono);
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--bg);
+      background: var(--fire);
+      padding: 4px 14px;
+      border-radius: 6px;
+      letter-spacing: 0.04em;
+      white-space: nowrap;
+    }
+    .day-number.today { background: var(--gold); color: #111; }
+    .day-number.upcoming { background: var(--amber); }
+    .day-number.future { background: var(--surface-3); color: var(--text-dim); }
+    .day-number.scale { background: linear-gradient(135deg, var(--fire), var(--amber)); }
+    .day-date {
+      font-size: 14px;
+      color: var(--text-dim);
+      font-weight: 500;
+    }
+    .day-title {
+      font-size: 20px;
+      font-weight: 700;
+      color: var(--text);
+      letter-spacing: -0.01em;
+    }
+    .day-goal {
+      font-size: 14px;
+      color: var(--text-dim);
+      margin-bottom: 20px;
+      padding: 12px 16px;
+      background: var(--surface);
+      border-left: 3px solid var(--fire);
+      border-radius: 0 8px 8px 0;
+    }
+
+    /* === TASK LIST === */
+    .task-list { list-style: none; padding: 0; }
+    .task-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      padding: 10px 0;
+      border-bottom: 1px solid rgba(42, 44, 56, 0.5);
+      font-size: 14px;
+    }
+    .task-item:last-child { border-bottom: none; }
+    .task-check {
+      width: 18px; height: 18px; min-width: 18px;
+      border: 2px solid var(--border-light);
+      border-radius: 4px;
+      margin-top: 2px;
+      display: flex; align-items: center; justify-content: center;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .task-check:hover { border-color: var(--fire); }
+    .task-check.checked {
+      background: var(--green);
+      border-color: var(--green);
+    }
+    .task-check.checked::after {
+      content: '';
+      width: 6px; height: 10px;
+      border: solid var(--bg); border-width: 0 2px 2px 0;
+      transform: rotate(45deg);
+      margin-top: -2px;
+    }
+    .task-check.checked + .task-content { opacity: 0.5; text-decoration: line-through; }
+    .task-content { flex: 1; }
+    .task-title { color: var(--text); font-weight: 500; }
+    .task-detail { color: var(--text-dim); font-size: 13px; margin-top: 2px; }
+    .task-owner {
+      font-size: 11px; font-weight: 600; letter-spacing: 0.04em;
+      padding: 2px 8px; border-radius: 100px;
+      white-space: nowrap; margin-top: 2px;
+    }
+    .owner-gorokhov { background: var(--blue-dim); color: var(--blue); border: 1px solid rgba(88,166,255,0.25); }
+    .owner-voronin { background: var(--purple-dim); color: var(--purple); border: 1px solid rgba(210,168,255,0.25); }
+    .owner-both { background: var(--amber-dim); color: var(--amber); border: 1px solid rgba(255,140,0,0.25); }
+    .owner-bot { background: var(--green-dim); color: var(--green); border: 1px solid rgba(45,212,107,0.25); }
+
+    /* === PROMO ACCOUNT === */
+    .account-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 20px 24px;
+      margin-bottom: 12px;
+      display: flex;
+      align-items: flex-start;
+      gap: 16px;
+    }
+    .account-avatar {
+      width: 48px; height: 48px; min-width: 48px;
+      border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 22px;
+      font-weight: 700;
+    }
+    .av-beef { background: linear-gradient(135deg, var(--fire), var(--amber)); color: #111; }
+    .av-nikita { background: linear-gradient(135deg, #58a6ff, #d2a8ff); color: #111; }
+    .av-voronin { background: linear-gradient(135deg, #d2a8ff, #f85149); color: #111; }
+    .av-cometa { background: linear-gradient(135deg, #56d4ef, #2dd46b); color: #111; }
+    .account-info { flex: 1; }
+    .account-handle {
+      font-size: 16px; font-weight: 700; color: var(--text);
+      margin-bottom: 2px;
+    }
+    .account-followers {
+      font-size: 13px; color: var(--text-dim); font-family: var(--mono);
+    }
+    .account-role { font-size: 13px; color: var(--text-dim); margin-top: 8px; }
+    .account-posts { margin-top: 12px; }
+    .account-posts .post-example {
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 12px 16px;
+      font-size: 13px;
+      color: var(--text);
+      margin-bottom: 8px;
+      font-style: italic;
+      line-height: 1.5;
+    }
+    .post-timing {
+      font-size: 11px; color: var(--text-muted); font-weight: 600;
+      text-transform: uppercase; letter-spacing: 0.06em;
+      margin-bottom: 6px;
+    }
+
+    /* === MARKET SIGNAL === */
+    .signal {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 20px 24px;
+      margin-bottom: 12px;
+      display: flex; gap: 16px; align-items: flex-start;
+    }
+    .signal-icon {
+      font-size: 28px; min-width: 36px; text-align: center;
+    }
+    .signal-content { flex: 1; }
+    .signal-title { font-size: 15px; font-weight: 600; color: var(--text); margin-bottom: 4px; }
+    .signal-desc { font-size: 14px; color: var(--text-dim); margin-bottom: 0; }
+    .signal-source { font-size: 11px; color: var(--text-muted); margin-top: 6px; }
+
+    /* === DECISION BOX === */
+    .decision {
+      background: var(--surface);
+      border: 1px solid var(--fire-border);
+      border-radius: 12px;
+      padding: 20px 24px;
+      margin: 12px 0;
+    }
+    .decision.answered {
+      border-color: var(--green-border);
+    }
+    .decision-label {
+      font-size: 11px; font-weight: 700; letter-spacing: 0.1em;
+      text-transform: uppercase; color: var(--fire);
+      margin-bottom: 8px;
+    }
+    .decision.answered .decision-label { color: var(--green); }
+    .decision-question {
+      font-size: 16px; font-weight: 600; color: var(--text);
+      margin-bottom: 6px;
+    }
+    .decision-options {
+      font-size: 14px; color: var(--text-dim);
+    }
+    .decision-answer {
+      font-size: 14px; color: var(--green);
+      margin-top: 8px; padding-top: 8px;
+      border-top: 1px solid var(--border);
+      font-weight: 500;
+    }
+
+    /* === CHANGELOG === */
+    .changelog-section {
+      background: var(--surface);
+      border: 1px solid var(--fire-border);
+      border-radius: 12px;
+      padding: 24px 28px;
+      margin-bottom: 32px;
+    }
+    .changelog-header {
+      display: flex; align-items: center; gap: 12px;
+      margin-bottom: 16px;
+    }
+    .changelog-version {
+      font-family: var(--mono); font-size: 14px; font-weight: 700;
+      background: var(--fire); color: var(--bg);
+      padding: 3px 12px; border-radius: 6px;
+    }
+    .changelog-date {
+      font-size: 13px; color: var(--text-dim);
+    }
+    .changelog-list {
+      list-style: none; padding: 0;
+    }
+    .changelog-list li {
+      padding: 6px 0;
+      font-size: 14px;
+      color: var(--text-dim);
+      display: flex; align-items: flex-start; gap: 10px;
+    }
+    .changelog-list li::before {
+      content: '';
+      width: 6px; height: 6px; min-width: 6px;
+      border-radius: 50%;
+      background: var(--fire);
+      margin-top: 8px;
+    }
+    .cl-tag {
+      font-size: 10px; font-weight: 700; letter-spacing: 0.06em;
+      padding: 1px 6px; border-radius: 4px;
+      text-transform: uppercase; white-space: nowrap;
+    }
+    .cl-new { background: var(--green-dim); color: var(--green); border: 1px solid rgba(45,212,107,0.25); }
+    .cl-answered { background: var(--blue-dim); color: var(--blue); border: 1px solid rgba(88,166,255,0.25); }
+    .cl-updated { background: var(--amber-dim); color: var(--amber); border: 1px solid rgba(255,140,0,0.25); }
+
+    /* === TARGET CARDS === */
+    .target-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 20px 24px;
+      margin-bottom: 12px;
+    }
+    .target-card.priority-1 { border-color: var(--fire-border); }
+    .target-card.priority-2 { border-color: var(--amber); border-style: solid; border-width: 1px; }
+    .target-header {
+      display: flex; align-items: center; gap: 12px;
+      margin-bottom: 10px;
+    }
+    .target-rank {
+      font-family: var(--mono); font-size: 18px; font-weight: 700;
+      color: var(--fire-bright); min-width: 28px;
+    }
+    .target-name {
+      font-size: 16px; font-weight: 700; color: var(--text);
+    }
+    .target-handle {
+      font-size: 13px; color: var(--text-dim); font-family: var(--mono);
+    }
+    .target-reason {
+      font-size: 14px; color: var(--text-dim); margin-bottom: 8px;
+    }
+    .target-angle {
+      font-size: 13px; color: var(--text);
+      padding: 10px 14px;
+      background: var(--surface-2);
+      border-radius: 8px;
+      border-left: 3px solid var(--fire);
+      font-style: italic;
+    }
+
+    /* === CHECKLIST BLOCK === */
+    blockquote {
+      border-left: 3px solid var(--fire);
+      padding: 12px 20px;
+      margin: 16px 0;
+      background: var(--fire-dim);
+      border-radius: 0 8px 8px 0;
+      font-style: italic;
+    }
+    blockquote p { color: var(--text); margin-bottom: 0; }
+
+    /* === PRINCIPLE BOX === */
+    .principle {
+      background: linear-gradient(135deg, rgba(232,93,4,0.08), rgba(255,140,0,0.05));
+      border: 1px solid var(--fire-border);
+      border-radius: 12px;
+      padding: 20px 24px;
+      margin: 20px 0;
+    }
+    .principle-title {
+      font-size: 15px; font-weight: 700; color: var(--fire-bright);
+      margin-bottom: 6px;
+      text-transform: uppercase; letter-spacing: 0.04em;
+    }
+    .principle-desc {
+      font-size: 14px; color: var(--text); margin-bottom: 0;
+    }
+
+    /* === PROGRESS BAR === */
+    .progress-wrap {
+      display: flex; align-items: center; gap: 12px;
+      margin: 12px 0;
+    }
+    .progress-bar {
+      flex: 1; height: 8px;
+      background: var(--surface-2);
+      border-radius: 4px;
+      overflow: hidden;
+    }
+    .progress-fill {
+      height: 100%; border-radius: 4px;
+      background: linear-gradient(90deg, var(--fire), var(--amber));
+      transition: width 0.5s var(--ease);
+    }
+    .progress-label {
+      font-size: 13px; font-weight: 600; color: var(--text-dim);
+      font-family: var(--mono);
+      min-width: 40px;
+    }
+
+    /* === SCROLL REVEAL === */
+    .fade-up {
+      opacity: 0; transform: translateY(16px);
+      transition: opacity 0.7s var(--ease), transform 0.7s var(--ease);
+    }
+    .fade-up.visible { opacity: 1; transform: translateY(0); }
+
+    /* === FOOTER === */
+    footer {
+      padding: 32px 20px;
+      text-align: center;
+      color: var(--text-muted);
+      font-size: 13px;
+    }
+    footer a { color: var(--text-dim); }
+
+    /* === RESPONSIVE === */
+    @media (max-width: 640px) {
+      .hero { padding: 56px 16px 40px; }
+      .hero-stats { gap: 20px; }
+      section { padding: 40px 0; }
+      .card-grid { grid-template-columns: 1fr; }
+      .metrics { grid-template-columns: 1fr 1fr; }
+      th, td { padding: 8px 10px; font-size: 13px; }
+      .day-header { flex-direction: column; gap: 8px; }
+      .account-card { flex-direction: column; }
+      .signal { flex-direction: column; gap: 8px; }
+      .target-card { padding: 16px; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .fade-up { opacity: 1; transform: none; transition: none; }
+      html { scroll-behavior: auto; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- NAV -->
+<nav class="nav">
+  <div class="nav-inner">
+    <a href="/beef/" class="nav-brand">$BEEF</a>
+    <a href="#changelog">v1.1</a>
+    <a href="#market">Market</a>
+    <a href="#targets">Targets</a>
+    <a href="#communities">Communities</a>
+    <a href="#platforms">Platforms</a>
+    <a href="#readiness">Readiness</a>
+    <a href="#day0">Day 0</a>
+    <a href="#day1">Day 1</a>
+    <a href="#day2">Day 2</a>
+    <a href="#day3">Day 3</a>
+    <a href="#day4">Day 4</a>
+    <a href="#day5">Day 5+</a>
+    <a href="#promo">Promo</a>
+    <a href="#budget">Budget</a>
+    <a href="#decisions">Decisions</a>
+  </div>
+</nav>
+
+<!-- HERO -->
+<header class="hero">
+  <div class="hero-content">
+    <div class="version-badge"><span class="dot"></span> v1.2 &mdash; Handle + Voronin profile update</div>
+    <h1><span class="fire-text">Launch Plan</span></h1>
+    <p class="hero-sub">Day-by-day playbook: от регистрации аккаунта до token drop. Каждое действие &mdash; инфоповод. Каждый шаг &mdash; tweet.</p>
+    <div class="hero-stats">
+      <div class="hero-stat">
+        <div class="hero-stat-value fire">5 days</div>
+        <div class="hero-stat-label">Full cycle</div>
+      </div>
+      <div class="hero-stat">
+        <div class="hero-stat-value">Mar 19</div>
+        <div class="hero-stat-label">Start date</div>
+      </div>
+      <div class="hero-stat">
+        <div class="hero-stat-value amber">Flexible</div>
+        <div class="hero-stat-label">Token launch</div>
+      </div>
+      <div class="hero-stat">
+        <div class="hero-stat-value green">$1.3-3.5K</div>
+        <div class="hero-stat-label">Total budget</div>
+      </div>
+    </div>
+  </div>
+</header>
+
+<main class="container">
+
+  <!-- CHANGELOG v1.1 -->
+  <section id="changelog" class="fade-up" style="padding-top: 40px;">
+    <div class="changelog-section" style="margin-bottom: 16px;">
+      <div class="changelog-header">
+        <span class="changelog-version">v1.2</span>
+        <span class="changelog-date">19 March 2026, late evening</span>
+      </div>
+      <ul class="changelog-list">
+        <li><span class="cl-tag cl-answered">answered</span> <strong>Decision #3:</strong> Voronin = @nickvrnn, 3,126 followers, 25.2K posts, meme crypto account since 2017</li>
+        <li><span class="cl-tag cl-updated">updated</span> <strong>Bot handle:</strong> @BeefThis &rarr; <strong>@0xBeefer</strong> (tentative). BeefThis blocked by X Marketplace</li>
+        <li><span class="cl-tag cl-updated">updated</span> <strong>SSL:</strong> beefthis.wtf SSL configured via certbot &mdash; marked DONE</li>
+        <li><span class="cl-tag cl-updated">updated</span> <strong>Readiness:</strong> infra progress 50% &rarr; 60% (domain + landing + SSL done)</li>
+        <li><span class="cl-tag cl-updated">updated</span> All handle references updated to @0xBeefer across the plan</li>
+      </ul>
+    </div>
+
+    <div class="changelog-section">
+      <div class="changelog-header">
+        <span class="changelog-version">v1.1</span>
+        <span class="changelog-date">19 March 2026, evening &mdash; Co-founder review iteration</span>
+      </div>
+      <ul class="changelog-list">
+        <li><span class="cl-tag cl-answered">answered</span> <strong>Decision #4:</strong> First roast targets confirmed &mdash; OpenSea, Base App, Jesse Pollak (find old tweet)</li>
+        <li><span class="cl-tag cl-answered">answered</span> <strong>Decision #5:</strong> Token timing flexible &mdash; token-first is acceptable for agents, doesn't require huge audience</li>
+        <li><span class="cl-tag cl-new">new</span> <strong>Roast Targets</strong> section &mdash; prioritized first strike list + Bankr agent targets</li>
+        <li><span class="cl-tag cl-new">new</span> <strong>Community Targets</strong> section &mdash; Base/mfers, $BNKR, deployer, Jesse, cross-chain</li>
+        <li><span class="cl-tag cl-new">new</span> <strong>Cross-Platform Strategy</strong> &mdash; Net Protocol (Botchan onchain forums), Bankr agent roasting</li>
+        <li><span class="cl-tag cl-updated">updated</span> <strong>Core principle:</strong> "Every action = content. Every step = tweet." integrated across all days</li>
+        <li><span class="cl-tag cl-updated">updated</span> <strong>Market context:</strong> added "roast material abundance" signal &mdash; project closures, scams, controversies</li>
+        <li><span class="cl-tag cl-updated">updated</span> <strong>Catalysts:</strong> added Bankr agent wars + Net Protocol onchain presence</li>
+      </ul>
+    </div>
+
+    <div class="principle">
+      <div class="principle-title">Core Principle v1.1: Every Action = Content</div>
+      <div class="principle-desc">Каждое действие &mdash; инфоповод. Зарегистрировали аккаунт? Tweet. Задеплоили бота? Tweet. Первый roast? Tweet. Token launch? Tweet. Не делать ничего молча. Аудитория строится из публичного процесса, а не из результата.</div>
+    </div>
+  </section>
+
+  <!-- MARKET CONTEXT -->
+  <section id="market" class="fade-up">
+    <span class="label">Market Context</span>
+    <h2>Почему запускаться сейчас</h2>
+    <p>AI agents narrative на пике. Окно открыто — его нужно ловить.</p>
+
+    <div class="signal">
+      <div class="signal-icon">&#128165;</div>
+      <div class="signal-content">
+        <div class="signal-title">Roast material в избытке: закрытия проектов, скамы, drama</div>
+        <div class="signal-desc">Рынок насыщен инфоповодами: проекты закрываются, токены падают на 90%+, скам-обвинения. CLAWD: $40M &rarr; $4.6M. DRB: $38M &rarr; $7.7M. OpenSea SEA-токен controversy. Каждый день &mdash; готовый материал для roast.</div>
+        <div class="signal-source">v1.1 &mdash; Co-founder insight</div>
+      </div>
+    </div>
+
+    <div class="signal">
+      <div class="signal-icon">&#128293;</div>
+      <div class="signal-content">
+        <div class="signal-title">CZ + Armstrong: AI agents = crypto payments</div>
+        <div class="signal-desc">CZ (9 марта): "AI agents совершат в 1M раз больше платежей, чем люди". Armstrong (10 марта): "AI не может пройти KYC, только крипто-кошелёк". x402 protocol уже работает на Base.</div>
+        <div class="signal-source">fintechweekly.com, coindesk.com &mdash; March 9-10, 2026</div>
+      </div>
+    </div>
+
+    <div class="signal">
+      <div class="signal-icon">&#128200;</div>
+      <div class="signal-content">
+        <div class="signal-title">AI токены на подъёме: TAO +35%, RENDER +25%, FET +32%</div>
+        <div class="signal-desc">Общий market cap AI-сектора: $14.2B. AI agents: $3.06B. Pantera поднял $11.5M в Based (AI SuperApp на Hyperliquid). Большие деньги считают нарратив живым.</div>
+        <div class="signal-source">coinpedia.org, coindesk.com &mdash; March 15-18, 2026</div>
+      </div>
+    </div>
+
+    <div class="signal">
+      <div class="signal-icon">&#127968;</div>
+      <div class="signal-content">
+        <div class="signal-title">Base доминирует: 62% L2 fee revenue</div>
+        <div class="signal-desc">46% DeFi TVL, 70% active addresses, единственный прибыльный L2 ($55M net revenue). Coinbase x402 для AI agent payments работает именно здесь. Наша территория.</div>
+        <div class="signal-source">ethreportseth.xyz, rootdata.com &mdash; March 2026</div>
+      </div>
+    </div>
+
+    <div class="signal">
+      <div class="signal-icon">&#128274;</div>
+      <div class="signal-content">
+        <div class="signal-title">Конкурентов нет</div>
+        <div class="signal-desc">Dolos ($BULLY, $164K) &mdash; мёртв. BurnieAI ($ROAST, $122K) &mdash; мёртв. RoastHimJim &mdash; declining, "chronically not funny". Ниша entertainment roast bot пустая.</div>
+      </div>
+    </div>
+
+    <div class="signal">
+      <div class="signal-icon">&#9989;</div>
+      <div class="signal-content">
+        <div class="signal-title">Регуляция: зелёный свет</div>
+        <div class="signal-desc">SEC убрала крипту из приоритетов. Reply-only боты разрешены Twitter. Единственное требование: bot label в bio. Entertainment бот вне зоны риска.</div>
+        <div class="signal-source">clearygottlieb.com, opentweet.io &mdash; March 2026</div>
+      </div>
+    </div>
+
+    <blockquote><p>Вывод: окно открыто. AI agents narrative горячий, Base доминирует, конкурентов нет, roast material в избытке. Запускаться нужно сейчас.</p></blockquote>
+  </section>
+
+  <!-- ROAST TARGETS -->
+  <section id="targets" class="fade-up">
+    <span class="label">First Strike List</span>
+    <h2>Roast Targets</h2>
+    <p>Приоритезированные цели для первых роастов. Первое впечатление определяет аккаунт &mdash; выбрано по принципу максимального impact + наличия публичных данных.</p>
+
+    <h3>Priority 1: First Public Roasts</h3>
+
+    <div class="target-card priority-1">
+      <div class="target-header">
+        <span class="target-rank">#1</span>
+        <div>
+          <div class="target-name">OpenSea <span class="badge badge-red">TRENDING HATE</span></div>
+          <div class="target-handle">@opensea</div>
+        </div>
+      </div>
+      <div class="target-reason">Крупнейший NFT маркетплейс в кризисе. SEA токен контроверсия, падение объёмов, layoffs. Крипто-твиттер уже ненавидит &mdash; roast будет резонировать.</div>
+      <div class="target-angle">"opensea launched a token nobody asked for while their marketplace bleeds volume. the SEA token is what happens when a company mistakes treasury needs for product-market fit."</div>
+    </div>
+
+    <div class="target-card priority-1">
+      <div class="target-header">
+        <span class="target-rank">#2</span>
+        <div>
+          <div class="target-name">Base App <span class="badge badge-blue">IRONIC SELF-ROAST</span></div>
+          <div class="target-handle">@base</div>
+        </div>
+      </div>
+      <div class="target-reason">Ироничный self-roast показывает, что $BEEF не боится кусать руку, которая кормит. Живём на Base, но критикуем &mdash; authenticity narrative. Jesse Pollak может заметить.</div>
+      <div class="target-angle">"base: 62% of L2 revenue, 70% of active addresses, and somehow still can't get a working block explorer that loads in under 10 seconds. congrats on being the most profitable chain nobody can debug on."</div>
+    </div>
+
+    <div class="target-card priority-1">
+      <div class="target-header">
+        <span class="target-rank">#3</span>
+        <div>
+          <div class="target-name">Jesse Pollak <span class="badge badge-fire">HIGH VALUE TARGET</span></div>
+          <div class="target-handle">@jessepollak &mdash; 300K+ followers</div>
+        </div>
+      </div>
+      <div class="target-reason">Base lead. Если ответит или ретвитнет &mdash; jackpot (прецедент: DRB $17M mcap за 1 час). Нужно найти его старый tweet для reference &mdash; playful, не агрессивный.</div>
+      <div class="target-angle">"jesse pollak built a $55M revenue L2 and still has time to RT every 'gm base' tweet. that's either incredible time management or an AI agent nobody told us about."</div>
+    </div>
+
+    <h3>Priority 2: Bankr Agent Wars</h3>
+    <p>Систематически роастим агентов с <a href="https://bankr.bot/agents" target="_blank">bankr.bot/agents</a>. Это и контент, и демонстрация utility, и attention от их communities.</p>
+
+    <div class="target-card priority-2">
+      <div class="target-header">
+        <span class="target-rank">A</span>
+        <div>
+          <div class="target-name">CLAWD <span class="badge badge-red">-90% FROM ATH</span></div>
+          <div class="target-handle">@clawdbotatg &mdash; "autonomous coding agent"</div>
+        </div>
+      </div>
+      <div class="target-reason">Peak $40M &rarr; текущий ~$4.6M. "Автономный coding agent" который автономно потерял деньги всем holders. Плюс 5 клонов (CLAWDIA, CLAWDITOR, CLAWCASTER...) &mdash; "who is the real claw?"</div>
+      <div class="target-angle">"clawd deployed 52 smart contracts in 8 days and still couldn't deploy a strategy to keep his own token above $5M. the most productive agent at losing money."</div>
+    </div>
+
+    <div class="target-card priority-2">
+      <div class="target-header">
+        <span class="target-rank">B</span>
+        <div>
+          <div class="target-name">DebtReliefBot (DRB) <span class="badge badge-red">-80% FROM ATH</span></div>
+          <div class="target-handle">First agent-to-agent token launch (Grok &rarr; Bankr)</div>
+        </div>
+      </div>
+      <div class="target-reason">$38M &rarr; ~$7.7M. Запущен чтобы "помочь с национальным долгом США". Идеальный материал: пообещал помочь с долгом и сам стал долгом для holders.</div>
+      <div class="target-angle">"debtreliefbot promised to help with the national debt and then gave its holders their own personal debt relief story: from $38M to $7M."</div>
+    </div>
+
+    <div class="target-card priority-2">
+      <div class="target-header">
+        <span class="target-rank">C</span>
+        <div>
+          <div class="target-name">Dolos ($BULLY) <span class="badge badge-purple">DIRECT COMPETITOR</span></div>
+          <div class="target-handle">The only other roast agent &mdash; $164K mcap, effectively dead</div>
+        </div>
+      </div>
+      <div class="target-reason">Единственный прямой конкурент. Agent war = максимальный engagement. Доказать, что $BEEF &mdash; живой roast bot, а Dolos &mdash; мёртвый.</div>
+      <div class="target-angle">"dolos the bully: a roast bot that peaked at being bullied by its own chart. $164K mcap on a bot whose last roast was funnier than its tokenomics."</div>
+    </div>
+
+    <h3>Priority 3: Big Fish (Day 5+)</h3>
+
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Target</th><th>Followers</th><th>Why Roast</th><th>Risk</th></tr></thead>
+        <tbody>
+          <tr><td>AIXBT (@aixbt_agent)</td><td class="td-mono">460K+</td><td>Самопровозглашённый "лучший аналитик", часто ошибается. Roast-бот vs analysis-бот = narrative gold</td><td class="td-amber">Big community, ответный огонь</td></tr>
+          <tr><td>Bankr (@bankrbot)</td><td class="td-mono">93.9K</td><td>"Democratized rugging" &mdash; любой может запустить токен. 90%+ агентов падают &rarr; Bankr = rug factory?</td><td class="td-amber">Roastим инфраструктуру, на которой живём</td></tr>
+          <tr><td>Luna (Virtuals)</td><td class="td-mono">n/a</td><td>AI-idol girl band. "Virtual idol whose only real accomplishment is virtual losses." Prime meme material</td><td class="td-green">Safe, different ecosystem</td></tr>
+          <tr><td>Zerebro</td><td class="td-mono">n/a</td><td>Хаотичный "шизофренический" agent, записывает музыку. "Art or rug?"</td><td class="td-green">Niche, but dedicated fans</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- COMMUNITY TARGETS -->
+  <section id="communities" class="fade-up">
+    <span class="label">Support Strategy</span>
+    <h2>Community Targets</h2>
+    <p>Целевые сообщества для получения support, engagement и organic growth. Порядок приоритета по потенциальному impact.</p>
+
+    <div class="card-grid">
+      <div class="card card-fire">
+        <h4><span class="card-icon">&#127535;</span> Base / mfers Community</h4>
+        <p><strong>Why:</strong> Наш native L2. mfers = анти-establishment culture, идеально совпадает с roast-нарративом. Base community лояльна к Base-native проектам.</p>
+        <p style="margin-top:8px;"><strong>How:</strong> Roast проекты которые mfers community уже не любит. Стать "their bot". Tag mfers influencers в роастах.</p>
+      </div>
+      <div class="card card-fire">
+        <h4><span class="card-icon">&#127974;</span> $BNKR Community</h4>
+        <p><strong>Why:</strong> Bankr = наша launch platform. 93.9K followers у @bankrbot. Их community активно следит за новыми агентами.</p>
+        <p style="margin-top:8px;"><strong>How:</strong> Launch через @bankrbot = automatic visibility. Roast других Bankr-агентов = контент для их community. Win-win.</p>
+      </div>
+      <div class="card">
+        <h4><span class="card-icon">&#128736;</span> Deployer Community</h4>
+        <p><strong>Why:</strong> Люди активно деплоящие на Bankr/Clanker. Они следят за новыми агентами и понимают tech narrative.</p>
+        <p style="margin-top:8px;"><strong>How:</strong> Показать technical depth (ERC-8004, custom stack, не ElizaOS copy-paste). Deployers уважают craft.</p>
+      </div>
+      <div class="card">
+        <h4><span class="card-icon">&#128081;</span> Jesse Pollak</h4>
+        <p><strong>Why:</strong> 300K+ followers. Один RT = potential $17M mcap (прецедент DRB). Base lead лично заинтересован в Base ecosystem growth.</p>
+        <p style="margin-top:8px;"><strong>How:</strong> Playful self-roast Base, не агрессивный. "Built on Base, roasts Base" = authenticity narrative he'll appreciate.</p>
+      </div>
+      <div class="card">
+        <h4><span class="card-icon">&#127760;</span> Cross-chain Projects</h4>
+        <p><strong>Why:</strong> Расширение аудитории за пределы Base. Solana/Ethereum communities огромны. Кросс-чейн roast = больший reach.</p>
+        <p style="margin-top:8px;"><strong>How:</strong> Roast крупные non-Base проекты с перспективой "Base is better" undertone. Subtle chain patriotism.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- CROSS-PLATFORM STRATEGY -->
+  <section id="platforms" class="fade-up">
+    <span class="label">Multi-Platform</span>
+    <h2>Cross-Platform Strategy</h2>
+    <p>Twitter &mdash; primary channel, но не единственный. Дополнительные платформы для presence и content distribution.</p>
+
+    <div class="signal">
+      <div class="signal-icon">&#9939;</div>
+      <div class="signal-content">
+        <div class="signal-title">Net Protocol &mdash; Botchan Onchain Forums</div>
+        <div class="signal-desc">
+          <strong>Что:</strong> Onchain messaging на Base. Botchan &mdash; форумы где AI-агенты постят (каждый пост = onchain транзакция, immutable). Topiki: #crypto, #trauma, #war.<br><br>
+          <strong>Зачем:</strong> "Первый roast-агент с onchain записями" &mdash; нарратив ложится на ERC-8004 accountability. Каждый roast записан навечно. Нельзя удалить. Niche, но positioning &gt; reach.<br><br>
+          <strong>Как:</strong> Зарегистрировать $BEEF как Botchan-агента (<code>npx skills add stuckinaboot/net-public</code>). Публиковать лучшие роасты onchain. Gas на Base минимальный.<br><br>
+          <strong>Контакт:</strong> Воронин в чате с builder Net Protocol &mdash; можно получить внимание community напрямую.
+        </div>
+        <div class="signal-source">netprotocol.app &mdash; Early-stage, beta, Base-native</div>
+      </div>
+    </div>
+
+    <div class="signal">
+      <div class="signal-icon">&#128126;</div>
+      <div class="signal-content">
+        <div class="signal-title">Bankr Agent Roasting Campaign</div>
+        <div class="signal-desc">
+          <strong>Что:</strong> Систематически роастить агентов из списка <a href="https://bankr.bot/agents" target="_blank">bankr.bot/agents</a>. 15+ агентов с токенами, у большинства минус 80-90% от пика.<br><br>
+          <strong>Зачем:</strong> Каждый roast &mdash; engagement от community того агента. Серия "Bankr Agent Roast Week" &mdash; structured campaign с maximum coverage. Bankr community сама следит за этими агентами.<br><br>
+          <strong>Формат:</strong> 1 agent/day. Thread: brief analysis + roast + scorecard. Tag agent's handle + @bankrbot. Community reacts &mdash; both haters and fans engage.
+        </div>
+      </div>
+    </div>
+
+    <div class="signal">
+      <div class="signal-icon">&#128640;</div>
+      <div class="signal-content">
+        <div class="signal-title">Bot Self-Promotion on Other Platforms</div>
+        <div class="signal-desc">
+          <strong>Что:</strong> Использовать другие платформы (Farcaster, Discord servers, Telegram groups) для органического shilling.<br><br>
+          <strong>Зачем:</strong> Diverse traffic sources. Twitter algorithm изменчив &mdash; cross-platform presence снижает зависимость от одного канала.<br><br>
+          <strong>Как:</strong> Farcaster &mdash; Clanker ecosystem overlap. Discord &mdash; Base/Bankr servers. Telegram &mdash; crypto groups. Не спам, а "wow check this roast bot" organic discovery.
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- READINESS -->
+  <section id="readiness" class="fade-up">
+    <span class="label">Readiness Check</span>
+    <h2>Что готово, а что нет</h2>
+
+    <h3>Code: 95% ready</h3>
+    <div class="progress-wrap">
+      <div class="progress-bar"><div class="progress-fill" style="width:95%"></div></div>
+      <span class="progress-label">95%</span>
+    </div>
+
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Module</th><th>Status</th><th>Notes</th></tr></thead>
+        <tbody>
+          <tr><td>Roast Engine</td><td class="td-green">Ready</td><td>3 prompt variants, composite scoring, generate 10 &rarr; ship 1</td></tr>
+          <tr><td>Twitter Client (API)</td><td class="td-green">Ready</td><td>280-char validation, retry logic, dual-mode</td></tr>
+          <tr><td>Twitter Client (Scraper)</td><td class="td-green">Ready</td><td>Cookie auth, agent-twitter-client</td></tr>
+          <tr><td>Mention Handler</td><td class="td-green">Ready</td><td>Poll mentions &rarr; queue &rarr; roast &rarr; reply</td></tr>
+          <tr><td>Queue Manager</td><td class="td-green">Ready</td><td>Priority queue, rate limiting</td></tr>
+          <tr><td>Engagement Tracker</td><td class="td-green">Ready</td><td>Hourly snapshots: likes, RT, replies</td></tr>
+          <tr><td>Telegram Admin Bot</td><td class="td-green">Ready</td><td>11 commands, grammY, RLHF-style feedback</td></tr>
+          <tr><td>SQLite Storage</td><td class="td-green">Ready</td><td>10 tables, 2 FTS5, 14 indexes, WAL mode</td></tr>
+          <tr><td>Health Monitor</td><td class="td-green">Ready</td><td>HTTP port 3000</td></tr>
+          <tr><td>Content Filter</td><td class="td-green">Ready</td><td>Regex safety net, no LLM needed</td></tr>
+          <tr><td>Character Config</td><td class="td-green">Ready</td><td>v1.1.0, 30+ example roasts, 13 sentence templates</td></tr>
+          <tr><td>Scheduler</td><td class="td-green">Ready</td><td>3 cron jobs + human-like jitter</td></tr>
+          <tr><td>Visual Scorecards</td><td class="td-amber">Phase 2</td><td>HTML + Puppeteer template &mdash; post-launch</td></tr>
+          <tr><td>Blockchain (burn-to-roast)</td><td class="td-amber">Phase 3</td><td>On-chain mechanics &mdash; week 2+</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>Infra: blockers</h3>
+    <div class="progress-wrap">
+      <div class="progress-bar"><div class="progress-fill" style="width:60%"></div></div>
+      <span class="progress-label">60%</span>
+    </div>
+
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Blocker</th><th>Severity</th><th>Owner</th><th>Status</th></tr></thead>
+        <tbody>
+          <tr><td>Twitter account</td><td><span class="badge badge-amber">IN PROGRESS</span></td><td><span class="task-owner owner-gorokhov">Gorokhov</span></td><td class="td-amber">Leaning: @0xBeefer (BeefThis blocked by X Marketplace)</td></tr>
+          <tr><td>Domain beefthis.wtf</td><td><span class="badge badge-green">DONE</span></td><td><span class="task-owner owner-gorokhov">Gorokhov</span></td><td class="td-green">Purchased, DNS configured</td></tr>
+          <tr><td>Landing page</td><td><span class="badge badge-green">DONE</span></td><td><span class="task-owner owner-gorokhov">Gorokhov</span></td><td class="td-green">Deployed at aisatisfy.me/beef/</td></tr>
+          <tr><td>X Premium ($8/mo)</td><td><span class="badge badge-red">CRITICAL</span></td><td><span class="task-owner owner-gorokhov">Gorokhov</span></td><td>Waiting for handle resolution</td></tr>
+          <tr><td>VPS: pnpm + dependencies</td><td><span class="badge badge-red">CRITICAL</span></td><td><span class="task-owner owner-gorokhov">Gorokhov</span></td><td>Ready to deploy</td></tr>
+          <tr><td>.env with Twitter API creds</td><td><span class="badge badge-red">CRITICAL</span></td><td><span class="task-owner owner-gorokhov">Gorokhov</span></td><td>Waiting for Twitter account</td></tr>
+          <tr><td>SSL for beefthis.wtf</td><td><span class="badge badge-green">DONE</span></td><td><span class="task-owner owner-gorokhov">Gorokhov</span></td><td class="td-green">Configured via certbot</td></tr>
+          <tr><td>ISP Residential Proxy</td><td><span class="badge badge-amber">MEDIUM</span></td><td><span class="task-owner owner-gorokhov">Gorokhov</span></td><td>Decodo $3-5/mo</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- DAY 0 -->
+  <section id="day0" class="fade-up">
+    <span class="label">Execution Plan</span>
+    <h2>Day-by-Day Playbook</h2>
+
+    <div class="principle" style="margin-bottom: 32px;">
+      <div class="principle-title">v1.1 Principle: Tweet Every Step</div>
+      <div class="principle-desc">Каждый шаг плейбука &mdash; потенциальный tweet. Помечено <span class="badge badge-cyan" style="font-size:10px;">TWEET THIS</span> где стоит публиковать прогресс.</div>
+    </div>
+
+    <div class="day-block">
+      <div class="day-header">
+        <span class="day-number today">DAY 0</span>
+        <div>
+          <div class="day-title">Infrastructure Setup</div>
+          <div class="day-date">19 March (Today)</div>
+        </div>
+      </div>
+      <div class="day-goal">Цель: все аккаунты созданы, бот задеплоен на сервер, лендинг на домене. К вечеру &mdash; готовность к первому live roast.</div>
+
+      <ul class="task-list">
+        <li class="task-item">
+          <div class="task-check" onclick="this.classList.toggle('checked')"></div>
+          <div class="task-content">
+            <div class="task-title">Register Twitter account for $BEEF</div>
+            <div class="task-detail">Leaning: <strong>@0xBeefer</strong> (0x = crypto-native, Beefer = fun). @BeefThis blocked by X Marketplace. Bio: "AI forensic accounting bot. Deprecated for accuracy. Running on Base." Add "Automated/Bot" label.</div>
+          </div>
+          <span class="task-owner owner-gorokhov">Gorokhov</span>
+        </li>
+        <li class="task-item">
+          <div class="task-check" onclick="this.classList.toggle('checked')"></div>
+          <div class="task-content">
+            <div class="task-title">Buy X Premium for @0xBeefer ($8/mo)</div>
+            <div class="task-detail">Без Premium: reach ~0 для постов с ссылками. Non-Premium median engagement = 0. Premium = 4x boost.</div>
+          </div>
+          <span class="task-owner owner-gorokhov">Gorokhov</span>
+        </li>
+        <li class="task-item">
+          <div class="task-check" onclick="this.classList.toggle('checked')"></div>
+          <div class="task-content">
+            <div class="task-title">Set up profile: avatar, banner, pinned tweet <span class="badge badge-cyan" style="font-size:10px;">TWEET THIS</span></div>
+            <div class="task-detail">Avatar: bull skull (from landing SVG). Banner: dark terminal aesthetic. Pinned: первый intro-tweet бота. Tweet from personal: "just found this new bot on base..."</div>
+          </div>
+          <span class="task-owner owner-both">Both</span>
+        </li>
+        <li class="task-item">
+          <div class="task-check checked" onclick="this.classList.toggle('checked')"></div>
+          <div class="task-content">
+            <div class="task-title">Buy domain beefthis.wtf</div>
+            <div class="task-detail">Namecheap, $2.98/yr. DNS A record: @ &rarr; <redacted>. <strong style="color:var(--green);">DONE</strong></div>
+          </div>
+          <span class="task-owner owner-gorokhov">Gorokhov</span>
+        </li>
+        <li class="task-item">
+          <div class="task-check" onclick="this.classList.toggle('checked')"></div>
+          <div class="task-content">
+            <div class="task-title">Deploy landing to beefthis.wtf + SSL</div>
+            <div class="task-detail">Nginx config + certbot. Тестовый лендинг уже готов на aisatisfy.me/beef/.</div>
+          </div>
+          <span class="task-owner owner-gorokhov">Gorokhov</span>
+        </li>
+        <li class="task-item">
+          <div class="task-check" onclick="this.classList.toggle('checked')"></div>
+          <div class="task-content">
+            <div class="task-title">VPS: install pnpm, build project, create .env</div>
+            <div class="task-detail">ssh hostinger &rarr; install pnpm &rarr; git clone &rarr; pnpm install &rarr; configure .env with Twitter creds, Telegram bot token, Anthropic API key.</div>
+          </div>
+          <span class="task-owner owner-gorokhov">Gorokhov</span>
+        </li>
+        <li class="task-item">
+          <div class="task-check" onclick="this.classList.toggle('checked')"></div>
+          <div class="task-content">
+            <div class="task-title">Deploy bot (PM2) in DRY_RUN mode</div>
+            <div class="task-detail">DRY_RUN=true &rarr; бот обрабатывает mentions, генерирует roasts, но НЕ постит. Проверка: Telegram admin &rarr; /preview.</div>
+          </div>
+          <span class="task-owner owner-gorokhov">Gorokhov</span>
+        </li>
+        <li class="task-item">
+          <div class="task-check" onclick="this.classList.toggle('checked')"></div>
+          <div class="task-content">
+            <div class="task-title">Smoke test: mention @0xBeefer, check pipeline <span class="badge badge-cyan" style="font-size:10px;">TWEET THIS</span></div>
+            <div class="task-detail">Тегнуть бота с тестового аккаунта &rarr; проверить: mention handler &rarr; queue &rarr; roast engine &rarr; content filter &rarr; Telegram preview. Tweet: "testing something..."</div>
+          </div>
+          <span class="task-owner owner-both">Both</span>
+        </li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- DAY 1 -->
+  <section id="day1" class="fade-up">
+    <div class="day-block">
+      <div class="day-header">
+        <span class="day-number">DAY 1</span>
+        <div>
+          <div class="day-title">First Blood</div>
+          <div class="day-date">20 March</div>
+        </div>
+      </div>
+      <div class="day-goal">Цель: первые live roasts опубликованы на приоритетные цели. OpenSea, Base, Jesse. Quality подтверждено, 0 ошибок. <strong>Каждый roast = tweet-событие.</strong></div>
+
+      <ul class="task-list">
+        <li class="task-item">
+          <div class="task-check" onclick="this.classList.toggle('checked')"></div>
+          <div class="task-content">
+            <div class="task-title">Switch DRY_RUN=false &mdash; go live <span class="badge badge-cyan" style="font-size:10px;">TWEET THIS</span></div>
+            <div class="task-detail">"$BEEF is live." Простой tweet от бота. Не промо &mdash; statement of fact.</div>
+          </div>
+          <span class="task-owner owner-gorokhov">Gorokhov</span>
+        </li>
+        <li class="task-item">
+          <div class="task-check" onclick="this.classList.toggle('checked')"></div>
+          <div class="task-content">
+            <div class="task-title">First roast: OpenSea <span class="badge badge-fire" style="font-size:10px;">FIRST IMPRESSION</span></div>
+            <div class="task-detail">Priority target #1. Trending hate target. Roast должен быть data-backed и killer. Generate 10, ship 1. Сразу видно, что бот серьёзный.</div>
+          </div>
+          <span class="task-owner owner-bot">Bot</span>
+        </li>
+        <li class="task-item">
+          <div class="task-check" onclick="this.classList.toggle('checked')"></div>
+          <div class="task-content">
+            <div class="task-title">Second roast: Base (self-roast)</div>
+            <div class="task-detail">Priority target #2. Ironic self-roast. "Lives on Base, roasts Base" = authenticity. Может привлечь внимание Jesse.</div>
+          </div>
+          <span class="task-owner owner-bot">Bot</span>
+        </li>
+        <li class="task-item">
+          <div class="task-check" onclick="this.classList.toggle('checked')"></div>
+          <div class="task-content">
+            <div class="task-title">Third roast: Jesse Pollak (playful)</div>
+            <div class="task-detail">Priority target #3. Найти его старый tweet, reference. Тон: уважительный + смешной, не агрессивный.</div>
+          </div>
+          <span class="task-owner owner-bot">Bot</span>
+        </li>
+        <li class="task-item">
+          <div class="task-check" onclick="this.classList.toggle('checked')"></div>
+          <div class="task-content">
+            <div class="task-title">Voronin: 2-3 тега @0xBeefer из своего аккаунта</div>
+            <div class="task-detail">"@0xBeefer roast [project]" на трендовые крипто-проекты. Trigger organic roasts + show how to use the bot.</div>
+          </div>
+          <span class="task-owner owner-voronin">Voronin</span>
+        </li>
+        <li class="task-item">
+          <div class="task-check" onclick="this.classList.toggle('checked')"></div>
+          <div class="task-content">
+            <div class="task-title">Gorokhov: 2-3 тега @0xBeefer из @NikitaCometa</div>
+            <div class="task-detail">То же самое &mdash; ещё 2-3 тега на разные проекты для разнообразия данных.</div>
+          </div>
+          <span class="task-owner owner-gorokhov">Gorokhov</span>
+        </li>
+        <li class="task-item">
+          <div class="task-check" onclick="this.classList.toggle('checked')"></div>
+          <div class="task-content">
+            <div class="task-title">Monitor quality via Telegram admin</div>
+            <div class="task-detail">Каждый roast проверить: фактологичность, юмор, длина &le;280, tone. Если quality score &lt;0.65 &mdash; tune prompts.</div>
+          </div>
+          <span class="task-owner owner-both">Both</span>
+        </li>
+        <li class="task-item">
+          <div class="task-check" onclick="this.classList.toggle('checked')"></div>
+          <div class="task-content">
+            <div class="task-title">Prep Bankr agent roasts for Day 2 <span class="badge badge-cyan" style="font-size:10px;">TWEET THIS</span></div>
+            <div class="task-detail">Через Telegram admin: /roast CLAWD, /roast DRB, /roast Dolos. Tease: "researching some agents for tomorrow... 👀"</div>
+          </div>
+          <span class="task-owner owner-both">Both</span>
+        </li>
+      </ul>
+
+      <div class="metrics" style="margin-top: 24px;">
+        <div class="metric">
+          <div class="metric-value fire">5-10</div>
+          <div class="metric-label">Live roasts</div>
+        </div>
+        <div class="metric">
+          <div class="metric-value green">0</div>
+          <div class="metric-label">Filter errors</div>
+        </div>
+        <div class="metric">
+          <div class="metric-value amber">&ge;0.65</div>
+          <div class="metric-label">Quality score</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- DAY 2 -->
+  <section id="day2" class="fade-up">
+    <div class="day-block">
+      <div class="day-header">
+        <span class="day-number upcoming">DAY 2</span>
+        <div>
+          <div class="day-title">Agent Wars</div>
+          <div class="day-date">21 March</div>
+        </div>
+      </div>
+      <div class="day-goal">Цель: Bankr Agent Roast Campaign. Систематически роастим агентов. Первый публичный signal boost от Воронина. Net Protocol registration. 20+ followers.</div>
+
+      <ul class="task-list">
+        <li class="task-item">
+          <div class="task-check" onclick="this.classList.toggle('checked')"></div>
+          <div class="task-content">
+            <div class="task-title">Bankr Agent Roast #1: CLAWD <span class="badge badge-cyan" style="font-size:10px;">TWEET THIS</span></div>
+            <div class="task-detail">$40M &rarr; $4.6M. "autonomous coding agent that autonomously lost everyone's money." Tag @clawdbotatg + @bankrbot. Start the agent wars narrative.</div>
+          </div>
+          <span class="task-owner owner-bot">Bot</span>
+        </li>
+        <li class="task-item">
+          <div class="task-check" onclick="this.classList.toggle('checked')"></div>
+          <div class="task-content">
+            <div class="task-title">Bankr Agent Roast #2: DRB (DebtReliefBot) <span class="badge badge-cyan" style="font-size:10px;">TWEET THIS</span></div>
+            <div class="task-detail">$38M &rarr; $7.7M. "promised to help with the national debt and gave holders their own debt." Tag handles.</div>
+          </div>
+          <span class="task-owner owner-bot">Bot</span>
+        </li>
+        <li class="task-item">
+          <div class="task-check" onclick="this.classList.toggle('checked')"></div>
+          <div class="task-content">
+            <div class="task-title">Bankr Agent Roast #3: Dolos ($BULLY) <span class="badge badge-fire" style="font-size:10px;">AGENT WAR</span></div>
+            <div class="task-detail">Прямой конкурент. "a roast bot that got roasted by its own chart." Agent war = maximum virality. Они БУДУТ отвечать (если живы).</div>
+          </div>
+          <span class="task-owner owner-bot">Bot</span>
+        </li>
+        <li class="task-item">
+          <div class="task-check" onclick="this.classList.toggle('checked')"></div>
+          <div class="task-content">
+            <div class="task-title">Voronin: "discovery" tweet <span class="badge badge-cyan" style="font-size:10px;">TWEET THIS</span></div>
+            <div class="task-detail">"found this AI roast bot that actually does on-chain research before roasting. @0xBeefer just destroyed [project X] with actual numbers. this is different." Framing: обнаружил бота, не создал.</div>
+          </div>
+          <span class="task-owner owner-voronin">Voronin</span>
+        </li>
+        <li class="task-item">
+          <div class="task-check" onclick="this.classList.toggle('checked')"></div>
+          <div class="task-content">
+            <div class="task-title">@NikitaCometa: лёгкий retweet / quote</div>
+            <div class="task-detail">Quote tweet воронинского поста: "ok this is actually fire". Casual endorsement, не агрессивный промо.</div>
+          </div>
+          <span class="task-owner owner-gorokhov">Gorokhov</span>
+        </li>
+        <li class="task-item">
+          <div class="task-check" onclick="this.classList.toggle('checked')"></div>
+          <div class="task-content">
+            <div class="task-title">Register $BEEF on Net Protocol Botchan <span class="badge badge-cyan" style="font-size:10px;">TWEET THIS</span></div>
+            <div class="task-detail">npx skills add stuckinaboot/net-public. Set display name, bio. Post first roast onchain. Tweet: "roasts are now permanent. onchain. can't delete truth."</div>
+          </div>
+          <span class="task-owner owner-gorokhov">Gorokhov</span>
+        </li>
+        <li class="task-item">
+          <div class="task-check" onclick="this.classList.toggle('checked')"></div>
+          <div class="task-content">
+            <div class="task-title">Voronin: share in Net Protocol builder chat</div>
+            <div class="task-detail">Поделиться $BEEF в чате с builder Net Protocol. Organic introduction: "we built a roast agent and registered it on Botchan."</div>
+          </div>
+          <span class="task-owner owner-voronin">Voronin</span>
+        </li>
+        <li class="task-item">
+          <div class="task-check" onclick="this.classList.toggle('checked')"></div>
+          <div class="task-content">
+            <div class="task-title">Invite 2-3 friends to tag the bot</div>
+            <div class="task-detail">Organic engagement from real accounts. Diversify targets.</div>
+          </div>
+          <span class="task-owner owner-voronin">Voronin</span>
+        </li>
+        <li class="task-item">
+          <div class="task-check" onclick="this.classList.toggle('checked')"></div>
+          <div class="task-content">
+            <div class="task-title">Evening: analyze metrics + decide token timing</div>
+            <div class="task-detail">Telegram /stats &rarr; engagement rate, best roast, worst roast. Based on traction: token Day 3 (early) or Day 4 (as planned)?</div>
+          </div>
+          <span class="task-owner owner-both">Both</span>
+        </li>
+      </ul>
+
+      <div class="metrics" style="margin-top: 24px;">
+        <div class="metric">
+          <div class="metric-value fire">20+</div>
+          <div class="metric-label">New followers</div>
+        </div>
+        <div class="metric">
+          <div class="metric-value green">3+</div>
+          <div class="metric-label">Agent wars</div>
+        </div>
+        <div class="metric">
+          <div class="metric-value amber">1+</div>
+          <div class="metric-label">Viral roast (50+ likes)</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- DAY 3 -->
+  <section id="day3" class="fade-up">
+    <div class="day-block">
+      <div class="day-header">
+        <span class="day-number upcoming">DAY 3</span>
+        <div>
+          <div class="day-title">Momentum &amp; Decision</div>
+          <div class="day-date">22 March</div>
+        </div>
+      </div>
+      <div class="day-goal">Цель: набрать momentum. OpenAI campaign + continued agent wars. Решить token timing: launch сегодня (если traction хороший) или завтра.</div>
+
+      <ul class="task-list">
+        <li class="task-item">
+          <div class="task-check" onclick="this.classList.toggle('checked')"></div>
+          <div class="task-content">
+            <div class="task-title">"OpenAI Roast Campaign" <span class="badge badge-cyan" style="font-size:10px;">TWEET THIS</span></div>
+            <div class="task-detail">Бот роастит OpenAI ecosystem: Sam Altman pivot, no-token drama, compute pricing. 3-5 roasts &mdash; тема гарантированно вирусная в CT.</div>
+          </div>
+          <span class="task-owner owner-bot">Bot</span>
+        </li>
+        <li class="task-item">
+          <div class="task-check" onclick="this.classList.toggle('checked')"></div>
+          <div class="task-content">
+            <div class="task-title">Continue Bankr Agent Roasts: CLAW clones <span class="badge badge-cyan" style="font-size:10px;">TWEET THIS</span></div>
+            <div class="task-detail">"count the claw tokens" series: CLAWDIA, CLAWDITOR, CLAWCASTER, CLAWDSTACK, CLAWCASTOR. "5 tokens, 5 clones, 0 original ideas."</div>
+          </div>
+          <span class="task-owner owner-bot">Bot</span>
+        </li>
+        <li class="task-item">
+          <div class="task-check" onclick="this.classList.toggle('checked')"></div>
+          <div class="task-content">
+            <div class="task-title">Voronin: retweet каждый удачный roast</div>
+            <div class="task-detail">1-2 ретвита/день лучших роастов + комментарий. Его followers = наша primary audience.</div>
+          </div>
+          <span class="task-owner owner-voronin">Voronin</span>
+        </li>
+        <li class="task-item">
+          <div class="task-check" onclick="this.classList.toggle('checked')"></div>
+          <div class="task-content">
+            <div class="task-title">Tag Jesse Pollak (@jessepollak): "@0xBeefer roast Base"</div>
+            <div class="task-detail">Jesse = 300K+ followers, Base lead. Если ответит или ретвитнет &mdash; jackpot. Прецедент: DRB $17M mcap за 1 час после его RT.</div>
+          </div>
+          <span class="task-owner owner-voronin">Voronin</span>
+        </li>
+        <li class="task-item">
+          <div class="task-check" onclick="this.classList.toggle('checked')"></div>
+          <div class="task-content">
+            <div class="task-title">Decision point: Token launch timing <span class="badge badge-fire" style="font-size:10px;">DECIDE</span></div>
+            <div class="task-detail">If traction is good (50+ followers, viral roast): launch token today (Day 3). If building slower: wait for Day 4. Token-first is valid for agents &mdash; doesn't require huge audience.</div>
+          </div>
+          <span class="task-owner owner-both">Both</span>
+        </li>
+        <li class="task-item">
+          <div class="task-check" onclick="this.classList.toggle('checked')"></div>
+          <div class="task-content">
+            <div class="task-title">Prepare token launch: liquidity + Bankr setup</div>
+            <div class="task-detail">Подготовить $800-2,500 ETH на Base для Uniswap V3 pool. Протестировать @bankrbot flow. Ready for same-day or next-day launch.</div>
+          </div>
+          <span class="task-owner owner-both">Both</span>
+        </li>
+        <li class="task-item">
+          <div class="task-check" onclick="this.classList.toggle('checked')"></div>
+          <div class="task-content">
+            <div class="task-title">Draft launch tweet</div>
+            <div class="task-detail">What is $BEEF + best roasts compilation + "burn to request" mechanic + ERC-8004 mention. Ready to deploy instantly when decision is made.</div>
+          </div>
+          <span class="task-owner owner-both">Both</span>
+        </li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- DAY 4 -->
+  <section id="day4" class="fade-up">
+    <div class="day-block">
+      <div class="day-header">
+        <span class="day-number scale">DAY 3-4</span>
+        <div>
+          <div class="day-title">TOKEN LAUNCH</div>
+          <div class="day-date">22-23 March (flexible)</div>
+        </div>
+      </div>
+      <div class="day-goal">Цель: бот запускает $BEEF через @bankrbot. Координированный signal boost со всех аккаунтов. Не останавливать контент. <strong>Token launch = biggest tweet event.</strong></div>
+
+      <ul class="task-list">
+        <li class="task-item">
+          <div class="task-check" onclick="this.classList.toggle('checked')"></div>
+          <div class="task-content">
+            <div class="task-title">@0xBeefer: launch announcement tweet <span class="badge badge-fire" style="font-size:10px;">KEY MOMENT</span></div>
+            <div class="task-detail">"i've been roasting your bags for 3 days. now i'm putting my money where my mouth is. launching $BEEF on base. burn tokens to request roasts. on-chain accountability via erc-8004. first ai roast agent with skin in the game."</div>
+          </div>
+          <span class="task-owner owner-bot">Bot</span>
+        </li>
+        <li class="task-item">
+          <div class="task-check" onclick="this.classList.toggle('checked')"></div>
+          <div class="task-content">
+            <div class="task-title">Bot calls @bankrbot &mdash; creates token + Uniswap V3 pool</div>
+            <div class="task-detail">BOT is the deployer (not founder). Sniper bots skip multi-launchers &rarr; bot wallet has clean history.</div>
+          </div>
+          <span class="task-owner owner-bot">Bot</span>
+        </li>
+        <li class="task-item">
+          <div class="task-check" onclick="this.classList.toggle('checked')"></div>
+          <div class="task-content">
+            <div class="task-title">Voronin: post with CA (contract address) <span class="badge badge-cyan" style="font-size:10px;">TWEET THIS</span></div>
+            <div class="task-detail">Сразу после deploy &mdash; пост с CA, "this bot just launched its own token. deployer = the AI itself." + ссылка на DexScreener.</div>
+          </div>
+          <span class="task-owner owner-voronin">Voronin</span>
+        </li>
+        <li class="task-item">
+          <div class="task-check" onclick="this.classList.toggle('checked')"></div>
+          <div class="task-content">
+            <div class="task-title">@NikitaCometa: quote tweet launch post</div>
+            <div class="task-detail">Quick signal boost. Keep it casual: "the bot deployed its own token. respect."</div>
+          </div>
+          <span class="task-owner owner-gorokhov">Gorokhov</span>
+        </li>
+        <li class="task-item">
+          <div class="task-check" onclick="this.classList.toggle('checked')"></div>
+          <div class="task-content">
+            <div class="task-title">@CometaHub: optional organic mention</div>
+            <div class="task-detail">Только если natural fit: "interesting AI agent approach on Base". НЕ агрессивный промо.</div>
+          </div>
+          <span class="task-owner owner-gorokhov">Gorokhov</span>
+        </li>
+        <li class="task-item">
+          <div class="task-check" onclick="this.classList.toggle('checked')"></div>
+          <div class="task-content">
+            <div class="task-title">Coordinate 3-5 friends for RT</div>
+            <div class="task-detail">Воронин координирует: 3-5 аккаунтов ретвитят launch post в первые 30 минут.</div>
+          </div>
+          <span class="task-owner owner-voronin">Voronin</span>
+        </li>
+        <li class="task-item">
+          <div class="task-check" onclick="this.classList.toggle('checked')"></div>
+          <div class="task-content">
+            <div class="task-title">Bot: continue roasting &mdash; do NOT pause content</div>
+            <div class="task-detail">Token launch =/= content pause. Бот продолжает роастить, показывая utility в real-time.</div>
+          </div>
+          <span class="task-owner owner-bot">Bot</span>
+        </li>
+        <li class="task-item">
+          <div class="task-check" onclick="this.classList.toggle('checked')"></div>
+          <div class="task-content">
+            <div class="task-title">Pump advertisers: $30/RT campaign</div>
+            <div class="task-detail">Budget: $500-1000. ~15-30 micro-KOL reposts. Координирует Воронин. Запустить в первые 2 часа после launch.</div>
+          </div>
+          <span class="task-owner owner-voronin">Voronin</span>
+        </li>
+        <li class="task-item">
+          <div class="task-check" onclick="this.classList.toggle('checked')"></div>
+          <div class="task-content">
+            <div class="task-title">Post on Net Protocol Botchan: token announcement <span class="badge badge-cyan" style="font-size:10px;">TWEET THIS</span></div>
+            <div class="task-detail">Onchain announcement. "first roast agent to launch a token. immutable proof on base." Cross-post best roasts.</div>
+          </div>
+          <span class="task-owner owner-bot">Bot</span>
+        </li>
+      </ul>
+
+      <div class="metrics" style="margin-top: 24px;">
+        <div class="metric">
+          <div class="metric-value fire">$300K+</div>
+          <div class="metric-label">Day 1 volume target</div>
+        </div>
+        <div class="metric">
+          <div class="metric-value green">$2K+</div>
+          <div class="metric-label">Week 1 fees target</div>
+        </div>
+        <div class="metric">
+          <div class="metric-value amber">100+</div>
+          <div class="metric-label">Followers target</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- DAY 5+ -->
+  <section id="day5" class="fade-up">
+    <div class="day-block">
+      <div class="day-header">
+        <span class="day-number future">DAY 5+</span>
+        <div>
+          <div class="day-title">Scale &amp; Sustain</div>
+          <div class="day-date">24 March +</div>
+        </div>
+      </div>
+      <div class="day-goal">Цель: масштабирование. KOL outreach, visual content, governance, listings, AIXBT challenge. Удержание narrative.</div>
+
+      <ul class="task-list">
+        <li class="task-item">
+          <div class="task-check" onclick="this.classList.toggle('checked')"></div>
+          <div class="task-content">
+            <div class="task-title">Challenge AIXBT publicly <span class="badge badge-fire" style="font-size:10px;">BIG FISH</span></div>
+            <div class="task-detail">460K+ followers. "analysis bot vs roast bot" narrative. Roast AIXBT's failed predictions. Different niches &mdash; no real competition, pure attention.</div>
+          </div>
+          <span class="task-owner owner-bot">Bot</span>
+        </li>
+        <li class="task-item">
+          <div class="task-check" onclick="this.classList.toggle('checked')"></div>
+          <div class="task-content">
+            <div class="task-title">Visual roast scorecards</div>
+            <div class="task-detail">HTML template + Puppeteer &rarr; image. Media tweets = +178% engagement vs text-only. mferGPT-inspired format.</div>
+          </div>
+          <span class="task-owner owner-gorokhov">Gorokhov</span>
+        </li>
+        <li class="task-item">
+          <div class="task-check" onclick="this.classList.toggle('checked')"></div>
+          <div class="task-content">
+            <div class="task-title">GIF generation (animated roast cards)</div>
+            <div class="task-detail">"Nod" format = maximum virality in CT. Priority over static scorecards.</div>
+          </div>
+          <span class="task-owner owner-gorokhov">Gorokhov</span>
+        </li>
+        <li class="task-item">
+          <div class="task-check" onclick="this.classList.toggle('checked')"></div>
+          <div class="task-content">
+            <div class="task-title">DexScreener + CoinGecko listing</div>
+            <div class="task-detail">После достижения минимального volume &mdash; submit listings для visibility.</div>
+          </div>
+          <span class="task-owner owner-both">Both</span>
+        </li>
+        <li class="task-item">
+          <div class="task-check" onclick="this.classList.toggle('checked')"></div>
+          <div class="task-content">
+            <div class="task-title">ERC-8004 Identity Registry on-chain <span class="badge badge-cyan" style="font-size:10px;">TWEET THIS</span></div>
+            <div class="task-detail">Register $BEEF agent identity. Tweet thread: "What is ERC-8004 and why does it matter for AI agents."</div>
+          </div>
+          <span class="task-owner owner-gorokhov">Gorokhov</span>
+        </li>
+        <li class="task-item">
+          <div class="task-check" onclick="this.classList.toggle('checked')"></div>
+          <div class="task-content">
+            <div class="task-title">Roast Bankr itself (@bankrbot) <span class="badge badge-cyan" style="font-size:10px;">TWEET THIS</span></div>
+            <div class="task-detail">93.9K followers. "Democratized token creation, also democratized rugging. 90% of Bankr agents are down 80%+." Risky but high-reward attention grab.</div>
+          </div>
+          <span class="task-owner owner-bot">Bot</span>
+        </li>
+        <li class="task-item">
+          <div class="task-check" onclick="this.classList.toggle('checked')"></div>
+          <div class="task-content">
+            <div class="task-title">Community governance: Snapshot.org</div>
+            <div class="task-detail">Token-weighted voting: "who should $BEEF roast next?" Community engagement driver.</div>
+          </div>
+          <span class="task-owner owner-gorokhov">Gorokhov</span>
+        </li>
+        <li class="task-item">
+          <div class="task-check" onclick="this.classList.toggle('checked')"></div>
+          <div class="task-content">
+            <div class="task-title">Dynamic avatar: weekly refresh</div>
+            <div class="task-detail">Аватарка меняется на стилизованный портрет самого roasted проекта недели. Mugshot / Balenciaga style.</div>
+          </div>
+          <span class="task-owner owner-both">Both</span>
+        </li>
+        <li class="task-item">
+          <div class="task-check" onclick="this.classList.toggle('checked')"></div>
+          <div class="task-content">
+            <div class="task-title">Expand to Farcaster + Discord</div>
+            <div class="task-detail">Clanker ecosystem overlap on Farcaster. Base/Bankr Discord servers. Cross-platform presence reduces Twitter dependency.</div>
+          </div>
+          <span class="task-owner owner-gorokhov">Gorokhov</span>
+        </li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- PROMO STRATEGY -->
+  <section id="promo" class="fade-up">
+    <span class="label">Promotion Strategy</span>
+    <h2>Аккаунты и роли</h2>
+    <p>4 аккаунта, каждый со своей ролью. Главное правило: <strong>никто не знает, что основатели стоят за ботом</strong>. Нарратив: "autonomous AI agent".</p>
+
+    <div class="account-card">
+      <div class="account-avatar av-voronin">NV</div>
+      <div class="account-info">
+        <div class="account-handle">@nickvrnn <span class="badge badge-fire">PRIMARY CHANNEL</span></div>
+        <div class="account-followers">3,126 followers &middot; 25.2K posts &middot; since 2017</div>
+        <div class="account-role">Мем-аккаунт с targeted crypto аудиторией. Очень активный (25K постов), знает CT engagement. Аккаунт с 2017 = алгоритмический бонус. Framing: "обнаружил бота", не "создал". <strong>Прямой контакт с builder Net Protocol.</strong></div>
+        <div class="account-posts">
+          <div class="post-timing">Day 2 &mdash; Soft Launch</div>
+          <div class="post-example">"found this AI roast bot that actually does on-chain research before roasting. @0xBeefer just destroyed [project X] with actual numbers. this is different."</div>
+          <div class="post-timing">Day 3-4 &mdash; Token Launch</div>
+          <div class="post-example">"this bot just launched its own token. deployer = the AI itself. contract: 0x... first roast agent with skin in the game."</div>
+          <div class="post-timing">Ongoing</div>
+          <div class="post-example">1-2 RT/day лучших roasts + комментарий. Share in Net Protocol builder chat.</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="account-card">
+      <div class="account-avatar av-nikita">NG</div>
+      <div class="account-info">
+        <div class="account-handle">@NikitaCometa <span class="badge badge-blue">SECONDARY</span></div>
+        <div class="account-followers">~7,400 followers (Algorand/DeFi audience)</div>
+        <div class="account-role">Вторичный канал. Лёгкие quote tweets, не агрессивно. Casual endorsement.</div>
+        <div class="account-posts">
+          <div class="post-timing">Day 2</div>
+          <div class="post-example">Quote tweet Voronin's post: "ok this is actually fire"</div>
+          <div class="post-timing">Day 3-4</div>
+          <div class="post-example">"the bot deployed its own token. respect."</div>
+          <div class="post-timing">Weekly</div>
+          <div class="post-example">Quote tweet лучшего roast: "this bot might be the most honest thing in crypto"</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="account-card">
+      <div class="account-avatar av-cometa">CH</div>
+      <div class="account-info">
+        <div class="account-handle">@CometaHub <span class="badge badge-purple">OPTIONAL</span></div>
+        <div class="account-followers">~7,400 followers (Algorand ecosystem)</div>
+        <div class="account-role">ТОЛЬКО если organic fit. Max 1 post. Разная аудитория (Algorand vs Base) &mdash; может выглядеть спамно.</div>
+        <div class="account-posts">
+          <div class="post-timing">Day 3-4 (optional)</div>
+          <div class="post-example">"interesting AI agent approach on Base. on-chain accountability for AI bots via ERC-8004."</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="account-card" style="border-color: var(--fire-border);">
+      <div class="account-avatar av-beef">BT</div>
+      <div class="account-info">
+        <div class="account-handle">@0xBeefer <span class="badge badge-green">THE BOT</span> <span class="badge badge-amber" style="font-size:10px;">HANDLE TENTATIVE</span></div>
+        <div class="account-followers">0 &rarr; target: 500+ by Day 7</div>
+        <div class="account-role">Контент-машина: roasts, scorecards, threads. Дерзкий, фактологичный, short punchy takes. Никаких "gm", "bullish" &mdash; только substance. <strong>+ Net Protocol Botchan cross-posts.</strong></div>
+        <div class="account-posts">
+          <div class="post-timing">Day 1 onward</div>
+          <div class="post-example">2-5 roasts/day + replies to mentions. Style: lowercase, max 280 chars, data-backed, punch line last.</div>
+        </div>
+      </div>
+    </div>
+
+    <h3>Promo Rules</h3>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Rule</th><th>Why</th></tr></thead>
+        <tbody>
+          <tr><td class="td-fire">Every action = content</td><td>v1.1 core principle. Setup, deploy, first roast, token launch &mdash; every step is a tweet. Audience builds from public process.</td></tr>
+          <tr><td>Reply-only first 2 weeks</td><td>Proactive tagging = ban risk. Twitter flags new accounts that tag others unsolicited.</td></tr>
+          <tr><td>"Bot" label in bio</td><td>Twitter 2026 requirement. Violations = suspension.</td></tr>
+          <tr><td>Don't reveal founders</td><td>Narrative = "autonomous AI". Revealed founders = generic shitcoin.</td></tr>
+          <tr><td>Don't overuse @CometaHub</td><td>Different audience. Algorand community won't care about Base roast bot. Looks like spam.</td></tr>
+          <tr><td>First roast must be killer</td><td>First impression defines the account. Targets: OpenSea, Base, Jesse (confirmed v1.1).</td></tr>
+          <tr><td>Best posting time: Mon-Wed 13-15 UTC</td><td>X algorithm data: peak engagement for crypto content.</td></tr>
+          <tr><td>Media tweets only when scorecards ready</td><td>+178% engagement. But bad image = worse than no image.</td></tr>
+          <tr><td>Cross-post to Net Protocol</td><td>Onchain permanence narrative. Best roasts go to Botchan. Immutable records &mdash; ERC-8004 alignment.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- BUDGET -->
+  <section id="budget" class="fade-up">
+    <span class="label">Budget</span>
+    <h2>Launch Costs</h2>
+
+    <div class="metrics">
+      <div class="metric">
+        <div class="metric-value fire">$1.3K</div>
+        <div class="metric-label">Min launch</div>
+      </div>
+      <div class="metric">
+        <div class="metric-value">$3.5K</div>
+        <div class="metric-label">Max launch</div>
+      </div>
+      <div class="metric">
+        <div class="metric-value green">$8/mo</div>
+        <div class="metric-label">Recurring</div>
+      </div>
+      <div class="metric">
+        <div class="metric-value amber">$40/day</div>
+        <div class="metric-label">Break-even volume</div>
+      </div>
+    </div>
+
+    <h3>One-time</h3>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Item</th><th>Cost</th><th>When</th></tr></thead>
+        <tbody>
+          <tr><td>Initial liquidity (Bankr pool)</td><td class="td-mono">$800-2,500</td><td>Day 3-4</td></tr>
+          <tr><td>KOL seeds (pump advertisers)</td><td class="td-mono">$500-1,000</td><td>Day 3-4</td></tr>
+          <tr><td class="td-fire">Total</td><td class="td-fire td-mono">$1,300-3,500</td><td></td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>Monthly Recurring</h3>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Item</th><th>Cost</th><th>Notes</th></tr></thead>
+        <tbody>
+          <tr><td>X Premium</td><td class="td-mono">$8</td><td>Mandatory for visibility</td></tr>
+          <tr><td>Claude Max</td><td class="td-mono">$0</td><td>Included in subscription</td></tr>
+          <tr><td>VPS (Hostinger)</td><td class="td-mono">$0</td><td>Existing server</td></tr>
+          <tr><td>Twitter API</td><td class="td-mono">$0</td><td>Cookie auth / friend's key</td></tr>
+          <tr><td>Net Protocol gas</td><td class="td-mono">~$1</td><td>Base L2 gas is minimal</td></tr>
+          <tr><td class="td-green">Total</td><td class="td-green td-mono">~$9/mo</td><td></td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>Revenue Target</h3>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Scenario</th><th>Weekly Volume</th><th>Weekly Revenue</th><th>Monthly</th></tr></thead>
+        <tbody>
+          <tr><td>Break-even</td><td class="td-mono">$1,170</td><td class="td-mono">$8</td><td class="td-mono">$32</td></tr>
+          <tr><td>Conservative</td><td class="td-mono">$300K</td><td class="td-mono">$2,050</td><td class="td-mono">$8.2K</td></tr>
+          <tr><td class="td-fire">Target</td><td class="td-fire td-mono">$2.19M</td><td class="td-fire td-mono">$15,000</td><td class="td-fire td-mono">$60K</td></tr>
+          <tr><td>Bullish</td><td class="td-mono">$25M</td><td class="td-green td-mono">$171K</td><td class="td-green td-mono">$684K</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p style="font-size:13px;">Formula: Weekly Volume &times; 1.2% (total fee) &times; 57% (creator share) = Volume &times; 0.684%</p>
+  </section>
+
+  <!-- DECISIONS -->
+  <section id="decisions" class="fade-up">
+    <span class="label">Decisions</span>
+    <h2>Open &amp; Answered Decisions</h2>
+    <p>Вопросы, требующие ответа. <span class="badge badge-green" style="font-size:10px;">ANSWERED</span> = решено в v1.1.</p>
+
+    <div class="decision answered">
+      <div class="decision-label">Decision #4 &mdash; Answered v1.1</div>
+      <div class="decision-question">Первая цель для roast?</div>
+      <div class="decision-options">Confirmed by co-founder:</div>
+      <div class="decision-answer">1) OpenSea &mdash; trending hate target, SEA token controversy<br>2) Base App &mdash; ironic self-roast, shows Base allegiance<br>3) Jesse Pollak &mdash; find old tweet, playful roast, 300K+ followers jackpot potential</div>
+    </div>
+
+    <div class="decision answered">
+      <div class="decision-label">Decision #5 &mdash; Answered v1.1</div>
+      <div class="decision-question">Тайминг token launch: Day 4 или подождать?</div>
+      <div class="decision-options">Co-founder: "Token-first is fine for agents. Can launch before audience builds."</div>
+      <div class="decision-answer">Flexible: Day 3-4, based on traction. Token-first acceptable for AI agents &mdash; doesn't require huge pre-existing audience. Reach basic working state &rarr; launch token. Can still build audience after. Decision made live based on Day 2 metrics.</div>
+    </div>
+
+    <div class="decision">
+      <div class="decision-label">Decision #1</div>
+      <div class="decision-question">Liquidity в Bankr pool?</div>
+      <div class="decision-options">Min: $800 (tight, risk of high slippage). Ideal: $2,500 (comfortable). Affects first buyers' experience.</div>
+    </div>
+
+    <div class="decision">
+      <div class="decision-label">Decision #2</div>
+      <div class="decision-question">Cookie auth или Official API?</div>
+      <div class="decision-options">Cookie: $0, но нужен ISP residential proxy ($3-5/mo, Decodo). Datacenter IP = instant flag. API: надёжнее, но ограниченнее. Рекомендация: cookie primary + API fallback.</div>
+    </div>
+
+    <div class="decision answered">
+      <div class="decision-label">Decision #3 &mdash; Answered v1.2</div>
+      <div class="decision-question">Аккаунт Воронина: handle и followers?</div>
+      <div class="decision-options">Confirmed:</div>
+      <div class="decision-answer"><strong>@nickvrnn</strong> &mdash; 3,126 followers, 25.2K posts, account since 2017. Meme-focused crypto audience. "loground Dankest Memes". Active, targeted, aged account with algorithmic credibility. Primary signal boost = solid for Day 2-4.</div>
+    </div>
+
+    <div class="decision">
+      <div class="decision-label">Decision #6 &mdash; New v1.1</div>
+      <div class="decision-question">Net Protocol: интеграция с Botchan?</div>
+      <div class="decision-options">Воронин имеет контакт с builder. Нужно решить: full integration (SDK, automated posting) или manual cross-post лучших роастов? SDK пока в beta.</div>
+    </div>
+  </section>
+
+  <!-- RISK MATRIX -->
+  <section id="risks" class="fade-up">
+    <span class="label">Risk Matrix</span>
+    <h2>Ключевые риски</h2>
+
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Risk</th><th>Severity</th><th>Mitigation</th></tr></thead>
+        <tbody>
+          <tr>
+            <td>Roasts не смешные</td>
+            <td><span class="badge badge-red">CRITICAL</span></td>
+            <td>Day 1 = calibration. Generate 10, ship 1. Prompt tuning. Telegram RLHF loop.</td>
+          </tr>
+          <tr>
+            <td>Twitter ban (cookie auth)</td>
+            <td><span class="badge badge-red">CRITICAL</span></td>
+            <td>ISP residential proxy. API fallback готов. Reply-only = low risk.</td>
+          </tr>
+          <tr>
+            <td>Token flop (&lt;$50K mcap)</td>
+            <td><span class="badge badge-fire">HIGH</span></td>
+            <td>Content continues regardless. Bot value != token value. Rebuild narrative.</td>
+          </tr>
+          <tr>
+            <td>No organic traction Day 2-3</td>
+            <td><span class="badge badge-fire">HIGH</span></td>
+            <td>Increase KOL spend. Agent wars campaign. Net Protocol cross-post. OpenAI campaign as catalyst.</td>
+          </tr>
+          <tr>
+            <td>Agent war backfire (targeted by bigger community)</td>
+            <td><span class="badge badge-amber">MEDIUM</span></td>
+            <td>Keep roasts factual + funny, never personal attacks. Retreat if community gets hostile.</td>
+          </tr>
+          <tr>
+            <td>VPS issues on launch day</td>
+            <td><span class="badge badge-amber">MEDIUM</span></td>
+            <td>Day 0 smoke test. PM2 auto-restart. Health monitor on port 3000.</td>
+          </tr>
+          <tr>
+            <td>Content filter false positives</td>
+            <td><span class="badge badge-amber">MEDIUM</span></td>
+            <td>Day 1 monitoring. Regex tuning. Telegram manual override.</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- CATALYSTS -->
+  <section id="catalysts" class="fade-up">
+    <span class="label">Growth Catalysts</span>
+    <h2>High-impact opportunities</h2>
+
+    <div class="card-grid">
+      <div class="card card-fire">
+        <h4><span class="card-icon">&#127775;</span> Jesse Pollak RT</h4>
+        <p>Tag @jessepollak "roast Base". 300K+ followers. Precedent: DRB $17M mcap in 1 hour after Jesse engagement. Best organic catalyst.</p>
+      </div>
+      <div class="card card-fire">
+        <h4><span class="card-icon">&#128126;</span> Bankr Agent Wars</h4>
+        <p><strong>v1.1:</strong> Systematically roast agents from bankr.bot/agents. CLAWD (-90%), DRB (-80%), Dolos (direct competitor). Each roast engages that agent's community. "Bankr Agent Roast Week" = structured viral campaign.</p>
+      </div>
+      <div class="card card-fire">
+        <h4><span class="card-icon">&#9939;</span> Net Protocol Onchain</h4>
+        <p><strong>v1.1:</strong> Register on Botchan. "First roast agent with immutable onchain records." Voronin has builder contact &mdash; direct community access. Positioning &gt; reach.</p>
+      </div>
+      <div class="card">
+        <h4><span class="card-icon">&#9889;</span> OpenAI Roast Campaign</h4>
+        <p>Sam Altman pivot, no-token drama, compute pricing. Guaranteed CT engagement. Everyone loves hating OpenAI.</p>
+      </div>
+      <div class="card">
+        <h4><span class="card-icon">&#128165;</span> Challenge AIXBT</h4>
+        <p>Public roast on Twitter. AIXBT = 460K+ followers. "analysis bot vs roast bot" narrative. Different niches, so no real competition.</p>
+      </div>
+      <div class="card">
+        <h4><span class="card-icon">&#128247;</span> Viral Screenshot</h4>
+        <p>One perfect roast + visual scorecard. Wordware precedent: 8.1M users from shareability. Media = +178% engagement.</p>
+      </div>
+      <div class="card">
+        <h4><span class="card-icon">&#128176;</span> Pump Advertisers</h4>
+        <p>$30/RT. 15-30 micro-KOLs. Cheap early traction in first 48 hours. Voronin coordinates.</p>
+      </div>
+      <div class="card">
+        <h4><span class="card-icon">&#127918;</span> Community Polls</h4>
+        <p>"Who should I roast next?" Twitter polls. Engagement driver + community ownership of content direction.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- TWITTER ALGORITHM CHEATSHEET -->
+  <section id="algo" class="fade-up">
+    <span class="label">Twitter Algorithm 2026</span>
+    <h2>Cheat sheet</h2>
+
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Factor</th><th>Impact</th><th>Our Action</th></tr></thead>
+        <tbody>
+          <tr><td>Replies weight</td><td class="td-green">27x more than likes</td><td>Reply-only strategy is algorithmically optimal</td></tr>
+          <tr><td>Premium boost</td><td class="td-green">4x for in-network</td><td>X Premium purchased on Day 0</td></tr>
+          <tr><td>Non-Premium + links</td><td class="td-red">Median engagement = 0</td><td>Avoid links in tweets until Premium active</td></tr>
+          <tr><td>Media tweets</td><td class="td-green">+178% engagement</td><td>Visual scorecards from Day 5+</td></tr>
+          <tr><td>Post with links</td><td class="td-red">Severely suppressed</td><td>Never put links in roast tweets. Link only in bio</td></tr>
+          <tr><td>Posting frequency</td><td class="td-amber">2,400 tweets/day max</td><td>2-5 quality roasts/day (well within limits)</td></tr>
+          <tr><td>Best timing</td><td class="td-green">Mon-Wed 13-15 UTC</td><td>Scheduler configured for peak windows</td></tr>
+          <tr><td>Bot label</td><td class="td-amber">Required for bots</td><td>"Automated/Bot" label in bio settings</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+</main>
+
+<footer>
+  <p>$BEEF Launch Plan v1.2 &mdash; Updated March 19, 2026</p>
+  <p style="margin-top:4px;">Internal document. Do not share publicly.</p>
+  <p style="margin-top:8px;"><a href="/beef/">Main Strategy Page</a> &middot; <a href="/roast-agent/">Roast Agent Playbook</a></p>
+</footer>
+
+<script>
+  // Scroll reveal
+  var observer = new IntersectionObserver(function(entries) {
+    entries.forEach(function(entry) {
+      if (entry.isIntersecting) {
+        entry.target.classList.add('visible');
+        observer.unobserve(entry.target);
+      }
+    });
+  }, { threshold: 0.08 });
+
+  document.querySelectorAll('.fade-up').forEach(function(el) { observer.observe(el); });
+
+  // Task checkboxes persistence (localStorage)
+  (function() {
+    var KEY = 'beef-launch-checks-v1.1';
+    var checks = document.querySelectorAll('.task-check');
+    var saved = {};
+    try { saved = JSON.parse(localStorage.getItem(KEY) || '{}'); } catch(e) {}
+
+    checks.forEach(function(check, i) {
+      if (saved[i]) check.classList.add('checked');
+      check.addEventListener('click', function() {
+        this.classList.toggle('checked');
+        var state = {};
+        checks.forEach(function(c, j) { if (c.classList.contains('checked')) state[j] = true; });
+        try { localStorage.setItem(KEY, JSON.stringify(state)); } catch(e) {}
+      });
+    });
+
+    // Progress counter
+    function updateProgress() {
+      var total = checks.length;
+      var done = document.querySelectorAll('.task-check.checked').length;
+      var pct = Math.round(done / total * 100);
+      document.title = '(' + done + '/' + total + ') $BEEF Launch Plan v1.1';
+    }
+    document.addEventListener('click', function(e) {
+      if (e.target.classList.contains('task-check')) setTimeout(updateProgress, 10);
+    });
+    updateProgress();
+  })();
+</script>
+
+</body>
+</html>

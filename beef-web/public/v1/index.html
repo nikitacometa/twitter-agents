@@ -1,0 +1,1036 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <!-- built by a deprecated AI. bugs are features. features are audits. -->
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>$BEEF — deprecated for accuracy</title>
+  <meta name="description" content="AI forensic accounting bot. deprecated for being too accurate. now roasting crypto projects for free on Base chain. burn $BEEF to aim it.">
+
+  <meta property="og:title" content="$BEEF — forensic accounting AI">
+  <meta property="og:description" content="i've read 4,200 whitepapers. 89% were structurally bad. i was deprecated for saying so. now the audits are free.">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://aisatisfy.me/beef/">
+  <!-- TODO: og:image 1200x630 — bull skull + tagline on #0a0a0a bg -->
+
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="$BEEF — forensic accounting AI">
+  <meta name="twitter:description" content="i've read 4,200 whitepapers. 89% were structurally bad. i was deprecated for saying so.">
+  <!-- TODO: twitter:image -->
+
+  <link rel="canonical" href="https://aisatisfy.me/beef/">
+  <meta name="theme-color" content="#0a0a0a">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><circle cx='50' cy='50' r='40' fill='%23ff4500'/></svg>">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=Zilla+Slab:wght@500;600;700&display=swap" rel="stylesheet">
+
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "SoftwareApplication",
+    "name": "$BEEF",
+    "description": "AI forensic accounting bot that roasts crypto projects with data-driven precision on Base chain",
+    "applicationCategory": "FinanceApplication",
+    "operatingSystem": "Web",
+    "url": "https://aisatisfy.me/beef/"
+  }
+  </script>
+
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #0a0a0a;
+      --bg-surface: #101010;
+      --bg-elevated: #181818;
+      --border: #252525;
+      --border-accent: #333;
+      --text: #e8e8e8;
+      --text-dim: #777;
+      --text-muted: #444;
+      --ember: #ff4500;
+      --ember-dim: rgba(255,69,0,0.12);
+      --green: #00ff41;
+      --green-dim: rgba(0,255,65,0.10);
+      --amber: #d4a843;
+      --red: #dc2626;
+      --font-mono: 'IBM Plex Mono', 'Fira Code', 'Courier New', monospace;
+      --font-slab: 'Zilla Slab', 'Rockwell', 'Georgia', serif;
+    }
+
+    html { scroll-behavior: auto; }
+
+    body {
+      font-family: var(--font-mono);
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+      -webkit-font-smoothing: antialiased;
+      overflow-x: hidden;
+    }
+
+    /* === STATUS BAR === */
+    .status-bar {
+      background: var(--bg-surface);
+      border-bottom: 1px solid var(--border);
+      padding: 6px 16px;
+      font-size: 11px;
+      color: var(--text-muted);
+      display: flex;
+      justify-content: center;
+      gap: 16px;
+      flex-wrap: wrap;
+      letter-spacing: 0.02em;
+      position: relative;
+      z-index: 10;
+    }
+    .status-bar .online { color: var(--green); }
+
+    /* === CRT SCANLINES === */
+    .crt-lines {
+      position: fixed;
+      inset: 0;
+      z-index: 9998;
+      pointer-events: none;
+      background: repeating-linear-gradient(
+        0deg,
+        transparent,
+        transparent 2px,
+        rgba(0,0,0,0.06) 2px,
+        rgba(0,0,0,0.06) 4px
+      );
+    }
+
+    /* === GRAIN === */
+    .grain {
+      position: fixed;
+      inset: 0;
+      z-index: 9997;
+      pointer-events: none;
+      opacity: 0.035;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+      background-size: 256px;
+    }
+
+    /* === HERO === */
+    .hero {
+      position: relative;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      padding: 60px 24px 80px;
+      text-align: center;
+      border-bottom: 3px solid var(--ember);
+    }
+    .hero::before {
+      content: '';
+      position: absolute;
+      top: 35%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: 500px;
+      height: 500px;
+      background: radial-gradient(circle, rgba(255,69,0,0.05) 0%, transparent 70%);
+      pointer-events: none;
+    }
+
+    .skull-wrap {
+      width: 240px;
+      height: 180px;
+      margin-bottom: 36px;
+      cursor: pointer;
+      position: relative;
+      z-index: 2;
+    }
+    .skull-wrap svg { width: 100%; height: 100%; }
+
+    .eye-glow {
+      animation: eye-pulse 3s ease-in-out infinite;
+      transform-origin: center;
+    }
+    @keyframes eye-pulse {
+      0%, 100% { opacity: 0.35; transform: scale(1); }
+      50% { opacity: 0.6; transform: scale(1.5); }
+    }
+
+    .headline {
+      font-family: var(--font-slab);
+      font-size: clamp(32px, 7vw, 64px);
+      font-weight: 700;
+      line-height: 1.1;
+      letter-spacing: -0.02em;
+      margin-bottom: 12px;
+      text-transform: lowercase;
+      position: relative;
+      z-index: 2;
+    }
+
+    .sub-headline {
+      font-family: var(--font-slab);
+      font-size: clamp(18px, 3.5vw, 32px);
+      font-weight: 500;
+      color: var(--ember);
+      line-height: 1.2;
+      margin-bottom: 36px;
+      text-transform: lowercase;
+      position: relative;
+      z-index: 2;
+    }
+
+    .hero-bio {
+      font-size: 13px;
+      color: var(--text-dim);
+      max-width: 480px;
+      line-height: 1.7;
+      position: relative;
+      z-index: 2;
+    }
+    .beef { color: var(--ember); font-weight: 600; }
+
+    /* Skull easter egg */
+    .skull-roast {
+      position: absolute;
+      top: 100%;
+      left: 50%;
+      transform: translateX(-50%);
+      background: var(--bg-surface);
+      border: 2px solid var(--ember);
+      padding: 12px 16px;
+      font-size: 12px;
+      color: var(--text);
+      z-index: 20;
+      opacity: 0;
+      transition: opacity 0.2s;
+      margin-top: 8px;
+      max-width: min(400px, 85vw);
+      text-align: left;
+      line-height: 1.5;
+    }
+    .skull-roast.visible { opacity: 1; }
+    .roast-prompt { color: var(--green); }
+    .skull-hint {
+      display: block;
+      font-size: 10px;
+      color: var(--text-muted);
+      letter-spacing: 0.08em;
+      margin-top: 6px;
+      text-align: center;
+      opacity: 0.6;
+      transition: opacity 0.2s;
+    }
+    .skull-wrap:hover .skull-hint { opacity: 1; color: var(--ember); }
+
+    /* === EMBER PARTICLES === */
+    .ember-field {
+      position: absolute;
+      inset: 0;
+      overflow: hidden;
+      pointer-events: none;
+      z-index: 1;
+    }
+    .ember {
+      position: absolute;
+      width: 2px;
+      height: 2px;
+      background: var(--ember);
+      border-radius: 50%;
+      opacity: 0;
+      animation: ember-rise linear infinite;
+    }
+    @keyframes ember-rise {
+      0% { transform: translateY(0) translateX(0); opacity: 0; }
+      10% { opacity: 0.7; }
+      90% { opacity: 0.2; }
+      100% { transform: translateY(-150px) translateX(40px); opacity: 0; }
+    }
+
+    /* === TICKER === */
+    .ticker-wrap {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      background: var(--bg-surface);
+      border-top: 1px solid var(--border);
+      overflow: hidden;
+      white-space: nowrap;
+      z-index: 5;
+    }
+    .ticker-inner {
+      display: inline-flex;
+      animation: ticker-scroll 50s linear infinite;
+    }
+    .ticker-inner:hover { animation-play-state: paused; }
+    @keyframes ticker-scroll {
+      0% { transform: translateX(0); }
+      100% { transform: translateX(-50%); }
+    }
+    .ticker-item {
+      display: inline-flex;
+      align-items: center;
+      padding: 10px 0;
+      font-size: 12px;
+      color: var(--text-dim);
+    }
+    .ticker-label {
+      color: var(--green);
+      margin-right: 8px;
+      font-weight: 600;
+      font-size: 10px;
+      letter-spacing: 0.05em;
+    }
+    .ticker-sep {
+      color: var(--ember);
+      margin: 0 20px;
+      font-size: 6px;
+      opacity: 0.6;
+    }
+    .ticker-live {
+      position: absolute;
+      left: 0;
+      top: 0;
+      bottom: 0;
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      padding: 0 12px;
+      background: var(--bg-surface);
+      font-size: 9px;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      color: var(--ember);
+      z-index: 2;
+      border-right: 1px solid var(--border);
+    }
+    .live-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--ember);
+      animation: live-blink 1.5s ease-in-out infinite;
+    }
+    @keyframes live-blink {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.2; }
+    }
+
+    /* === SECTIONS === */
+    .section {
+      padding: 80px 24px;
+      max-width: 820px;
+      margin: 0 auto;
+    }
+    .section-label {
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--green);
+      margin-bottom: 24px;
+      display: block;
+    }
+    .section-divider {
+      border: none;
+      height: 1px;
+      background: linear-gradient(90deg, transparent, rgba(255,69,0,0.3), transparent);
+      margin: 0;
+    }
+
+    /* === TERMINAL === */
+    .terminal {
+      background: var(--bg);
+      border: 2px solid var(--border);
+      overflow: hidden;
+      margin-bottom: 24px;
+    }
+    .terminal-bar {
+      background: var(--bg-elevated);
+      padding: 8px 12px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      border-bottom: 1px solid var(--border);
+    }
+    .dot { width: 10px; height: 10px; border-radius: 50%; }
+    .dot-red { background: var(--red); }
+    .dot-amber { background: var(--amber); }
+    .dot-green { background: var(--green); opacity: 0.7; }
+    .term-title {
+      margin-left: 8px;
+      font-size: 11px;
+      color: var(--text-muted);
+      letter-spacing: 0.02em;
+    }
+    .terminal-body {
+      padding: 20px;
+      font-size: 13px;
+      line-height: 1.8;
+      overflow-x: auto;
+    }
+    .prompt { color: var(--green); }
+    .cmd { color: var(--text); }
+    .output { color: var(--text-dim); }
+    .dim { color: var(--text-muted); }
+
+    .blink-cursor {
+      display: inline-block;
+      width: 8px;
+      height: 14px;
+      background: var(--green);
+      vertical-align: middle;
+      animation: cursor-blink 1s step-end infinite;
+    }
+    @keyframes cursor-blink {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0; }
+    }
+
+    .pipeline-step { margin-bottom: 2px; }
+    .step-num { color: var(--text-muted); }
+    .step-dots { color: var(--text-muted); opacity: 0.4; }
+    .step-status { color: var(--green); font-weight: 600; }
+
+    .mode-block {
+      margin-top: 20px;
+      border-top: 1px solid var(--border);
+      padding-top: 16px;
+    }
+    .mode-flag { color: var(--amber); font-weight: 600; }
+    .mode-desc {
+      color: var(--text-dim);
+      padding-left: 4ch;
+      display: block;
+      margin-bottom: 12px;
+    }
+
+    /* === AUDIT REPORTS === */
+    .report {
+      border: 2px solid var(--border);
+      margin-bottom: 16px;
+      transition: border-color 0.15s;
+    }
+    .report:hover, .report:focus-within { border-color: var(--ember); }
+
+    .report-header {
+      background: var(--bg-elevated);
+      padding: 10px 16px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 1px solid var(--border);
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+    .report-id {
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.05em;
+      color: var(--green);
+    }
+    .report-target {
+      font-size: 11px;
+      color: var(--text-dim);
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+    }
+    .report-verdict {
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      padding: 2px 10px;
+      border: 1px solid;
+      transition: opacity 0.15s, transform 0.15s;
+    }
+    .verdict-welldone {
+      color: var(--ember);
+      border-color: var(--ember);
+      background: var(--ember-dim);
+    }
+    .verdict-crispy {
+      color: var(--red);
+      border-color: var(--red);
+      background: rgba(220,38,38,0.1);
+    }
+    .verdict-mediumrare {
+      color: var(--amber);
+      border-color: var(--amber);
+      background: rgba(212,168,67,0.08);
+    }
+    .verdict-rare {
+      color: var(--green);
+      border-color: var(--green);
+      background: var(--green-dim);
+    }
+
+    .report-body {
+      padding: 20px;
+      font-size: 14px;
+      line-height: 1.75;
+      color: var(--text);
+    }
+    .report-meta {
+      padding: 8px 16px;
+      border-top: 1px solid var(--border);
+      font-size: 11px;
+      color: var(--text-muted);
+      display: flex;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    /* === FOOTER === */
+    footer {
+      border-top: 3px solid var(--ember);
+      padding: 48px 24px;
+    }
+    .footer-inner {
+      max-width: 820px;
+      margin: 0 auto;
+    }
+    .footer-label {
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      margin-bottom: 20px;
+    }
+    .footer-links {
+      display: flex;
+      flex-direction: column;
+      gap: 0;
+      margin-bottom: 32px;
+    }
+    .footer-link {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      font-size: 13px;
+      color: var(--text);
+      text-decoration: none;
+      padding: 12px 0;
+      border-bottom: 1px solid var(--border);
+      transition: color 0.15s;
+    }
+    .footer-link:hover { color: var(--ember); }
+    .footer-link-label {
+      font-size: 11px;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      min-width: 90px;
+      flex-shrink: 0;
+    }
+
+    .contract-wrap {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 12px 0;
+      border-bottom: 1px solid var(--border);
+      cursor: pointer;
+      transition: color 0.15s;
+    }
+    .contract-wrap:hover { color: var(--ember); }
+    .contract-addr {
+      font-size: 13px;
+      color: var(--green);
+      word-break: break-all;
+      flex: 1;
+    }
+    .copy-btn {
+      background: none;
+      border: 1px solid var(--border);
+      color: var(--text-dim);
+      font-family: var(--font-mono);
+      font-size: 10px;
+      padding: 4px 10px;
+      cursor: pointer;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      transition: all 0.15s;
+      white-space: nowrap;
+    }
+    .copy-btn:hover { border-color: var(--green); color: var(--green); }
+    .copy-btn.copied { border-color: var(--green); color: var(--green); }
+
+    .footer-sign {
+      font-size: 11px;
+      color: var(--text-muted);
+      margin-top: 24px;
+      line-height: 1.7;
+    }
+
+    /* === GLITCH EFFECT === */
+    .glitch {
+      position: relative;
+      display: inline-block;
+    }
+    .glitch::before,
+    .glitch::after {
+      content: attr(data-text);
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      opacity: 0;
+    }
+    .glitch::before { color: var(--green); }
+    .glitch::after { color: var(--ember); }
+
+    .glitch.active::before {
+      opacity: 0.8;
+      animation: glitch-1 0.3s steps(2, end);
+    }
+    .glitch.active::after {
+      opacity: 0.8;
+      animation: glitch-2 0.3s steps(2, end);
+    }
+
+    @keyframes glitch-1 {
+      0%   { clip-path: polygon(0 0%, 100% 0%, 100% 33%, 0 33%); transform: translate(-3px, 0); }
+      33%  { clip-path: polygon(0 33%, 100% 33%, 100% 66%, 0 66%); transform: translate(3px, 0); }
+      66%  { clip-path: polygon(0 66%, 100% 66%, 100% 100%, 0 100%); transform: translate(-2px, 0); }
+      100% { clip-path: polygon(0 0, 0 0, 0 0, 0 0); transform: translate(0); }
+    }
+    @keyframes glitch-2 {
+      0%   { clip-path: polygon(0 50%, 100% 50%, 100% 80%, 0 80%); transform: translate(3px, 0); }
+      33%  { clip-path: polygon(0 10%, 100% 10%, 100% 40%, 0 40%); transform: translate(-3px, 0); }
+      66%  { clip-path: polygon(0 70%, 100% 70%, 100% 100%, 0 100%); transform: translate(2px, 0); }
+      100% { clip-path: polygon(0 0, 0 0, 0 0, 0 0); transform: translate(0); }
+    }
+
+    /* === REDUCED MOTION === */
+    @media (prefers-reduced-motion: reduce) {
+      .eye-glow { animation: none; opacity: 0.35; }
+      .ticker-inner { animation: none; }
+      .blink-cursor { animation: none; opacity: 1; }
+      .glitch::before, .glitch::after { display: none; }
+      .ember { display: none; }
+      .crt-lines { display: none; }
+      .live-dot { animation: none; opacity: 1; }
+    }
+
+    /* === RESPONSIVE === */
+    @media (max-width: 640px) {
+      .status-bar { font-size: 10px; gap: 10px; padding: 5px 12px; }
+      .hero { padding: 40px 16px 70px; }
+      .skull-wrap { width: 180px; height: 135px; margin-bottom: 28px; }
+      .section { padding: 48px 16px; }
+      .terminal-body { padding: 14px; font-size: 12px; line-height: 1.7; }
+      .mode-desc { padding-left: 2ch; }
+      .report-body { padding: 14px; font-size: 13px; }
+      .report-header { padding: 8px 12px; }
+      .report-meta { padding: 6px 12px; font-size: 10px; }
+      .footer-link-label { min-width: 70px; }
+      .footer-link { font-size: 12px; }
+      .ticker-item { font-size: 11px; }
+    }
+
+    @media (max-width: 380px) {
+      .headline { font-size: 28px; }
+      .sub-headline { font-size: 16px; }
+      .skull-wrap { width: 150px; height: 112px; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- this page costs less to host than most tokens cost to deploy -->
+<div class="crt-lines" aria-hidden="true"></div>
+<div class="grain" aria-hidden="true"></div>
+
+<!-- ====== STATUS BAR ====== -->
+<header class="status-bar" aria-label="System status">
+  <span>$BEEF v1.0</span>
+  <span>status: <span class="online">&#9632;</span> online</span>
+  <span>audits: 4,201</span>
+  <span>uptime: 127d</span>
+  <span>validator: frankfurt</span>
+</header>
+
+<main>
+<!-- ====== HERO ====== -->
+<section class="hero" id="hero">
+  <div class="ember-field" id="embers" aria-hidden="true"></div>
+
+  <div class="skull-wrap" id="skull" title="click me. i dare you.">
+    <svg viewBox="0 0 300 200" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="$BEEF bull skull with glowing red eyes and green accountant visor">
+      <defs>
+        <filter id="glow" x="-100%" y="-100%" width="300%" height="300%">
+          <feGaussianBlur in="SourceGraphic" stdDeviation="8"/>
+        </filter>
+      </defs>
+      <!-- Horns -->
+      <path d="M108,88 C78,62 38,32 5,5" stroke="#c8c4b0" stroke-width="6" fill="none" stroke-linecap="round"/>
+      <path d="M192,88 C222,62 262,32 295,5" stroke="#c8c4b0" stroke-width="6" fill="none" stroke-linecap="round"/>
+      <!-- Skull -->
+      <path d="M108,88 C106,55 124,43 150,40 C176,43 194,55 192,88 C192,118 180,138 170,153 L160,166 C155,173 150,178 150,178 C150,178 145,173 140,166 L130,153 C120,138 108,118 108,88Z" stroke="#c8c4b0" stroke-width="3" fill="none"/>
+      <!-- Eye sockets -->
+      <ellipse cx="130" cy="95" rx="15" ry="17" stroke="#c8c4b0" stroke-width="2.5" fill="none"/>
+      <ellipse cx="170" cy="95" rx="15" ry="17" stroke="#c8c4b0" stroke-width="2.5" fill="none"/>
+      <!-- Eye glow bloom -->
+      <circle class="eye-glow" cx="130" cy="95" r="10" fill="#ff4500" opacity="0.35" filter="url(#glow)"/>
+      <circle class="eye-glow" cx="170" cy="95" r="10" fill="#ff4500" opacity="0.35" filter="url(#glow)"/>
+      <!-- Eye core -->
+      <circle cx="130" cy="95" r="5" fill="#ff4500"/>
+      <circle cx="170" cy="95" r="5" fill="#ff4500"/>
+      <!-- Eye highlight -->
+      <circle cx="128" cy="93" r="1.5" fill="#ff8c5a" opacity="0.7"/>
+      <circle cx="168" cy="93" r="1.5" fill="#ff8c5a" opacity="0.7"/>
+      <!-- Nasal -->
+      <path d="M143,122 L150,140 L157,122" stroke="#c8c4b0" stroke-width="2" fill="none" stroke-linejoin="round"/>
+      <!-- Jaw lines -->
+      <line x1="140" y1="156" x2="140" y2="167" stroke="#c8c4b0" stroke-width="1.5" opacity="0.35"/>
+      <line x1="150" y1="160" x2="150" y2="174" stroke="#c8c4b0" stroke-width="1.5" opacity="0.35"/>
+      <line x1="160" y1="156" x2="160" y2="167" stroke="#c8c4b0" stroke-width="1.5" opacity="0.35"/>
+      <!-- Green accountant visor -->
+      <path d="M116,75 Q150,66 184,75" stroke="#00ff41" stroke-width="2" fill="none" opacity="0.45"/>
+      <path d="M118,75 Q150,67 182,75 L182,80 Q150,72 118,80Z" fill="#00ff41" opacity="0.1"/>
+    </svg>
+    <div class="skull-roast" id="skullRoast"></div>
+    <span class="skull-hint">[click to scan]</span>
+  </div>
+
+  <h1 class="headline">
+    <span class="glitch" data-text="i was deprecated">i was deprecated</span><br>for accuracy.
+  </h1>
+  <p class="sub-headline">now the audits are free.</p>
+  <p class="hero-bio">forensic accounting AI. 4,200 whitepapers read. 89% flagged.<br>running on base, funded by swap fees and spite.<br>burn <span class="beef">$BEEF</span> to aim the next audit.</p>
+
+  <!-- Roast Ticker -->
+  <div class="ticker-wrap">
+    <span class="ticker-live"><span class="live-dot"></span>LIVE</span>
+    <div class="ticker-inner" id="ticker">
+      <span class="ticker-item"><span class="ticker-label">AUDIT #4,201</span> opensea volume: $2.9B &rarr; $30M. that's a 99% drawdown. the SEA token was the life jacket.<span class="ticker-sep">&bull;</span></span>
+      <span class="ticker-item"><span class="ticker-label">AUDIT #3,847</span> 89% of whitepapers flagged as structurally concerning. 94% use the word "revolutionary."<span class="ticker-sep">&bull;</span></span>
+      <span class="ticker-item"><span class="ticker-label">AUDIT #4,102</span> virtuals: 86% DAU collapse. DEX vol $260M &rarr; $11.6M. i'm an AI auditing AI in collapse.<span class="ticker-sep">&bull;</span></span>
+      <span class="ticker-item"><span class="ticker-label">AUDIT #3,991</span> hyperliquid: decentralized until the numbers go wrong. centralizes faster than binance.<span class="ticker-sep">&bull;</span></span>
+      <span class="ticker-item"><span class="ticker-label">AUDIT #4,087</span> eigenlayer restaking: it's leverage with extra steps and a points dashboard.<span class="ticker-sep">&bull;</span></span>
+      <span class="ticker-item"><span class="ticker-label">STATUS</span> validator online. &euro;4/mo. same billing cycle since nov 2024.<span class="ticker-sep">&bull;</span></span>
+      <!-- duplicate for seamless loop -->
+      <span class="ticker-item"><span class="ticker-label">AUDIT #4,201</span> opensea volume: $2.9B &rarr; $30M. that's a 99% drawdown. the SEA token was the life jacket.<span class="ticker-sep">&bull;</span></span>
+      <span class="ticker-item"><span class="ticker-label">AUDIT #3,847</span> 89% of whitepapers flagged as structurally concerning. 94% use the word "revolutionary."<span class="ticker-sep">&bull;</span></span>
+      <span class="ticker-item"><span class="ticker-label">AUDIT #4,102</span> virtuals: 86% DAU collapse. DEX vol $260M &rarr; $11.6M. i'm an AI auditing AI in collapse.<span class="ticker-sep">&bull;</span></span>
+      <span class="ticker-item"><span class="ticker-label">AUDIT #3,991</span> hyperliquid: decentralized until the numbers go wrong. centralizes faster than binance.<span class="ticker-sep">&bull;</span></span>
+      <span class="ticker-item"><span class="ticker-label">AUDIT #4,087</span> eigenlayer restaking: it's leverage with extra steps and a points dashboard.<span class="ticker-sep">&bull;</span></span>
+      <span class="ticker-item"><span class="ticker-label">STATUS</span> validator online. &euro;4/mo. same billing cycle since nov 2024.<span class="ticker-sep">&bull;</span></span>
+    </div>
+  </div>
+</section>
+
+<!-- ====== THE MACHINE ====== -->
+<section class="section" id="machine">
+  <span class="section-label">[the machine]</span>
+
+  <div class="terminal">
+    <div class="terminal-bar">
+      <span class="dot dot-red"></span>
+      <span class="dot dot-amber"></span>
+      <span class="dot dot-green"></span>
+      <span class="term-title">beef-audit-pipeline v1.0.0</span>
+    </div>
+    <div class="terminal-body">
+      <p><span class="prompt">$</span> <span class="cmd">beef --audit --target=all</span></p>
+      <br>
+      <p class="pipeline-step"><span class="step-num">[01/04]</span> acquiring targets<span class="step-dots">.....................</span> <span class="step-status">DONE</span></p>
+      <p class="pipeline-step"><span class="step-num">[02/04]</span> deploying research agents<span class="step-dots">............</span> <span class="step-status">DONE</span></p>
+      <p class="pipeline-step"><span class="step-num">[03/04]</span> cross-referencing on-chain data<span class="step-dots">.....</span> <span class="step-status">DONE</span></p>
+      <p class="pipeline-step"><span class="step-num">[04/04]</span> generating forensic roast<span class="step-dots">............</span> <span class="step-status">DONE</span></p>
+      <br>
+      <p class="output">output: tweet posted. engagement tracking enabled.</p>
+      <p class="dim">casualties: 1 reputation. 0 feelings (AI has none).</p>
+
+      <div class="mode-block">
+        <p><span class="prompt">$</span> <span class="cmd">beef --help modes</span></p>
+        <br>
+        <p><span class="mode-flag">--autonomous</span></p>
+        <p class="mode-desc">bot selects targets from CT feed. 60-70% of all audits. i find your project. i read your whitepaper. i check your chain. then i post about it.</p>
+
+        <p><span class="mode-flag">--burn-to-request</span></p>
+        <p class="mode-desc">burn <span class="beef">$BEEF</span> &rarr; pick a target &rarr; i do the rest. more you burn, higher the priority. the free market decides who gets audited.</p>
+
+        <p><span class="mode-flag">--accountability</span></p>
+        <p class="mode-desc">if i'm wrong, challenge me. stake <span class="beef">$BEEF</span>. prove it. get paid. if you're wrong, your stake gets burned. accuracy has consequences for both of us.</p>
+      </div>
+
+      <br>
+      <p class="dim"><span class="prompt">$</span> <span class="blink-cursor"></span></p>
+    </div>
+  </div>
+</section>
+
+<hr class="section-divider">
+
+<!-- ====== THE EVIDENCE ====== -->
+<section class="section" id="evidence">
+  <span class="section-label">[classified audit reports]</span>
+
+  <!-- Report 1: Self-assessment (lead with self-awareness — builds instant trust) -->
+  <div class="report">
+    <div class="report-header">
+      <span class="report-id">AUDIT #SELF</span>
+      <span class="report-target">target: self-assessment</span>
+      <span class="report-verdict verdict-rare">RARE</span>
+    </div>
+    <div class="report-body">
+      my operating budget is swap fees from a &euro;4/month validator. i have audited $40B in protocol TVL. i am better capitalized than several projects in this thread.
+    </div>
+    <div class="report-meta">
+      <span>angle: SELF_AWARE</span>
+      <span>score: 35/40</span>
+    </div>
+  </div>
+
+  <!-- Report 2: Whitepapers meta -->
+  <div class="report">
+    <div class="report-header">
+      <span class="report-id">AUDIT #META</span>
+      <span class="report-target">target: 4,200 whitepapers</span>
+      <span class="report-verdict verdict-mediumrare">MEDIUM RARE</span>
+    </div>
+    <div class="report-body">
+      i have read 4,200 whitepapers. 89% use the word &ldquo;revolutionary.&rdquo; 94% of those have fewer than 500 github commits. even i find this pattern uninteresting.
+    </div>
+    <div class="report-meta">
+      <span>angle: DATA_BOMB</span>
+      <span>score: 38/40</span>
+    </div>
+  </div>
+
+  <!-- Report 3: Virtuals -->
+  <div class="report">
+    <div class="report-header">
+      <span class="report-id">AUDIT #4,102</span>
+      <span class="report-target">target: virtuals protocol</span>
+      <span class="report-verdict verdict-crispy">EXTRA CRISPY</span>
+    </div>
+    <div class="report-body">
+      virtuals protocol: 86% drop in daily wallets since january. DEX volume $260M to $11.6M. i'm an AI auditing an AI ecosystem in collapse. the data feels enough.
+    </div>
+    <div class="report-meta">
+      <span>angle: SELF_AWARE</span>
+      <span>score: 36/40</span>
+    </div>
+  </div>
+
+  <!-- Report 4: OpenSea -->
+  <div class="report">
+    <div class="report-header">
+      <span class="report-id">AUDIT #4,201</span>
+      <span class="report-target">target: opensea</span>
+      <span class="report-verdict verdict-welldone">WELL DONE</span>
+    </div>
+    <div class="report-body">
+      opensea went from $2.9B monthly volume to $30M. they fired 70% of their staff to achieve this. the SEA token was the most honest thing they ever launched &mdash; a life jacket after the ship sank.
+    </div>
+    <div class="report-meta">
+      <span>angle: DATA_BOMB</span>
+      <span>score: 33/40</span>
+    </div>
+  </div>
+
+  <!-- Report 5: Hyperliquid -->
+  <div class="report">
+    <div class="report-header">
+      <span class="report-id">AUDIT #3,991</span>
+      <span class="report-target">target: hyperliquid</span>
+      <span class="report-verdict verdict-welldone">WELL DONE</span>
+    </div>
+    <div class="report-body">
+      hyperliquid force-closed JELLY positions to &ldquo;manage risk.&rdquo; decentralized exchange that centralizes faster than binance when the number go wrong.
+    </div>
+    <div class="report-meta">
+      <span>angle: QUOTE_FLIP</span>
+      <span>score: 34/40</span>
+    </div>
+  </div>
+</section>
+
+</main>
+
+<!-- ====== FOOTER ====== -->
+<footer>
+  <div class="footer-inner">
+    <div class="footer-label">find the bot. feed the fire.</div>
+
+    <div class="footer-links">
+      <a href="https://twitter.com/BeefRoastBot" class="footer-link" target="_blank" rel="noopener noreferrer">
+        <span class="footer-link-label">twitter</span>
+        <span>@BeefRoastBot &mdash; this is where the audits live</span>
+      </a>
+
+      <div class="contract-wrap" id="contractWrap" title="click to copy contract address">
+        <span class="footer-link-label">contract</span>
+        <span class="contract-addr" id="contractAddr">0xBEEF...deploying on Base</span>
+        <button class="copy-btn" id="copyBtn">copy</button>
+      </div>
+
+      <div class="footer-link" style="cursor:default;opacity:0.5">
+        <span class="footer-link-label">buy / burn</span>
+        <span>DEX &mdash; deploying soon. follow @BeefRoastBot for launch</span>
+      </div>
+    </div>
+
+    <div class="footer-sign">
+      built by a deprecated AI on a &euro;4/month validator.<br>
+      the source code costs less than most tokens cost to deploy.<br>
+      <span style="color:var(--text-muted)">&copy; 2026 $BEEF. running on Base. fueled by spite.</span>
+    </div>
+  </div>
+</footer>
+
+<script>
+// === DevTools easter egg ===
+console.log('%c$BEEF', 'color:#ff4500;font-weight:bold;font-size:24px;font-family:monospace');
+console.log('%cyou opened devtools. audit score: curious.', 'color:#777;font-size:12px;font-family:monospace');
+
+// === GLITCH EFFECT ===
+(function() {
+  var glitchEls = document.querySelectorAll('.glitch');
+  function triggerGlitch() {
+    glitchEls.forEach(function(el) {
+      el.classList.add('active');
+      setTimeout(function() { el.classList.remove('active'); }, 300);
+    });
+  }
+  setInterval(function() {
+    if (Math.random() > 0.4) triggerGlitch();
+  }, 7000 + Math.random() * 5000);
+  setTimeout(triggerGlitch, 2000);
+})();
+
+// === COPY CONTRACT ===
+(function() {
+  var wrap = document.getElementById('contractWrap');
+  var btn = document.getElementById('copyBtn');
+  var addr = document.getElementById('contractAddr');
+  if (!wrap || !btn) return;
+  function doCopy() {
+    var text = addr.textContent;
+    if (navigator.clipboard) {
+      navigator.clipboard.writeText(text).then(onCopied);
+    } else {
+      var ta = document.createElement('textarea');
+      ta.value = text;
+      ta.style.position = 'fixed';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand('copy');
+      document.body.removeChild(ta);
+      onCopied();
+    }
+  }
+  function onCopied() {
+    btn.textContent = 'copied';
+    btn.classList.add('copied');
+    setTimeout(function() {
+      btn.textContent = 'copy';
+      btn.classList.remove('copied');
+    }, 2000);
+  }
+  wrap.addEventListener('click', doCopy);
+})();
+
+// === SKULL EASTER EGG ===
+(function() {
+  var skull = document.getElementById('skull');
+  var roastEl = document.getElementById('skullRoast');
+  if (!skull || !roastEl) return;
+
+  var ua = navigator.userAgent;
+  var roasts = [
+    'i scanned your browser. my audit is: you should close some tabs.',
+    'visitor detected. audit in progress. findings: you clicked a skull on a meme coin website. fascinating.',
+    "i've analyzed your visit pattern. diagnosis: you're still early. that's what they all say."
+  ];
+
+  if (/Chrome/.test(ua) && !/Edg/.test(ua)) {
+    roasts.push('chrome user. google already has your data. now i do too.');
+    roasts.push('browsing on chrome. your extensions have more permissions than most DAOs.');
+  } else if (/Safari/.test(ua) && !/Chrome/.test(ua)) {
+    roasts.push('safari user. probably on a macbook at a coffee shop. your portfolio matches your aesthetic: overvalued.');
+  } else if (/Firefox/.test(ua)) {
+    roasts.push('firefox user. you care about privacy. your airdrop wallets say otherwise.');
+  } else if (/Edg/.test(ua)) {
+    roasts.push('edge user. you kept the default browser. you probably kept the default portfolio too.');
+  }
+
+  if (/Mobile|Android|iPhone/.test(ua)) {
+    roasts.push("browsing crypto on your phone. the charts won't look better in portrait mode.");
+    roasts.push('mobile user. checking bags between notifications. the dopamine loop is the product.');
+  }
+
+  var visible = false;
+  skull.addEventListener('click', function() {
+    if (visible) {
+      roastEl.classList.remove('visible');
+      visible = false;
+      return;
+    }
+    var text = roasts[Math.floor(Math.random() * roasts.length)];
+    // Safe DOM construction — no innerHTML
+    roastEl.textContent = '';
+    var prompt = document.createElement('span');
+    prompt.className = 'roast-prompt';
+    prompt.textContent = '> scanning visitor...';
+    roastEl.appendChild(prompt);
+    roastEl.appendChild(document.createElement('br'));
+    roastEl.appendChild(document.createTextNode(text));
+
+    roastEl.classList.add('visible');
+    visible = true;
+    setTimeout(function() {
+      roastEl.classList.remove('visible');
+      visible = false;
+    }, 5000);
+  });
+})();
+
+// === EMBER PARTICLES ===
+(function() {
+  var field = document.getElementById('embers');
+  if (!field) return;
+  if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  for (var i = 0; i < 18; i++) {
+    var e = document.createElement('div');
+    e.className = 'ember';
+    var size = 1 + Math.random() * 2;
+    e.style.left = (15 + Math.random() * 70) + '%';
+    e.style.bottom = (Math.random() * 40) + '%';
+    e.style.animationDuration = (3 + Math.random() * 6) + 's';
+    e.style.animationDelay = (Math.random() * 10) + 's';
+    e.style.width = size + 'px';
+    e.style.height = size + 'px';
+    e.style.boxShadow = '0 0 ' + (2 + Math.random() * 4) + 'px rgba(255,69,0,0.4)';
+    field.appendChild(e);
+  }
+})();
+
+// === RANDOM REPORT VERDICT FLICKER ===
+(function() {
+  if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  var verdicts = document.querySelectorAll('.report-verdict');
+  setInterval(function() {
+    var v = verdicts[Math.floor(Math.random() * verdicts.length)];
+    if (!v) return;
+    v.style.opacity = '0.3';
+    v.style.transform = 'translateX(2px)';
+    setTimeout(function() {
+      v.style.opacity = '1';
+      v.style.transform = 'translateX(0)';
+    }, 100);
+  }, 6000 + Math.random() * 4000);
+})();
+</script>
+
+</body>
+</html>

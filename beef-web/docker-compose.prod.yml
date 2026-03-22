@@ -1,0 +1,10 @@
+services:
+  beef-web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        VITE_FEED_URL: ${VITE_FEED_URL}
+    ports:
+      - "3080:80"
+    restart: unless-stopped

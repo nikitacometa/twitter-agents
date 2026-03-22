@@ -1,0 +1,55 @@
+:root {
+  /* Backgrounds */
+  --bg: #0a0a0a;
+  --bg-surface: #0e0e0e;
+  --bg-elevated: #151515;
+  --bg-hover: #1a1a1a;
+
+  /* Borders */
+  --border: #1e1e1e;
+  --border-accent: #2a2a2a;
+
+  /* Text */
+  --text: #e8e8e8;
+  --text-dim: #888;
+  --text-muted: #555;
+
+  /* Brand */
+  --red: #cc0000;
+  --red-bright: #ff4500;
+  --red-glow: rgba(204, 0, 0, 0.3);
+  --red-dim: rgba(204, 0, 0, 0.15);
+
+  /* Semantic */
+  --green: #00ff41;
+  --green-dim: rgba(0, 255, 65, 0.1);
+  --amber: #d4a843;
+  --amber-dim: rgba(212, 168, 67, 0.1);
+
+  /* Typography */
+  --font-mono: 'IBM Plex Mono', monospace;
+  --font-slab: 'Zilla Slab', serif;
+
+  /* Spacing */
+  --space-xs: 4px;
+  --space-sm: 8px;
+  --space-md: 16px;
+  --space-lg: 24px;
+  --space-xl: 32px;
+  --space-2xl: 48px;
+
+  /* Sizing */
+  --sidebar-width: 220px;
+  --status-bar-height: 40px;
+  --content-max-width: 720px;
+
+  /* Borders */
+  --radius-sm: 4px;
+  --radius-md: 8px;
+
+  /* Transitions */
+  --ease-out-quart: cubic-bezier(0.22, 1, 0.36, 1);
+  --duration-fast: 150ms;
+  --duration-normal: 250ms;
+  --duration-slow: 500ms;
+}

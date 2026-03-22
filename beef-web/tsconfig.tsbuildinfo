@@ -1,0 +1,1 @@
+{"root":["./src/app.tsx","./src/main.tsx","./src/vite-env.d.ts","./src/components/mobiletabbar.tsx","./src/components/sidebar.tsx","./src/components/statusbar.tsx","./src/components/terminal.tsx","./src/hooks/useactivity.ts","./src/hooks/usetypewriter.ts","./src/services/activity.ts","./src/types/activity.ts","./src/utils/time.ts"],"version":"5.9.3"}
