@@ -158,9 +158,11 @@ export class ClaudeCodeProvider implements LLMProvider {
       const home = process.env.HOME ?? '';
       const extendedPath = `${home}/.local/bin:${home}/.npm-global/bin:${process.env.PATH ?? ''}`;
 
+      // Remove ANTHROPIC_API_KEY so Claude CLI uses subscription auth, not API key
+      const { ANTHROPIC_API_KEY: _, ...baseEnv } = process.env;
       const child = spawn('claude', args, {
         stdio: ['ignore', 'pipe', 'pipe'],
-        env: { ...process.env, ...cliConfig.env, PATH: extendedPath },
+        env: { ...baseEnv, ...cliConfig.env, PATH: extendedPath },
       });
       this.childProcesses.add(child);
 
