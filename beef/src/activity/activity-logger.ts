@@ -155,7 +155,16 @@ export class ActivityLogger {
       const feed = JSON.parse(raw) as ActivityFeed;
 
       if (Array.isArray(feed.events)) {
-        this.events = feed.events.slice(0, this.maxEvents);
+        this.events = feed.events
+          .filter(
+            (e): e is ActivityEvent =>
+              typeof e === 'object' &&
+              e !== null &&
+              typeof e.id === 'string' &&
+              typeof e.timestamp === 'string' &&
+              typeof e.narrative === 'string',
+          )
+          .slice(0, this.maxEvents);
         this.logger.info(
           { recoveredEvents: this.events.length },
           'Recovered activity events from previous session',

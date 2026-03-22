@@ -325,7 +325,8 @@ export class RoastEngine {
         text: obj['text'],
         tone: obj['tone'],
         mentionsBeef: (obj['mentionsBeef'] as boolean) ?? false,
-        diaryThought: typeof obj['diaryThought'] === 'string' ? obj['diaryThought'] : undefined,
+        diaryThought: typeof obj['diaryThought'] === 'string' && obj['diaryThought'].length > 0
+          ? obj['diaryThought'].slice(0, 160) : undefined,
       };
     }
 
@@ -417,7 +418,7 @@ export class RoastEngine {
           this.validateOutput(data, `${taskId}-${strategy}`);
           allVariants.push(...data.variants);
           if (data.researchNotes && !researchNotes) researchNotes = data.researchNotes;
-          if (data.diaryThought && !diaryThought) diaryThought = data.diaryThought;
+          if (typeof data.diaryThought === 'string' && data.diaryThought && !diaryThought) diaryThought = data.diaryThought.slice(0, 160);
           if (!data.factCheckPassed) factCheckPassed = false;
           lastProvider = result.value.provider;
           maxDurationMs = Math.max(maxDurationMs, result.value.durationMs);

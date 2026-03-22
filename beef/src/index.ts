@@ -101,20 +101,24 @@ function formatUptime(start: number): string {
 
 let activityLogger: ActivityLogger | undefined;
 if (config.ACTIVITY_FEED_ENABLED) {
-  activityLogger = new ActivityLogger({
-    feedPath: resolve(process.cwd(), config.ACTIVITY_FEED_PATH),
-    getStats: () => ({
-      totalRoasts: roastRepo.getTotalCount(),
-      totalLikes: roastRepo.getTotalLikes(),
-      stockpileSize: stockpileRepo.getStats().byStatus['available'] ?? 0,
-      burnedTokens: 0,
-      uptime: formatUptime(startTime),
-    }),
-    logger,
-  });
+  try {
+    activityLogger = new ActivityLogger({
+      feedPath: resolve(process.cwd(), config.ACTIVITY_FEED_PATH),
+      getStats: () => ({
+        totalRoasts: roastRepo.getTotalCount(),
+        totalLikes: roastRepo.getTotalLikes(),
+        stockpileSize: stockpileRepo.getStats().byStatus['available'] ?? 0,
+        burnedTokens: 0,
+        uptime: formatUptime(startTime),
+      }),
+      logger,
+    });
 
-  activityLogger.emit({ type: 'wake' });
-  activityLogger.setStatus('online');
+    activityLogger.emit({ type: 'wake' });
+    activityLogger.setStatus('online');
+  } catch (err) {
+    logger.error({ err }, 'Failed to initialize ActivityLogger — feed disabled for this session');
+  }
 }
 
 // --- LLM Providers (optional — bot works without them for manual eval) ---
@@ -463,7 +467,7 @@ if (activityLogger) {
       const stockpileSize = stockpileRepo.getStats().byStatus['available'] ?? 0;
       al.emit({
         type: 'stats',
-        data: { roastsToday, stockpileSize },
+        data: { count: roastsToday, stockpileSize },
       });
       return Promise.resolve();
     },
@@ -540,16 +544,19 @@ const shutdown = async () => {
   logger.info('Shutting down...');
   activityLogger?.emit({ type: 'sleep' });
   activityLogger?.setStatus('offline');
-  activityLogger?.flush();
-  scheduler.stop();
-  healthMonitor.stop();
-  if (bot) await bot.stop();
-  if (provider) {
-    await provider.waitForIdle(185_000);
-    provider.shutdown();
+  try {
+    scheduler.stop();
+    healthMonitor.stop();
+    if (bot) await bot.stop();
+    if (provider) {
+      await provider.waitForIdle(185_000);
+      provider.shutdown();
+    }
+    if (twitter?.shutdown) await twitter.shutdown();
+  } finally {
+    activityLogger?.flush();
+    db.close();
   }
-  if (twitter?.shutdown) await twitter.shutdown();
-  db.close();
   process.exit(0);
 };
 

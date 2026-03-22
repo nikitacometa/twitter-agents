@@ -353,7 +353,7 @@ Be honest. A 3 is "passable." A 5 is "this gets screenshotted."
   "bestIndex": 0,
   "researchNotes": "research facts + step 2 reasoning",
   "factCheckPassed": true,
-  "diaryThought": "1-2 sentence internal monologue for your public activity diary. Write as $BEEF about what you just researched or discovered. Reference specific findings. NOT the roast itself — your forensic note about the process. Max 150 chars."
+  "diaryThought": "1 sentence for your public activity diary. Write as $BEEF: lowercase, forensic voice. Cite a specific number or finding from the research — not the punchline. Example: 'deployer wallet moved 40% of supply 3 days after launch. the timing is forensic.' Max 150 chars."
 }`;
 }
 
@@ -497,7 +497,7 @@ Be honest. A 3 is "passable." A 5 is "this gets screenshotted."
   "bestIndex": 0,
   "researchNotes": "gut reaction + key facts",
   "factCheckPassed": true,
-  "diaryThought": "1-2 sentence internal monologue for your public activity diary. Write as $BEEF about what you just researched or discovered. Reference specific findings. NOT the roast itself — your forensic note about the process. Max 150 chars."
+  "diaryThought": "1 sentence for your public activity diary. Write as $BEEF: lowercase, forensic voice. Cite a specific number or finding from the research — not the punchline. Example: 'deployer wallet moved 40% of supply 3 days after launch. the timing is forensic.' Max 150 chars."
 }`;
 }
 
@@ -651,7 +651,7 @@ For each: what makes this better than the obvious take?
   "bestIndex": 0,
   "researchNotes": "slop diagnosis + key research facts",
   "factCheckPassed": true,
-  "diaryThought": "1-2 sentence internal monologue for your public activity diary. Write as $BEEF about what you just researched or discovered. Reference specific findings. NOT the roast itself — your forensic note about the process. Max 150 chars."
+  "diaryThought": "1 sentence for your public activity diary. Write as $BEEF: lowercase, forensic voice. Cite a specific number or finding from the research — not the punchline. Example: 'deployer wallet moved 40% of supply 3 days after launch. the timing is forensic.' Max 150 chars."
 }`;
 }
 
@@ -769,6 +769,6 @@ Write a single casual reply in $BEEF's voice. Match the energy of the message �
   "text": "your reply text",
   "tone": "one of: dry_wit | clap_back | deadpan | self_aware | friendly_roast",
   "mentionsBeef": false,
-  "diaryThought": "1 sentence internal monologue for your public diary. Write as $BEEF about this interaction. Max 120 chars."
+  "diaryThought": "1 sentence diary note as $BEEF about this interaction. Lowercase, forensic, self-aware. Not a roast — an observation. Max 120 chars."
 }`;
 }

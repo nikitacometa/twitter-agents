@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { existsSync, readFileSync, writeFileSync, mkdirSync, rmSync } from 'node:fs';
 import { resolve } from 'node:path';
+import type { Logger } from 'pino';
 import { ActivityLogger } from './activity-logger.js';
 import type { ActivityFeed, ActivityFeedStats } from './types.js';
 
@@ -14,7 +15,7 @@ function makeLogger() {
     warn: vi.fn(),
     error: vi.fn(),
     fatal: vi.fn(),
-  } as unknown as import('pino').Logger;
+  } as unknown as Logger;
 }
 
 function makeStats(): ActivityFeedStats {

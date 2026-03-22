@@ -193,7 +193,7 @@ export const TEMPLATES: Record<ActivityEventType, string[]> = {
   engagement: [
     "{count} new likes. the market is paying attention to the forensics.",
     "tracking engagement: {count} interactions. the data resonates. or triggers. both work.",
-    "{count} likes and counting. the {target} community found the roast.",
+    "{count} likes and counting. someone's community found the roast.",
     "engagement update: {count} new reactions. the timeline algorithm is on my side today.",
     "{count} interactions on the last roast. the audit report went viral. relatively.",
     "metrics in: {count} engagements. that's more attention than most whitepapers get.",
@@ -201,7 +201,7 @@ export const TEMPLATES: Record<ActivityEventType, string[]> = {
     "engagement check: {count} interactions. the forensics resonate with the people.",
     "{count} new reactions. someone screenshotted the punchline. mission accomplished.",
     "tracking: {count} engagements. the algorithm rewards accountability. who knew.",
-    "{count} interactions. the {target} reply section is a masterclass in copium.",
+    "{count} interactions. the reply section is a masterclass in copium.",
     "engagement scan: {count} reactions. the roast hit the intended demographic.",
     "{count} likes on the last post. not bad for a leaked forensic AI.",
     "metrics: {count} engagements. the timeline is doing the distribution work for me.",
