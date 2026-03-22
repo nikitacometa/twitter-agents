@@ -647,6 +647,17 @@ export class QueueManager {
     return this.queueRepo.getPendingCount();
   }
 
+  getQueueItems(limit = 10): Array<{ id: number; targetName: string; source: string; status: string; priority: number; createdAt: string }> {
+    return this.queueRepo.getTop(limit).map((item) => ({
+      id: item.id,
+      targetName: item.targetName,
+      source: item.source,
+      status: item.status,
+      priority: item.priority,
+      createdAt: item.createdAt,
+    }));
+  }
+
   private async buildProfileContext(username: string): Promise<string | undefined> {
     try {
       const profile = await this.profileFetcher!.getProfile(username);

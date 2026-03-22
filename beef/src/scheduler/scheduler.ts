@@ -8,8 +8,13 @@ export interface ScheduledJob {
   jitterMs?: number;
 }
 
+export interface JobInfo {
+  name: string;
+  nextFire: Date | null;
+}
+
 export class Scheduler {
-  private readonly jobs: CronJob[] = [];
+  private readonly jobs: Array<{ cron: CronJob; name: string }> = [];
   private readonly logger: Logger;
 
   constructor(logger: Logger) {
@@ -38,22 +43,29 @@ export class Scheduler {
       timeZone: 'UTC',
     });
 
-    this.jobs.push(cronJob);
+    this.jobs.push({ cron: cronJob, name: job.name });
     this.logger.info({ job: job.name, cron: job.cronTime, jitterMs: job.jitterMs }, 'Job registered');
   }
 
   start(): void {
-    for (const job of this.jobs) {
-      job.start();
+    for (const { cron } of this.jobs) {
+      cron.start();
     }
     this.logger.info({ jobCount: this.jobs.length }, 'Scheduler started');
   }
 
   stop(): void {
-    for (const job of this.jobs) {
-      job.stop();
+    for (const { cron } of this.jobs) {
+      cron.stop();
     }
     this.logger.info('Scheduler stopped');
+  }
+
+  getJobsInfo(): JobInfo[] {
+    return this.jobs.map(({ cron, name }) => ({
+      name,
+      nextFire: cron.running ? cron.nextDate().toJSDate() : null,
+    }));
   }
 }
 

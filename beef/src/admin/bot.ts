@@ -17,6 +17,7 @@ import type { RoastSession } from './types.js';
 import { generateRoasts } from './roast-generator.js';
 import type { EvaluationMode } from '@roast/roast-engine.js';
 import type { PollResult } from '@twitter/mention-handler.js';
+import type { JobInfo } from '@scheduler/scheduler.js';
 import {
   escapeHtml,
   formatSessionSummary,
@@ -52,6 +53,7 @@ export function createBot(opts: {
   stockpileRepo?: StockpileRepository;
   postingMode?: { autonomous: boolean; mentionReplies: boolean };
   pollMentions?: () => Promise<PollResult>;
+  getSchedulerJobs?: () => JobInfo[];
   twitterEnabled?: boolean;
   beefEnv?: string;
 }): Bot {
@@ -325,13 +327,12 @@ export function createBot(opts: {
   });
 
   bot.command('status', async (ctx) => {
+    const modeEmoji = !provider ? '⚪' : provider.mode === 'primary' ? '🟢' : provider.mode === 'degraded' ? '🟡' : '🔴';
     const providerStatus = provider
-      ? `Provider: <b>${provider.mode}</b>`
+      ? `Provider: ${modeEmoji} <b>${provider.mode}</b>`
       : 'Provider: <b>not configured</b>';
     const stats = feedbackRepo.getStats();
-    const adminStr = openAccess ? 'open access' : adminIds.length > 0 ? adminIds.map(String).join(', ') : 'no admins configured (open)';
     const runtime = configRepo?.getRuntime();
-    const queueCount = queueManager?.getPendingCount() ?? 0;
     const postingStr = postingMode
       ? `Posting: autonomous=<b>${String(postingMode.autonomous)}</b>, replies=<b>${String(postingMode.mentionReplies)}</b>`
       : '';
@@ -342,7 +343,34 @@ export function createBot(opts: {
       const available = sStats.byStatus['available'] ?? 0;
       const served = (sStats.byStatus['served_bot'] ?? 0) + (sStats.byStatus['served_landing'] ?? 0);
       const avgStr = sStats.avgScore !== null ? ` (avg ${sStats.avgScore.toFixed(1)})` : '';
-      stockpileStr = `Stockpile: <b>${String(available)}</b> available, ${String(served)} served, ${String(sStats.total)} total${avgStr}`;
+      stockpileStr = `Stockpile: <b>${String(available)}</b> ready, ${String(served)} served, ${String(sStats.total)} total${avgStr}`;
+    }
+
+    // Queue items detail
+    const queueItems = queueManager?.getQueueItems(10) ?? [];
+    const queueCount = queueManager?.getPendingCount() ?? 0;
+    let queueDetail = `Queue: <b>${String(queueCount)}</b> pending`;
+    if (queueItems.length > 0) {
+      const sourceEmoji: Record<string, string> = {
+        mention: '💬', autonomous: '🤖', manual: '👤', casual_reply: '💭',
+      };
+      const itemLines = queueItems.map((item) => {
+        const emoji = sourceEmoji[item.source] ?? '📌';
+        return `  ${emoji} #${String(item.id)} <b>${escapeHtml(item.targetName)}</b> [${item.source}]`;
+      });
+      queueDetail += '\n' + itemLines.join('\n');
+    }
+
+    // Next scheduler fire times
+    let schedulerStr = '';
+    if (opts.getSchedulerJobs) {
+      const jobs = opts.getSchedulerJobs();
+      const jobLines = jobs.map((j) => {
+        if (!j.nextFire) return `  ⏸ ${j.name}: stopped`;
+        const mins = Math.max(0, Math.round((j.nextFire.getTime() - Date.now()) / 60_000));
+        return `  ⏱ ${j.name}: ~${String(mins)}m`;
+      });
+      schedulerStr = '<b>Scheduler:</b>\n' + jobLines.join('\n');
     }
 
     await ctx.reply(
@@ -350,13 +378,15 @@ export function createBot(opts: {
         `<b>🤖 Bot Status</b> [${escapeHtml((opts.beefEnv ?? 'unknown').toUpperCase())}]`,
         '',
         providerStatus,
-        `Total ratings: <b>${String(stats.total)}</b>`,
-        `Queue: <b>${String(queueCount)}</b> pending`,
-        stockpileStr,
-        runtime ? `Paused: <b>${String(runtime.paused)}</b>` : '',
-        postingStr,
-        `Access: ${adminStr}`,
+        runtime?.paused ? '⏸ <b>PAUSED</b>' : '',
         `Twitter: <b>${opts.twitterEnabled ? 'enabled' : 'disabled'}</b>`,
+        postingStr,
+        `Ratings: <b>${String(stats.total)}</b>`,
+        '',
+        queueDetail,
+        stockpileStr,
+        '',
+        schedulerStr,
       ].filter(Boolean).join('\n'),
       { parse_mode: 'HTML' },
     );

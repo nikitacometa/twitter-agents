@@ -377,6 +377,7 @@ if (config.TELEGRAM_BOT_TOKEN) {
       mentionReplies: config.ENABLE_MENTION_REPLIES,
     },
     pollMentions: mentionHandler ? () => mentionHandler.poll() : undefined,
+    getSchedulerJobs: () => scheduler.getJobsInfo(),
     twitterEnabled: config.ENABLE_TWITTER,
     beefEnv: config.BEEF_ENV,
   });
