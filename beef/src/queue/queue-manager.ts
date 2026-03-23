@@ -29,6 +29,7 @@ export interface QueueProcessResult {
   posted?: boolean;
   savedOnly?: boolean;
   pendingApproval?: boolean;
+  postBlocked?: boolean;
   roastId?: number;
   tweetId?: string;
   target?: string;
@@ -300,15 +301,16 @@ export class QueueManager {
 
           const postResult = await this.postOrSkip(stockpiled.tweetText, replyToId, item.source);
 
-          if (postResult === 'pending_approval') {
+          if (postResult === 'pending_approval' || postResult === 'reply_blocked') {
+            const blocked = postResult === 'reply_blocked';
             this.pendingApprovals.set(roastId, { stockpileId: stockpiled.id, mentionTweetId });
             this.queueRepo.complete(item.id);
             this.logger.info(
-              { queueId: item.id, roastId, target: item.targetName, fromStockpile: true },
-              'Stockpiled roast pending approval',
+              { queueId: item.id, roastId, target: item.targetName, fromStockpile: true, blocked },
+              blocked ? 'Stockpiled roast reply blocked (403) — pending manual review' : 'Stockpiled roast pending approval',
             );
             return {
-              dequeued: true, pendingApproval: true, roastId, target: item.targetName,
+              dequeued: true, pendingApproval: true, postBlocked: blocked || undefined, roastId, target: item.targetName,
               fromStockpile: true, postedText: stockpiled.tweetText,
               roastSource: item.source, replyToId,
             };
@@ -622,15 +624,16 @@ export class QueueManager {
 
     const postResult = await this.postOrSkip(tweetText, replyToId, item.source);
 
-    if (postResult === 'pending_approval') {
+    if (postResult === 'pending_approval' || postResult === 'reply_blocked') {
+      const blocked = postResult === 'reply_blocked';
       this.pendingApprovals.set(roastId, { mentionTweetId: extractMentionTweetId(item.context) });
       this.queueRepo.complete(item.id);
       this.logger.info(
-        { queueId: item.id, roastId, target: item.targetName, evaluationScore, newStockpileCount },
-        'Roast pending approval',
+        { queueId: item.id, roastId, target: item.targetName, evaluationScore, newStockpileCount, blocked },
+        blocked ? 'Reply blocked (403) — pending manual review' : 'Roast pending approval',
       );
       return {
-        dequeued: true, pendingApproval: true, roastId, target: item.targetName,
+        dequeued: true, pendingApproval: true, postBlocked: blocked || undefined, roastId, target: item.targetName,
         evaluationScore, newStockpileCount, postedText: tweetText, stockpiledVariants,
         roastSource: item.source, replyToId,
       };
@@ -748,14 +751,15 @@ export class QueueManager {
 
     const postResult = await this.postOrSkip(result.text, replyToId, 'casual_reply');
 
-    if (postResult === 'pending_approval') {
+    if (postResult === 'pending_approval' || postResult === 'reply_blocked') {
+      const blocked = postResult === 'reply_blocked';
       this.pendingApprovals.set(roastId, {});
       this.queueRepo.complete(item.id);
       this.logger.info(
-        { queueId: item.id, roastId, target: item.targetName, tone: result.tone },
-        'Casual reply pending approval',
+        { queueId: item.id, roastId, target: item.targetName, tone: result.tone, blocked },
+        blocked ? 'Casual reply blocked (403) — pending manual review' : 'Casual reply pending approval',
       );
-      return { dequeued: true, pendingApproval: true, roastId, target: item.targetName, postedText: result.text, roastSource: 'casual_reply', replyToId };
+      return { dequeued: true, pendingApproval: true, postBlocked: blocked || undefined, roastId, target: item.targetName, postedText: result.text, roastSource: 'casual_reply', replyToId };
     }
 
     if (postResult === 'no_twitter') {
@@ -794,12 +798,23 @@ export class QueueManager {
     text: string,
     replyToId: string | undefined,
     source: RoastSource,
-  ): Promise<{ tweetId: string } | null | 'no_twitter' | 'pending_approval'> {
+  ): Promise<{ tweetId: string } | null | 'no_twitter' | 'pending_approval' | 'reply_blocked'> {
     if (this.requiresApproval(source)) return 'pending_approval';
     if (!this.twitter) return 'no_twitter';
-    return replyToId
-      ? this.twitter.replyToTweet(text, replyToId)
-      : this.twitter.postTweet(text);
+
+    try {
+      return replyToId
+        ? await this.twitter.replyToTweet(text, replyToId)
+        : await this.twitter.postTweet(text);
+    } catch (error) {
+      const msg = getErrorMessage(error);
+      // 403 on reply = permanent (thread restricted by author). Escalate to manual review.
+      if (msg.includes('403') && replyToId) {
+        this.logger.warn({ replyToId, error: msg.slice(0, 200) }, 'Reply blocked (403) — escalating to manual review');
+        return 'reply_blocked';
+      }
+      throw error;
+    }
   }
 
   getPendingCount(): number {

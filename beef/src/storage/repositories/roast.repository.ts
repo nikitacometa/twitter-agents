@@ -45,6 +45,7 @@ export class RoastRepository {
   private readonly totalCountStmt: Database.Statement;
   private readonly totalLikesStmt: Database.Statement;
   private readonly pendingApprovalStmt: Database.Statement;
+  private readonly rejectDuplicatePendingStmt: Database.Statement;
 
   constructor(db: Database.Database) {
     this.insertStmt = db.prepare(`
@@ -100,6 +101,14 @@ export class RoastRepository {
     this.pendingApprovalStmt = db.prepare(
       "SELECT * FROM roasts WHERE status = 'pending_approval' ORDER BY created_at DESC",
     );
+
+    this.rejectDuplicatePendingStmt = db.prepare(`
+      UPDATE roasts SET status = 'rejected'
+      WHERE status = 'pending_approval'
+      AND id NOT IN (
+        SELECT MAX(id) FROM roasts WHERE status = 'pending_approval' GROUP BY target_name
+      )
+    `);
   }
 
   insert(roast: InsertRoast): number {
@@ -172,6 +181,14 @@ export class RoastRepository {
 
   getPendingApproval(): PostedRoast[] {
     return (this.pendingApprovalStmt.all() as RoastRow[]).map(mapRow);
+  }
+
+  /**
+   * Reject duplicate pending_approval roasts — keep only the latest per target.
+   * Returns count of rejected duplicates.
+   */
+  rejectDuplicatePending(): number {
+    return this.rejectDuplicatePendingStmt.run().changes;
   }
 }
 

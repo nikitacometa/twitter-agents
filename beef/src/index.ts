@@ -315,21 +315,33 @@ async function notifyQueueResult(
   if (result.pendingApproval && result.roastId) {
     const stockpileTag = result.fromStockpile ? ' [stockpile]' : '';
     const isReply = result.roastSource && ['mention', 'reply_guy', 'casual_reply'].includes(result.roastSource);
-    const typeEmoji = isReply ? '💬' : '📢';
+    const typeEmoji = result.postBlocked ? '⚠️' : isReply ? '💬' : '📢';
     const sourceLabel = result.roastSource ?? source;
-    lines.push(`${typeEmoji} <b>Review${stockpileTag}</b> — ${escHtml(result.target ?? '?')} <i>(${sourceLabel})</i>`);
-    if (result.replyToId) lines.push(`Reply to: <code>${escHtml(result.replyToId)}</code>`);
+    const blockedTag = result.postBlocked ? ' [reply blocked]' : '';
+    lines.push(`${typeEmoji} <b>Review${stockpileTag}${blockedTag}</b> — ${escHtml(result.target ?? '?')} <i>(${sourceLabel})</i>`);
+    if (result.postBlocked) {
+      lines.push('⛔ Reply blocked (403) — thread restricted by author');
+    }
+    if (result.replyToId) {
+      const tweetUrl = `https://x.com/i/status/${result.replyToId}`;
+      lines.push(result.postBlocked ? `Target: ${tweetUrl}` : `Reply to: <code>${escHtml(result.replyToId)}</code>`);
+    }
     if (result.evaluationScore) lines.push(`Eval: <b>${result.evaluationScore.toFixed(1)}</b>/5`);
     if (result.newStockpileCount) lines.push(`Stockpiled: <b>${String(result.newStockpileCount)}</b> new`);
 
     const text = lines.join('\n');
     const isReplySource = result.roastSource && ['mention', 'reply_guy', 'casual_reply'].includes(result.roastSource);
-    const buttons = [
-      { text: 'Post', callback_data: `approve:${String(result.roastId)}` },
-      { text: 'Skip', callback_data: `reject:${String(result.roastId)}` },
-    ];
-    if (isReplySource) {
-      buttons.push({ text: '🔄 Regenerate', callback_data: `regenerate:${String(result.roastId)}` });
+    const buttons: Array<{ text: string; callback_data: string }> = [];
+    if (result.postBlocked) {
+      // Reply is permanently blocked — only offer standalone or skip
+      buttons.push({ text: 'Post standalone', callback_data: `standalone:${String(result.roastId)}` });
+      buttons.push({ text: 'Skip', callback_data: `reject:${String(result.roastId)}` });
+    } else {
+      buttons.push({ text: 'Post', callback_data: `approve:${String(result.roastId)}` });
+      buttons.push({ text: 'Skip', callback_data: `reject:${String(result.roastId)}` });
+      if (isReplySource) {
+        buttons.push({ text: '🔄 Regenerate', callback_data: `regenerate:${String(result.roastId)}` });
+      }
     }
     const keyboard = { inline_keyboard: [buttons] };
 
@@ -533,6 +545,12 @@ if (config.TELEGRAM_BOT_TOKEN) {
         { admins: config.TELEGRAM_ADMIN_IDS, openAccess: config.TELEGRAM_OPEN_ACCESS },
         'Telegram bot polling started',
       );
+
+      // Clean up duplicate pending_approval roasts before showing recovery list
+      const rejectedDuplicates = roastRepo.rejectDuplicatePending();
+      if (rejectedDuplicates > 0) {
+        logger.info({ rejectedDuplicates }, 'Rejected duplicate pending_approval roasts on startup');
+      }
 
       // Recover orphaned pending_approval roasts after restart
       const pending = roastRepo.getPendingApproval();
