@@ -180,7 +180,7 @@ export function createBot(opts: {
         '<b>📦 Stockpile</b>',
         '<code>/stockpile &lt;target&gt;</code> — list roasts for a target',
         '<code>/stockpile top [N]</code> — top N ready to post <i>(default 5)</i>',
-        '<code>/unrated</code> — roasts missing human score',
+        '<code>/unrated [N]</code> — blind review of unrated roasts',
         '<code>/srate &lt;id&gt; &lt;1-5&gt;</code> — set human score',
         '<code>/sdel &lt;id&gt;</code> — delete from stockpile',
         '<code>/sadd &lt;target&gt;</code> — add text (reply to msg or next line)',
@@ -922,6 +922,19 @@ export function createBot(opts: {
     );
   });
 
+  bot.command('cleanup', async (ctx) => {
+    if (!roastRepo) {
+      await ctx.reply('⚠️ Roast repository not available.');
+      return;
+    }
+    const rejected = roastRepo.rejectDuplicatePending();
+    const pendingLeft = roastRepo.getPendingApproval().length;
+    await ctx.reply(
+      `🧹 Cleanup: <b>${String(rejected)}</b> duplicate pending roasts rejected\n📋 Remaining: <b>${String(pendingLeft)}</b> unique pending`,
+      { parse_mode: 'HTML' },
+    );
+  });
+
   bot.command('promote', async (ctx) => {
     if (!stockpileRepo) {
       await ctx.reply('⚠️ Stockpile not configured.');
@@ -1088,17 +1101,28 @@ export function createBot(opts: {
       return;
     }
 
-    const title = `<b>📋 Unrated Roasts</b> (${String(roasts.length)})`;
-    const fullMessage = formatStockpileList(roasts, title, false);
+    await ctx.reply(
+      `📋 <b>Unrated Roasts</b> (${String(roasts.length)})\n\n<i>Оцени от 1 до 5:</i>`,
+      { parse_mode: 'HTML' },
+    );
 
-    if (fullMessage.length <= 4000) {
-      await ctx.reply(fullMessage, { parse_mode: 'HTML' });
-    } else {
-      await ctx.reply(title, { parse_mode: 'HTML' });
-      for (let i = 0; i < roasts.length; i++) {
-        const msg = formatStockpileRoast(roasts[i]!, i);
-        await ctx.reply(msg, { parse_mode: 'HTML' });
-      }
+    for (const roast of roasts) {
+      const text = roast.tweetText.length > 220
+        ? roast.tweetText.slice(0, 219) + '…'
+        : roast.tweetText;
+
+      const keyboard = new InlineKeyboard()
+        .text('1', `hscore:${String(roast.id)}:1`)
+        .text('2', `hscore:${String(roast.id)}:2`)
+        .text('3', `hscore:${String(roast.id)}:3`)
+        .text('4', `hscore:${String(roast.id)}:4`)
+        .text('5', `hscore:${String(roast.id)}:5`)
+        .text('🗑', `hdel:${String(roast.id)}`);
+
+      await ctx.reply(
+        `<b>#${String(roast.id)}</b> ${escapeHtml(roast.targetName)}  AI: <code>?</code>\n\n<pre>${escapeHtml(text)}</pre>`,
+        { parse_mode: 'HTML', reply_markup: keyboard },
+      );
     }
   });
 
@@ -1469,6 +1493,42 @@ export function createBot(opts: {
           show_alert: true,
         });
       }
+    } else if (data.startsWith('hscore:') && stockpileRepo) {
+      const parts = data.split(':');
+      const roastId = parseInt(parts[1] ?? '', 10);
+      const score = parseInt(parts[2] ?? '', 10);
+      if (Number.isNaN(roastId) || Number.isNaN(score) || score < 1 || score > 5) {
+        await ctx.answerCallbackQuery({ text: 'Invalid data', show_alert: true });
+        return;
+      }
+      const roast = stockpileRepo.getById(roastId);
+      if (!roast) {
+        await ctx.answerCallbackQuery({ text: 'Roast not found', show_alert: true });
+        return;
+      }
+      stockpileRepo.setHumanScore(roastId, score);
+      await ctx.editMessageText(
+        `<b>#${String(roastId)}</b> ${escapeHtml(roast.targetName)}  Human: <b>${String(score)}</b>\n\n<pre>${escapeHtml(roast.tweetText.length > 220 ? roast.tweetText.slice(0, 219) + '…' : roast.tweetText)}</pre>`,
+        { parse_mode: 'HTML' },
+      );
+      await ctx.answerCallbackQuery({ text: `Scored ${String(score)}/5` });
+    } else if (data.startsWith('hdel:') && stockpileRepo) {
+      const roastId = parseInt(data.slice(5), 10);
+      if (Number.isNaN(roastId)) {
+        await ctx.answerCallbackQuery({ text: 'Invalid ID', show_alert: true });
+        return;
+      }
+      const roast = stockpileRepo.getById(roastId);
+      if (!roast) {
+        await ctx.answerCallbackQuery({ text: 'Already deleted', show_alert: true });
+        return;
+      }
+      stockpileRepo.deleteById(roastId);
+      await ctx.editMessageText(
+        `🗑 <b>#${String(roastId)}</b> ${escapeHtml(roast.targetName)} — deleted`,
+        { parse_mode: 'HTML' },
+      );
+      await ctx.answerCallbackQuery({ text: 'Deleted' });
     } else if (data.startsWith('regenerate:') && queueManager) {
       const roastId = parseInt(data.slice(11), 10);
       if (Number.isNaN(roastId)) {
