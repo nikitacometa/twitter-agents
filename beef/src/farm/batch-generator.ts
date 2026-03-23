@@ -24,6 +24,7 @@ import { pickMutations, formatMutationSection } from './mutations.js';
 import { classifyFreshness, calculateExpiry } from './freshness.js';
 import type { Mutation, InsertFarmAttempt } from './types.js';
 import { getErrorMessage } from '@common/utils/error.util.js';
+import type { TwitterEnricher } from './twitter-enricher.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const DEFAULT_CHARACTER_PATH = resolve(__dirname, '../../characters/beef-bot.json');
@@ -36,6 +37,7 @@ export interface BatchGeneratorOptions {
   configRepo?: ConfigRepository;
   exampleRepo?: ExternalExampleRepository;
   patternRepo?: RoastPatternRepository;
+  twitterEnricher?: TwitterEnricher;
   logger: Logger;
   characterPath?: string;
   variantsPerTarget?: number;
@@ -59,10 +61,13 @@ export class BatchGenerator {
   private readonly configRepo: ConfigRepository | undefined;
   private readonly exampleRepo: ExternalExampleRepository | undefined;
   private readonly patternRepo: RoastPatternRepository | undefined;
+  private readonly twitterEnricher: TwitterEnricher | null;
   private readonly logger: Logger;
   private readonly character: CharacterConfig;
   private readonly variantsPerTarget: number;
   private readonly mutationCount: number;
+  /** Cache enrichment results to avoid re-fetching for the same target across strategies */
+  private readonly enrichmentCache = new Map<string, string | null>();
 
   constructor(opts: BatchGeneratorOptions) {
     this.provider = opts.provider;
@@ -72,6 +77,7 @@ export class BatchGenerator {
     this.configRepo = opts.configRepo;
     this.exampleRepo = opts.exampleRepo;
     this.patternRepo = opts.patternRepo;
+    this.twitterEnricher = opts.twitterEnricher ?? null;
     this.logger = opts.logger;
     this.variantsPerTarget = opts.variantsPerTarget ?? 3;
     this.mutationCount = opts.mutationCount ?? 2;
@@ -119,15 +125,19 @@ export class BatchGenerator {
 
   /**
    * Run all 3 strategies for a single target, each with its own mutations.
+   * For Twitter handles (@username), enriches with profile data first.
    * Merges results into one GenerationResult.
    */
   private async generateMultiStrategy(
     targetName: string,
     targetType: string,
   ): Promise<GenerationResult> {
+    // Enrich Twitter handles before generation
+    const profileContext = await this.enrichTwitterHandle(targetName);
+
     const strategyResults = await Promise.allSettled(
       PROMPT_STRATEGIES.map((strategy) =>
-        this.generateForTarget(targetName, targetType, strategy),
+        this.generateForTarget(targetName, targetType, strategy, profileContext),
       ),
     );
 
@@ -169,6 +179,7 @@ export class BatchGenerator {
     targetName: string,
     targetType: string,
     strategy: PromptStrategy,
+    profileContext?: string | null,
   ): Promise<GenerationResult> {
     const mutations = pickMutations(this.mutationCount);
     const mutationSection = formatMutationSection(mutations);
@@ -179,7 +190,7 @@ export class BatchGenerator {
       'Generating roasts',
     );
 
-    const basePrompt = this.buildStrategyPrompt(strategy, targetName);
+    const basePrompt = this.buildStrategyPrompt(strategy, targetName, profileContext ?? undefined);
     const prompt = mutationSection
       ? basePrompt + '\n' + mutationSection
       : basePrompt;
@@ -241,8 +252,8 @@ export class BatchGenerator {
     };
   }
 
-  private buildStrategyPrompt(strategy: PromptStrategy, targetName: string): string {
-    const memory = buildCreativeMemory({
+  private buildStrategyPrompt(strategy: PromptStrategy, targetName: string, profileContext?: string): string {
+    let memory = buildCreativeMemory({
       targetName,
       logger: this.logger,
       feedbackRepo: this.feedbackRepo,
@@ -252,6 +263,16 @@ export class BatchGenerator {
       stockpileRepo: this.stockpile ?? undefined,
       farmAttemptRepo: this.farmAttempt,
     });
+
+    // Inject Twitter profile data into creative memory
+    if (profileContext) {
+      if (memory) {
+        memory = { ...memory, profileContext };
+      } else {
+        memory = { fireExamples: [], profileContext };
+      }
+    }
+
     switch (strategy) {
       case 'rubric':
         return buildRoastPrompt(targetName, this.character, this.variantsPerTarget, memory);
@@ -259,6 +280,41 @@ export class BatchGenerator {
         return buildPersonaPrompt(targetName, this.character, this.variantsPerTarget, memory);
       case 'adversarial':
         return buildAdversarialPrompt(targetName, this.character, this.variantsPerTarget, memory);
+    }
+  }
+
+  /**
+   * Enrich a Twitter handle with profile data before generation.
+   * Returns profileContext string or null if not a handle / enricher unavailable.
+   */
+  private async enrichTwitterHandle(targetName: string): Promise<string | null> {
+    if (!targetName.startsWith('@') || !this.twitterEnricher?.isConfigured) {
+      return null;
+    }
+
+    // Check cache first (avoid re-fetching across strategy runs)
+    const cached = this.enrichmentCache.get(targetName);
+    if (cached !== undefined) return cached;
+
+    try {
+      this.logger.info({ target: targetName }, 'Enriching Twitter handle before generation');
+      const result = await this.twitterEnricher.enrich(targetName);
+
+      const profileContext = result?.profileContext ?? null;
+      this.enrichmentCache.set(targetName, profileContext);
+
+      if (profileContext) {
+        this.logger.info(
+          { target: targetName, contextLength: profileContext.length, hasData: result?.hasData },
+          'Twitter enrichment complete',
+        );
+      }
+
+      return profileContext;
+    } catch (err) {
+      this.logger.warn({ err: getErrorMessage(err), target: targetName }, 'Twitter enrichment failed');
+      this.enrichmentCache.set(targetName, null);
+      return null;
     }
   }
 

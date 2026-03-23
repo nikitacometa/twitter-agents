@@ -31,6 +31,7 @@ import { ProviderManager } from '@agent/provider-manager.js';
 import { SelfEvaluator } from './self-evaluator.js';
 import { BatchGenerator } from './batch-generator.js';
 import { TargetDiscoverer } from './target-discoverer.js';
+import { TwitterEnricher } from './twitter-enricher.js';
 import { createFarmLogger } from './logger.js';
 import { exportNdjson, importNdjson, exportLandingJson } from './sync.js';
 import { formatFarmSummary, formatEvaluateSummary, sendFarmNotification } from './notify.js';
@@ -57,6 +58,73 @@ function createProviderFrom(db: ReturnType<typeof createDatabase>, logger: Retur
   const primary = new ClaudeCodeProvider(logger, llmLog);
   const alerter = { send: (msg: string) => Promise.resolve(logger.warn({ alert: msg }, 'Farm alert')) };
   return new ProviderManager(primary, null, alerter, logger);
+}
+
+/**
+ * Create a Twitter enricher for the farm pipeline.
+ * Tries Scraper first (richer data), then Official API, then returns null.
+ */
+async function createTwitterEnricher(logger: ReturnType<typeof createFarmLogger>): Promise<TwitterEnricher | undefined> {
+  const scraperUsername = process.env['TWITTER_USERNAME'];
+  const scraperPassword = process.env['TWITTER_PASSWORD'];
+
+  // Try Scraper (preferred — richer data, no API quota)
+  if (scraperUsername && scraperPassword) {
+    try {
+      const { Scraper } = await import('@the-convocation/twitter-scraper');
+      const { cycleTLSFetch } = await import('@the-convocation/twitter-scraper/cycletls');
+      const scraper = new Scraper({ fetch: cycleTLSFetch as unknown as typeof fetch });
+
+      // Try saved cookies first
+      const { CookieStore } = await import('@twitter/cookie-store.js');
+      const cookieStore = new CookieStore(logger);
+      const savedCookies = cookieStore.load();
+
+      if (savedCookies) {
+        await scraper.setCookies(savedCookies);
+        const loggedIn = await scraper.isLoggedIn();
+        if (loggedIn) {
+          logger.info('Farm enricher: scraper logged in via saved cookies');
+          return new TwitterEnricher({ scraper, logger });
+        }
+      }
+
+      // Login with credentials
+      await scraper.login(scraperUsername, scraperPassword, process.env['TWITTER_PHONE'], process.env['TWITTER_2FA_SECRET']);
+      const loggedIn = await scraper.isLoggedIn();
+      if (loggedIn) {
+        logger.info('Farm enricher: scraper logged in via credentials');
+        return new TwitterEnricher({ scraper, logger });
+      }
+    } catch (err) {
+      logger.warn({ err }, 'Farm enricher: scraper initialization failed');
+    }
+  }
+
+  // Try Official API
+  const apiKey = process.env['TWITTER_API_KEY'];
+  const apiSecret = process.env['TWITTER_API_SECRET'];
+  const accessToken = process.env['TWITTER_ACCESS_TOKEN'];
+  const accessSecret = process.env['TWITTER_ACCESS_SECRET'];
+
+  if (apiKey && apiSecret && accessToken && accessSecret) {
+    try {
+      const { TwitterApi } = await import('twitter-api-v2');
+      const apiClient = new TwitterApi({
+        appKey: apiKey,
+        appSecret: apiSecret,
+        accessToken,
+        accessSecret,
+      });
+      logger.info('Farm enricher: initialized with Official API');
+      return new TwitterEnricher({ apiClient, logger });
+    } catch (err) {
+      logger.warn({ err }, 'Farm enricher: Official API initialization failed');
+    }
+  }
+
+  logger.debug('Farm enricher: no Twitter credentials available — enrichment disabled');
+  return undefined;
 }
 
 function buildStats(
@@ -236,10 +304,13 @@ program
     let discoveredPending: ReturnType<typeof farmTarget.getPending> = [];
 
     if (opts.targets) {
-      targets = opts.targets.split(',').map((name) => ({
-        name: name.trim(),
-        type: 'project',
-      }));
+      targets = opts.targets.split(',').map((name) => {
+        const trimmed = name.trim();
+        return {
+          name: trimmed,
+          type: trimmed.startsWith('@') ? 'person' : 'project',
+        };
+      });
     } else if (opts.fromDiscovered) {
       const limit = parseInt(opts.limit, 10);
       discoveredPending = farmTarget.getPending(limit);
@@ -262,6 +333,7 @@ program
 
     console.log(`Generating ${String(variantsPerTarget)} variants for ${String(targets.length)} targets...\n`);
 
+    const enricher = await createTwitterEnricher(logger);
     const generator = new BatchGenerator({
       provider,
       farmAttempt,
@@ -269,6 +341,7 @@ program
       logger,
       variantsPerTarget,
       mutationCount,
+      twitterEnricher: enricher,
     });
 
     const results = await generator.generateBatch(targets, concurrency);
@@ -611,6 +684,7 @@ program
 
         console.log(`Generating ${String(variantsPerTarget)} variants for ${String(pending.length)} targets...\n`);
 
+        const enricher = await createTwitterEnricher(logger);
         const generator = new BatchGenerator({
           provider,
           farmAttempt,
@@ -618,6 +692,7 @@ program
           logger,
           variantsPerTarget,
           mutationCount,
+          twitterEnricher: enricher,
         });
 
         const genTargets = pending.map((t) => ({ name: t.name, type: t.type }));
