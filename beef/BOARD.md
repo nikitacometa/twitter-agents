@@ -12,7 +12,7 @@ Status: `[ ]` pending, `[~]` in progress, `[x]` done, `[!]` blocked
 
 [x] #I1-1 — Set TELEGRAM_ADMIN_IDS (<admin_id_1>, <admin_id_2>)
 [x] #I1-2 — Fix generate command race condition
-[x] #I1-3 — Prompt injection input sanitization
+[x] #I1-3 — Prompt injection input sanitization (targetName added to all 6 builders 2026-03-23)
 [x] #I1-4 — Extract shared evaluation module
 [x] #I1-5 — Integrate evaluation into RoastEngine (quick/serious modes)
 [x] #I1-6 — Fix single-judge FUNNY veto (majority-based)
@@ -26,7 +26,7 @@ Status: `[ ]` pending, `[~]` in progress, `[x]` done, `[!]` blocked
 
 [ ] #B-1 — ISP proxy setup (Decodo ~$3-5/мес) + PROXY_URL in env schema + wire into scraper
 [ ] #B-2 — DB backup cron on VPS
-[ ] #B-3 — Replace auto re-login with Telegram alert on cookie expiry
+[x] #B-3 — Replace auto re-login with Telegram alert on cookie expiry
 [ ] #B-4 — Circuit breaker for Error 226 (3x/1h → disable 6h → Telegram alert)
 
 ## Backlog: Infrastructure
@@ -44,7 +44,7 @@ Status: `[ ]` pending, `[~]` in progress, `[x]` done, `[!]` blocked
 ## Backlog: Content Quality
 
 [x] #B-14 — Split getRandomExamples into roast vs reply pools (casualReplies leaked into roast prompts)
-[ ] #B-15 — Curate 10 few-shot examples for 5 empty angles (DATA_BOMB, TIMELINE, COMPARISON, RHETORICAL, RULE_OF_THREE)
+[!] #B-15 — HIGH PRIORITY: Curate 10 few-shot examples for 5 empty angles (DATA_BOMB, TIMELINE, COMPARISON, RHETORICAL, RULE_OF_THREE) — blocked on human feedback revision first
 [ ] #B-16 — Overused CT phrases pass prefilter (expand banned patterns)
 [ ] #B-17 — Missing examples for sentence structures J/K
 [ ] #B-18 — No temporal calibration (dates in roasts become stale)
