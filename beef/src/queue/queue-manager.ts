@@ -125,7 +125,7 @@ export class QueueManager {
 
     if (isQuietHour()) {
       this.logger.debug('Quiet hours — skipping queue processing');
-      return { dequeued: false, error: 'Quiet hours (2-7 UTC)' };
+      return { dequeued: false, error: 'Quiet hours (5-10 UTC)' };
     }
 
     const todayCount = this.roastRepo.getTodayCount('autonomous');

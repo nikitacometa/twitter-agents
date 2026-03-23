@@ -329,7 +329,7 @@ Guard middleware фильтрует **все** сообщения до обра�
 
 | # | Задача | Файлы | Описание |
 |---|--------|-------|----------|
-| 4.1 | Human-like jitter module | `scheduler/jitter.ts` | Quiet hours (2–7 UTC), burst patterns (2–3 posts close together), distraction delays (random 5–45 min gaps). Mimics human: не постит ровно каждые 2 часа |
+| 4.1 | Human-like jitter module | `scheduler/jitter.ts` | Quiet hours (5–10 UTC), burst patterns (2–3 posts close together), distraction delays (random 5–45 min gaps). Mimics human: не постит ровно каждые 2 часа |
 | 4.2 | Scheduler | `scheduler/scheduler.ts` | Uses `cron` package (already in deps). Jobs: autonomous-roast (3–5/day), mention-poll (every 2–3 min), engagement-track (every 1h), daily-digest (08:00 UTC). All with jitter |
 | 4.3 | Queue manager | `queue/queue.manager.ts` | Dequeue by priority → process (roast engine → twitter client) → update status. Max 3 attempts, exponential backoff between retries. Uses existing QueueRepository |
 | 4.4 | Bootstrap + wiring | `bootstrap.ts`, `index.ts` | DI container (manual, no framework): create DB → repos → providers → engine → twitter client → scheduler → telegram bot. Start all services. Graceful shutdown on SIGTERM/SIGINT |

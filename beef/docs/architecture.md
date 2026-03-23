@@ -392,7 +392,7 @@ claude -p "{prompt}" \
 export interface JitterConfig {
   baseMinutes: number;
   jitterPercent: number;  // ±X% от base
-  quietHoursMultiplier: number;  // 3x delay в quiet hours (2-6 AM UTC)
+  quietHoursMultiplier: number;  // 3x delay в quiet hours (5-10 AM UTC)
   distractionChance: number;  // 15% chance добавить 10-30 min "отвлёкся"
   burstChance: number;  // 10% chance выполнить задачу повторно через 5-15 min
 }
@@ -409,9 +409,9 @@ export function humanLikeDelay(config: JitterConfig): number {
     delay += 10 + Math.random() * 20;
   }
 
-  // Quiet hours (2-6 AM UTC) — человек спит, активность минимальная
+  // Quiet hours (5-10 AM UTC) — CT dead zone: US sleeps, EU commutes
   const hour = new Date().getUTCHours();
-  if (hour >= 2 && hour < 6) {
+  if (hour >= 5 && hour < 10) {
     delay *= quietHoursMultiplier;
   }
 

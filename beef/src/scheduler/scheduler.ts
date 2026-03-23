@@ -70,12 +70,13 @@ export class Scheduler {
 }
 
 /**
- * Check if current hour (UTC) is within quiet hours (2-7 UTC).
- * Used to skip autonomous posting during low-engagement hours.
+ * Check if current hour (UTC) is within quiet hours (5-10 UTC).
+ * Covers the true CT dead zone: US sleeping (1-6 AM EDT), EU commuting (6-11 AM CET).
+ * Frees up 02-05 UTC for Asian prime (11 AM-2 PM KST) + US night owls.
  */
 export function isQuietHour(): boolean {
   const hour = new Date().getUTCHours();
-  return hour >= 2 && hour < 7;
+  return hour >= 5 && hour < 10;
 }
 
 /**
