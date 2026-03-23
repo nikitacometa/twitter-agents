@@ -306,20 +306,20 @@ function buildStockpileSection(
 
   lines.push(line());
   lines.push(line(`${bold(String(newStockpile.length))} new roast(s) added:`));
+  lines.push(line());
+  lines.push(line(italic('Оцени от 0 до 5:')));
 
   // Sort by quality score descending, show all (they're the winners)
   const sorted = [...newStockpile].sort((a, b) => b.qualityScore - a.qualityScore);
 
-  for (const roast of sorted) {
+  for (let i = 0; i < sorted.length; i++) {
+    const roast = sorted[i]!;
     lines.push(line());
-    lines.push(line(`${bold(roast.targetName)}  AI: ${code('?')}`));
+    lines.push(line(`${bold(String(i + 1) + '.')} ${bold(roast.targetName)}  AI: ${code('?')}`));
 
     // Roast text in a pre block for fixed-width readability, truncated to ~220 chars
     const text = truncate(roast.tweetText, 220);
     lines.push(`<pre>${escapeHtml(text)}</pre>\n`);
-
-    // Human rating prompt (blind evaluation)
-    lines.push(line(`Rate: ${code('1')}  ${code('2')}  ${code('3')}  ${code('4')}  ${code('5')}`));
   }
 
   return lines.join('');

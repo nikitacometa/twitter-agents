@@ -102,6 +102,32 @@ const TOO_TECHY_PATTERNS = [
   /\bterms of service say\b.*\bcontractual IOU\b/i,
 ];
 
+// Self-deprecating AI openers that never land — human score consistently < 2.5
+const SELF_DEPRECATING_FLOPS = [
+  /\bi run on (?:€|\$|£)\d/i,
+  /\bi cost (?:€|\$|£)\d/i,
+  /\bmy inference budget\b/i,
+  /\bmy compute costs?\b/i,
+];
+
+// Dead/obscure targets — avg human score < 2.0 across sessions, waste of LLM calls.
+// Review monthly: remove recovered projects, add newly dead ones.
+const TARGET_BLACKLIST = new Set([
+  'net protocol',
+  'zora',
+  'zetachain',
+  'manta network',
+  'manta',
+  'blast',
+  'mode network',
+  'mode',
+  'merlin chain',
+  'zklink',
+  'linea',
+  'scroll',
+  'mantle',
+]);
+
 /**
  * Count real sentences, ignoring dots inside domain names (pump.fun),
  * decimal numbers (98.6%), dollar amounts ($1.3B), and version strings (v2.1).
@@ -113,16 +139,26 @@ export function countSentences(text: string): number {
   return normalized.split(/[.!?]+/).filter((s) => s.trim().length > 0).length;
 }
 
-export function preFilter(tweetText: string): PreFilterResult {
+export function preFilter(tweetText: string, targetName?: string): PreFilterResult {
+  // 0. Blacklisted target — dead/obscure, consistently scores < 2.0
+  if (targetName && TARGET_BLACKLIST.has(targetName.toLowerCase())) {
+    return { pass: false, reason: `blacklisted target: ${targetName} (consistently low human scores)` };
+  }
+
   // 1. Sentence count > 3 → auto-reject (setup → context → punchline is fine)
   const sentenceCount = countSentences(tweetText);
   if (sentenceCount > 3) {
     return { pass: false, reason: `exceeds 3 sentences (${String(sentenceCount)} found)` };
   }
 
-  // 2. Character count > 280 → auto-reject
+  // 2a. Character count > 280 → auto-reject (Twitter limit)
   if (tweetText.length > 280) {
     return { pass: false, reason: `exceeds 280 chars (${String(tweetText.length)})` };
+  }
+
+  // 2b. Character count > 220 → auto-reject (human data: >200ch avg 2.59, diminishing returns)
+  if (tweetText.length > 220) {
+    return { pass: false, reason: `too long for impact (${String(tweetText.length)} chars, max 220)` };
   }
 
   // 3. Generic punchline patterns → auto-reject
@@ -146,7 +182,14 @@ export function preFilter(tweetText: string): PreFilterResult {
     }
   }
 
-  // 6. Truncation detection — catch sentences cut off mid-thought
+  // 6. Self-deprecating AI openers that never land
+  for (const p of SELF_DEPRECATING_FLOPS) {
+    if (p.test(tweetText)) {
+      return { pass: false, reason: `self-deprecating AI flop: ${p.source}` };
+    }
+  }
+
+  // 7. Truncation detection — catch sentences cut off mid-thought
   // Only flag obvious mid-sentence breaks, not missing final punctuation (CT style)
   const trimmed = tweetText.trim();
   if (/\b(the|a|an|of|in|for|to|and|but|or|with|that|is|was|are|were)\s*$/i.test(trimmed)) {
@@ -201,7 +244,7 @@ export class RoastEvaluator {
 
   async evaluate(input: EvaluateInput): Promise<EvaluationOutput> {
     // Pre-filter: reject before expensive LLM calls
-    const preCheck = preFilter(input.tweetText);
+    const preCheck = preFilter(input.tweetText, input.targetName);
     if (!preCheck.pass) {
       this.logger.info(
         { id: input.id, reason: preCheck.reason, target: input.targetName },

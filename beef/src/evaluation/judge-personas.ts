@@ -31,7 +31,8 @@ const PERSONAS: Record<JudgePersona, JudgePersonaConfig> = {
       '- Too technical: mentions smart contract function names, ERC standards, legal clauses\n\n' +
       'When scoring SHAREABLE: "would I actually RT this RIGHT NOW?"\n' +
       'PUNCHLINE CHECK: Does the last phrase make you stop scrolling? Extract the final 5-10 words — could you tweet JUST the punchline and it would still hit? If not, cap FUNNY at 3.\n' +
-      'IMPORTANT: If the target is obscure (< 10K followers, dead project, niche protocol), cap SHAREABLE at 2.',
+      'IMPORTANT: If the target is obscure (< 10K followers, dead project, niche protocol), cap SHAREABLE at 2.\n' +
+      'ACCESSIBILITY CHECK: If you had to explain WHO the target is before the roast lands, cap SHAREABLE at 2.',
   },
   comedy_writer: {
     id: 'comedy_writer',
@@ -51,7 +52,7 @@ const PERSONAS: Record<JudgePersona, JudgePersonaConfig> = {
       '- Structures you\'ve seen before: "that\'s not X, that\'s Y" / "most X could never"\n' +
       '- Laundry list of facts without an ironic twist — listing problems is not comedy\n' +
       '- Legal/contractual analysis framed as humor — "the ToS says X but the whitepaper says Y" is an audit, not a roast\n\n' +
-      'LENGTH PENALTY: Roasts over 180 chars get a FUNNY penalty of -0.5 unless the punchline is exceptional. Most great comedy is short. Data: roasts under 150 chars score 3.4 avg from humans; over 200 chars score 2.3 avg.',
+      'LENGTH PENALTY: Roasts over 160 chars get a FUNNY penalty of -0.5 unless the punchline is exceptional. Most great comedy is short. Data: roasts under 150 chars score 3.4 avg from humans; over 200 chars score 2.3 avg. Sweet spot: 72-145 chars.',
   },
   data_hawk: {
     id: 'data_hawk',
@@ -112,7 +113,8 @@ const PERSONAS: Record<JudgePersona, JudgePersonaConfig> = {
       '- When in doubt, round DOWN\n' +
       '- If the target is obscure or boring (nobody on CT is talking about it) → cap SHAREABLE at 1\n' +
       '- If the roast reads like an audit report rather than a joke → cap FUNNY at 2\n' +
-      '- Ask yourself: "Would a 30K-follower CT degen screenshot this?" If not → overall cap at 3',
+      '- Ask yourself: "Would a 30K-follower CT degen screenshot this?" If not → overall cap at 3\n' +
+      '- If you had to explain WHO the target is before the joke works → cap SHAREABLE at 2',
   },
 };
 
@@ -183,11 +185,12 @@ The system will determine verdict from your scores.
    Score 4: specific detail or framing that only works for THIS target
    Auto-cap at 2 if: removing the project name makes the roast work for anything.
 
-5. SHAREABLE (1-5): Would someone RT this without additional context?
+5. SHAREABLE (1-5): Would someone RT this without needing to Google the target?
    CALIBRATION:
    Score 2: needs knowledge of the project to appreciate
    Score 4: anyone in CT would understand and RT regardless of whether they follow this project
-   Ask yourself: "would I actually send this to 3 group chats RIGHT NOW?"
+   Auto-cap at 2 if: understanding requires niche knowledge beyond top-50 crypto awareness.
+   Ask yourself: "would I actually send this to 3 group chats RIGHT NOW? would they GET it?"
 
 6. CRYPTO_NATIVE (1-5): Does it sound like CT, not a marketing team?
    CALIBRATION:

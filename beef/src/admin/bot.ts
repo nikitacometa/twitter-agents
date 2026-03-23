@@ -245,20 +245,18 @@ export function createBot(opts: {
         clearInterval(progressInterval);
         const elapsed = Math.round((Date.now() - startTime) / 1000);
 
-        // Update status message with completion info
+        // Build combined message: status header + results in a single message
         const researchNote = output.researchNotes
-          ? `\n<i>${escapeHtml(output.researchNotes.slice(0, 200))}</i>\n`
+          ? `\n<i>${escapeHtml(output.researchNotes.slice(0, 200))}</i>`
           : '';
+        const header = `✅ <b>${escapeHtml(o.target)}</b> — ${String(output.variants.length)} variants, ${String(elapsed)}s${researchNote}`;
+        const result = formatRoastOutput(o.target, output, o.evaluationMode);
         await api.editMessageText(
           chatId,
           statusMsg.message_id,
-          `✅ <b>${escapeHtml(o.target)}</b> — ${String(output.variants.length)} variants, ${String(elapsed)}s${researchNote ? '\n' + researchNote : ''}`,
+          header + '\n\n' + result,
           { parse_mode: 'HTML' },
         );
-
-        // Format and send results as plain text — matching local farm output
-        const message = formatRoastOutput(o.target, output, o.evaluationMode);
-        await api.sendMessage(chatId, message, { parse_mode: 'HTML' });
       } catch (error) {
         clearInterval(progressInterval);
         const elapsed = Math.round((Date.now() - startTime) / 1000);
@@ -276,8 +274,9 @@ export function createBot(opts: {
   }
 
   /**
-   * Formats roast output matching the farm pipeline Telegram style (notify.ts).
-   * Shows only stockpiled (good) roasts — no extras.
+   * Formats roast output for Telegram.
+   * Stockpile case: numbered list with blind-eval instruction.
+   * Discard case: brief rejection message.
    */
   function formatRoastOutput(
     target: string,
@@ -286,7 +285,6 @@ export function createBot(opts: {
   ): string {
     const hasEval = evaluationMode && evaluationMode !== 'none' && output.evaluation;
     const variants = output.variants;
-    const divider = '────────────────────';
 
     // No evaluation — just show all variants as plain text
     if (!hasEval) {
@@ -300,43 +298,29 @@ export function createBot(opts: {
     }
 
     const eval_ = output.evaluation!;
-    const bestScore = eval_.compositeScore;
     const verdict = eval_.verdict;
-    const lines: string[] = [];
 
-    // Evaluate section
-    lines.push(`⚖️ <b>EVALUATE</b>`);
-    lines.push('');
-    if (verdict === 'stockpile') {
-      lines.push(`✅ Promoted: <b>${bestScore.toFixed(1)}</b>/5 → stockpile`);
-    } else {
-      const vetoInfo = eval_.vetoReasons && eval_.vetoReasons.length > 0
-        ? ` · Veto: ${escapeHtml(eval_.vetoReasons[0]!)}`
-        : '';
-      lines.push(`❌ Best: <b>${bestScore.toFixed(1)}</b>/5 → discard${vetoInfo}`);
+    if (verdict !== 'stockpile') {
+      const lines: string[] = [];
+      lines.push(`❌ <i>All ${String(variants.length)} variants scored below threshold.</i>`);
       if (eval_.preFilterReason) {
         lines.push(`<i>Pre-filter: ${escapeHtml(eval_.preFilterReason)}</i>`);
       }
-    }
-
-    if (verdict !== 'stockpile') {
-      lines.push('');
-      lines.push(`<i>All ${String(variants.length)} variants scored below threshold.</i>`);
+      if (eval_.vetoReasons && eval_.vetoReasons.length > 0) {
+        lines.push(`<i>Veto: ${escapeHtml(eval_.vetoReasons[0]!)}</i>`);
+      }
       return lines.join('\n');
     }
 
-    // Stockpile section — only the winning variant
+    // Stockpile — numbered list with blind-eval instruction
     const best = variants[0]!;
-    lines.push('');
-    lines.push(divider);
-    lines.push('');
+    const lines: string[] = [];
     lines.push(`🗄 <b>STOCKPILE</b>`);
     lines.push('');
-    lines.push(`<b>${escapeHtml(target)}</b>  AI: <code>?</code>`);
-    lines.push(`<pre>${escapeHtml(best.text)}</pre>`);
-    lines.push(`<i>${escapeHtml(best.angle)} · ${String(best.text.length)} chars</i>`);
+    lines.push(`<i>Оцени от 0 до 5:</i>`);
     lines.push('');
-    lines.push(`Rate: <code>1</code>  <code>2</code>  <code>3</code>  <code>4</code>  <code>5</code>`);
+    lines.push(`<b>1.</b> <b>${escapeHtml(target)}</b>  AI: <code>?</code>`);
+    lines.push(`<pre>${escapeHtml(best.text)}</pre>`);
 
     return lines.join('\n');
   }

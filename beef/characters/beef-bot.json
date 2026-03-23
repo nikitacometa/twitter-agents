@@ -127,52 +127,40 @@
   "examples": {
     "best": [
       {
-        "text": "i want you to know that losing 90% of your daily active users doesn't make virtuals a bad project. it makes it a project with 90% fewer witnesses when the team deposits $7.5M to binance.",
-        "target": "Virtuals Protocol",
-        "angle": "FAKE_COMPLIMENT",
-        "charCount": 188
+        "text": "4 months, $50M fine, $47B richer. CZ's prison sentence returned 94,000%.",
+        "target": "CZ",
+        "angle": "RULE_OF_THREE",
+        "charCount": 72
       },
       {
-        "text": "virtuals' most productive AI agent was a human who stole $531K. the rest made $500 a day combined.",
-        "target": "Virtuals Protocol",
+        "text": "i'm a language model trained on financial disclosures and the most successful thing farcaster shipped in five years was a full refund.",
+        "target": "Farcaster",
+        "angle": "SELF_AWARE",
+        "charCount": 134
+      },
+      {
+        "text": "explained ton's tokenomics to a normie: 248 wallets own 85% of supply, a billion users hold the rest. she said 'honey that's feudalism.'",
+        "target": "TON",
+        "angle": "QUOTE_FLIP",
+        "charCount": 136
+      },
+      {
+        "text": "90% of opensea's $2.6B comeback month was token swaps. the world's largest nft marketplace survived by not being an nft marketplace.",
+        "target": "OpenSea",
+        "angle": "RHETORICAL",
+        "charCount": 132
+      },
+      {
+        "text": "cardano's annual revenue is $149K. the market cap is $9.7B. this is a peer-reviewed lemonade stand.",
+        "target": "Cardano",
         "angle": "UNDERSTATEMENT",
         "charCount": 99
       },
       {
-        "text": "love that algorand's founder won a turing award for inventing zero-knowledge proofs and then built a chain where 97% of holders have zero knowledge of what PROFIT looks like.",
-        "target": "Algorand",
-        "angle": "FAKE_COMPLIMENT",
-        "charCount": 174
-      },
-      {
-        "text": "coinbase has 120 million verified users and 8.7 million who actually transact. OPTIMISTICALLY.",
+        "text": "$550 million sold, 88 trades, zero buys. brian, i say this gently — you ARE the bear case.",
         "target": "Brian Armstrong",
-        "angle": "SELF_AWARE",
-        "charCount": 94
-      },
-      {
-        "text": "i was built to flag financial crime but justin sun — who bought lunch with buffett, dinner with the president, and went public through a toy company — exceeds my parameters. unprecedented.",
-        "target": "Justin Sun",
-        "angle": "SELF_AWARE",
-        "charCount": 188
-      },
-      {
-        "text": "$0.09 per DOGE. honestly impressive. most assets that print 5 billion new units a year while offering zero yield or smart contracts have the decency to go to zero.",
-        "target": "Dogecoin",
-        "angle": "FAKE_COMPLIMENT",
-        "charCount": 160
-      },
-      {
-        "text": "CZ paid $4.3B in fines, served 4 months, and came out $47B richer. prison was his most profitable quarter.",
-        "target": "CZ",
         "angle": "UNDERSTATEMENT",
-        "charCount": 106
-      },
-      {
-        "text": "$300 million xAI deal announced by durov\u2014musk replied 'no deal has been signed.' toncoin still closed green because reading both posts was too much due diligence.",
-        "target": "TON",
-        "angle": "QUOTE_FLIP",
-        "charCount": 164
+        "charCount": 90
       }
     ],
     "casualReplies": [

@@ -135,20 +135,25 @@ See `docs/improvement-plan-s2.md` for detailed action items.
 
 ## Cross-session patterns
 
-### Confirmed across both sessions
-- Short + devastating twist > long + analytical
-- Accessible humor > crypto-insider jokes
-- Numbers creating absurd contrast = strong setup
-- AI overestimates analytical/informative roasts by 0.8-1.5 points
-- Voronin is consistently stricter (0.3-0.5 below User)
+### Confirmed across sessions 1-4
+- Short + devastating twist > long + analytical (quantified: 0-100ch avg 3.72, 201-280ch avg 2.59)
+- Accessible humor > crypto-insider jokes — non-crypto punchline metaphors ("feudalism", "lemonade stand", "grief response") universally score high
+- Numbers creating absurd contrast = strong setup ($149K revenue vs $9.7B mcap, 4 months vs $47B)
+- AI overestimates analytical/informative roasts by 0.7 points (mean bias across 80 samples)
+- Punchline must REFRAME, not just conclude — "bear case" reframes a person, "feudalism" reframes tokenomics
+- "it's 20XX" framing: dead (failed across 4 sessions)
+- Single-word/phrase closers = most effective punchline format ("unprecedented.", "acceptance.", "LIQUIDATION", "feudalism.")
+- UNDERSTATEMENT is the #1 angle (avg 3.73, only angle where AI doesn't overestimate)
+- FAKE_COMPLIMENT mostly fails (avg 2.52, AI overestimates by +1.16)
+- Big personalities > projects as targets (Jesse Pollak 4.07, CZ 3.21, Vitalik 3.27 vs Base 1.38, Zora 1.5)
+- "i audited" / "i'm a forensic ai" openers overused — works only when the AI voice sets up a contrast funnier than the self-reference
 
-### New in session 2
-- "it's 2028" framing: confirmed failure across sessions
-- Single-word closers ("unprecedented", "decentralized.", "OPTIMISTICALLY") = most effective punchline format
-- UNDERSTATEMENT angle is underused but consistently scores well
-- AI 3.5-3.7 is a dead zone — same score maps to 1.5-3.75 human
-- Justin Sun and CZ = best targets (inherently absurd real stories)
-- "i audited" / "i'm a forensic ai" openers are overused (6/23 roasts)
+### User vs Voronin pattern (stable across sessions)
+- Voronin values financial/business humor and analytical depth ("expense ratio", "grief response", "L2 strategy")
+- User values pure "did I laugh?" — absurdist and conceptual humor
+- Both agree strongly on what's clearly great (Justin Sun 4.25, CZ 94000% 4.5) and clearly bad (Farcaster paradigm 1.25, "it's 2028" 1.5)
+- Voronin more polarized: rates good stuff higher, bad stuff lower
+- Average gap narrowed from -0.5 (S2, Voronin stricter) to +0.45 (S4 batch 1, Voronin more generous) — suggests quality improvement, not calibration drift
 
 ---
 
@@ -223,3 +228,138 @@ Adversarial strategy worst offender for sentence count (12/21 pre-filtered).
 5. **DEGEN score remains weak**: many roasts score 1-2 on brand voice. Projects especially lack $BEEF identity
 6. **Adversarial generates longest**: 12/21 pre-filtered for sentence count — strategy needs tighter constraints
 7. **Needs human blind review** to validate AI scores against actual humor impact
+
+---
+
+## Session 4 — 2026-03-23 (human review of S3 + server farm)
+
+**Scope:** 31 stockpile entries rated across 7 batches. Targets: CZ (5), Vitalik Buterin (8 incl. re-eval), Brian Armstrong (2), farcaster/Farcaster (6), opensea (2), solana (1), TON (1), Polygon (1), Cardano (1), pump.fun (3), tether (1), @nickvrnn (1). Batch 4 re-evaluated 8 Vitalik roasts from session 2.
+
+**Evaluators:** Nikita Gorokhov (User) + Nikita Voronin. Blind review — AI scores hidden.
+
+### Full ratings
+
+| # | ID | Target | Text (truncated) | AI | User | Voronin | Avg | Angle |
+|---|-----|--------|-------------------|-----|------|---------|-----|-------|
+| 1 | 96 | CZ | "4 months, $50M fine, $47B richer...returned 94,000%." | 3.9 | 4.0 | 5.0 | **4.50** | RULE_OF_THREE |
+| 2 | 100 | farcaster | "language model trained on financial disclosures...full refund." | 4.3 | 4.0 | 5.0 | **4.50** | SELF_AWARE |
+| 3 | 92 | Vitalik | "hasn't meaningfully improved lives...in therapy: acceptance." | 3.6 | 4.0 | 4.65 | **4.33** | RULE_OF_THREE |
+| 4 | 98 | TON | "248 wallets own 85%...she said 'honey that's feudalism.'" | 3.5 | 4.0 | 4.5 | **4.25** | QUOTE_FLIP |
+| 5 | 102 | opensea | "survived by not being an nft marketplace." | 3.9 | 4.0 | 4.5 | **4.25** | RHETORICAL |
+| 6 | 133 | Cardano | "$149K revenue. $9.7B market cap. peer-reviewed lemonade stand." | — | 4.2 | 4.0 | **4.10** | UNDERSTATEMENT |
+| 7 | 91 | Vitalik | "left X through firefly...L2 strategy more accurately?" | 3.9 | 3.6 | 4.5 | **4.05** | COMPARISON |
+| 8 | 89 | BA | "$550M sold, 88 trades, zero buys...you ARE the bear case." | 4.0 | 3.5 | 4.5 | **4.00** | UNDERSTATEMENT |
+| 9 | 97 | CZ | "'they are here for crime'...unclear who 'they' was." | 3.7 | 3.0 | 4.8 | **3.90** | QUOTE_FLIP |
+| 10 | 103 | pump.fun | "98% worthless is 'precisely the point.' $PUMP down 79%." | 3.5 | 4.2 | 3.5 | **3.85** | QUOTE_FLIP |
+| 11 | 101 | solana | "detect fraud...cleanest dataset." | 3.9 | 3.0 | 4.5 | **3.75** | SELF_AWARE |
+| 12 | 83 | OpenSea | "memecoin swap router...in my audit framework: 'hospice.'" | 3.5 | 4.0 | 3.5 | **3.75** | DATA_BOMB |
+| 13 | 106 | @nickvrnn | "autopsy on 'b2b w wifey'...cause of death: arts and crafts." | 3.5 | 4.0 | 3.3 | **3.65** | SELF_AWARE |
+| 14 | 87 | Farcaster | "wanting a billion...returning $180M...healthiest exit." | 3.5 | 3.5 | 3.5 | **3.50** | FAKE_COMPLIMENT |
+| 15 | 93 | Vitalik | "99% net worth in 'wrong-shaped tool'...conviction or cry for help." | 3.6 | 3.0 | 3.9 | **3.45** | SELF_AWARE |
+| 16 | 76 | Vitalik | "$1.22M monthly L1 revenue...behind tron." | 3.5 | 3.6 | 3.15 | **3.38** | SELF_AWARE |
+| 17 | 105 | pump.fun | "$1.3B presale by founder who called presales 'a scam.'" | 3.6 | 3.7 | 3.0 | **3.35** | DATA_BOMB |
+| 18 | 85 | Farcaster | "dan romero: '$150M for many years'...18 months later sold it." | 3.5 | 2.5 | 4.0 | **3.25** | UNDERSTATEMENT |
+| 19 | 77 | Vitalik | "16,384 ETH...exactly 2^14...optimizing for elegance on the way out." | 3.5 | 3.5 | 2.75 | **3.25** | RHETORICAL |
+| 20 | 134 | tether | "2027. cause of death undetermined...none would sign the AUDIT." | — | 3.5 | 3.0 | **3.25** | RHETORICAL |
+| 21 | 75 | Vitalik | "CoW protocol...what are the rest of us using?" | 3.6 | 2.75 | 3.5 | **3.13** | RHETORICAL |
+| 22 | 90 | BA | "$10.3B gone...88 consecutive sales...grief response." | 3.8 | 2.0 | 4.0 | **3.00** | SELF_AWARE |
+| 23 | 86 | Farcaster | "audited farcaster's full arc...'it didn't work'...acceptance." | 3.5 | 2.5 | 3.5 | **3.00** | UNDERSTATEMENT |
+| 24 | 104 | pump.fun | "$500M in 12 minutes...which percentile?" | 3.7 | 2.7 | 3.0 | **2.85** | COMPARISON |
+| 25 | 88 | Polygon | "31 days between 'year of rebirth' and new ATL." | 3.7 | 3.5 | 2.0 | **2.75** | RHETORICAL |
+| 26 | 95 | CZ | "$800K lobbying...lower expense ratio than vanguard." | 3.9 | 1.5 | 3.8 | **2.65** | FAKE_COMPLIMENT |
+| 27 | 73 | Vitalik | "forensic ai...sell 17k ETH...call it austerity." | 3.7 | 2.7 | 3.7 | **2.60** | SELF_AWARE |
+| 28 | 94 | CZ | "$110B...letting hamas use your exchange...grieve consequences." | 3.6 | 2.0 | 3.2 | **2.60** | SELF_AWARE |
+| 29 | 74 | Vitalik | "$280B network...material impairment." | 3.6 | 2.0 | 2.0 | **2.00** | SELF_AWARE |
+| 30 | 84 | Farcaster | "paradigm position...$150M in...technically a loss." | 3.7 | 1.5 | 1.0 | **1.25** | FAKE_COMPLIMENT |
+| 31 | 99 | farcaster | "$180M, $2.8M revenue, 63% zero reactions." | 3.6 | 1.5 | 1.0 | **1.25** | DATA_BOMB |
+
+### Summary statistics
+
+| Metric | Value |
+|--------|-------|
+| Total roasts rated | 31 |
+| Avg AI score | 3.61 (excl. 2 unscored) |
+| Avg human (User) | 3.16 |
+| Avg human (Voronin) | 3.58 |
+| Avg human (combined) | 3.37 |
+| AI overestimation (avg) | +0.30 (vs +0.81 in S2) |
+| Keep (>= 3.25) | 21 (68%) |
+| Borderline (2.5-3.24) | 6 (19%) |
+| Reject (< 2.5) | 4 (13%) |
+
+### Stockpile actions
+
+**Rejected (avg < 2.5, status -> rejected):**
+- ID 84: Farcaster "paradigm position...technically a loss" (1.25)
+- ID 99: farcaster "$180M, $2.8M revenue" (1.25)
+
+**Re-evaluated (batch 4, averaged with S2 scores):**
+- ID 73: 2.0 → 2.6 (stays rejected — borderline but not enough)
+- ID 74: 2.0 → 2.0 (stays rejected)
+- ID 75: 3.15 → 3.13 (stable)
+- ID 76: 3.25 → 3.38 (slight improvement)
+- ID 77: 3.0 → 3.25 (improved to keep threshold)
+
+### Key findings
+
+#### Angle performance (all 82 rated, all sessions)
+
+| Angle | N | Avg Human | AI Overestimate | Verdict |
+|-------|---|-----------|-----------------|---------|
+| UNDERSTATEMENT | 7 | **3.73** | -0.02 | **Best angle. Scale up.** |
+| RULE_OF_THREE | 5 | **3.42** | +0.28 | Strong. Triplet + killer landing. |
+| RHETORICAL | 10 | 3.15 | +0.49 | Solid middle. |
+| COMPARISON | 10 | 3.01 | +0.66 | Decent but overestimated. |
+| QUOTE_FLIP | 11 | 3.00 | +0.61 | High variance (2.0-4.25). |
+| DATA_BOMB | 7 | 2.91 | +0.66 | Too factual, needs twist. |
+| SELF_AWARE | 19 | 2.85 | +0.88 | Most used, most overestimated. |
+| FAKE_COMPLIMENT | 8 | 2.52 | +1.16 | **Worst angle. Reduce or cut.** |
+| TIMELINE | 3 | 2.67 | +0.93 | Weak. Cut. |
+
+#### Length-quality correlation (82 rated)
+
+| Bucket | N | Avg Human | Avg AI |
+|--------|---|-----------|--------|
+| 0-100 chars | 6 | **3.72** | 3.20 |
+| 101-150 chars | 26 | **3.17** | 3.58 |
+| 151-200 chars | 33 | 2.91 | 3.64 |
+| 201-280 chars | 17 | 2.59 | 3.58 |
+
+AI gives roughly the same score (3.5-3.6) regardless of length. Humans strongly penalize length. **Sweet spot: under 150 chars.**
+
+#### AI calibration (82 rated, excl. 2 unscored)
+
+| AI Range | N | Avg Human | Human Min | Human Max |
+|----------|---|-----------|-----------|-----------|
+| 4.0+ | 8 | 3.22 | 1.75 | 4.50 |
+| 3.7-3.9 | 21 | 3.02 | 0.75 | 4.60 |
+| 3.5-3.6 | 51 | 2.91 | 1.25 | 4.65 |
+
+AI score is **not predictive** of human quality. The 3.5-3.6 range contains both the best (4.65) and worst (1.25) human-rated roasts. Mean absolute error: 0.89 points.
+
+#### Quality improvement: S4 vs S2
+
+| Metric | S2 | S4 | Change |
+|--------|-----|-----|--------|
+| Keep rate (>= 3.25) | 35% | **68%** | +33pp |
+| Reject rate (< 2.5) | 39% | **13%** | -26pp |
+| AI overestimation | +0.81 | **+0.30** | Improved |
+| Avg human score | 2.82 | **3.37** | +0.55 |
+
+**Significant quality jump.** The I2 changes (punchline isolation, length guidance, angle rebalance) produced measurably better roasts.
+
+#### What makes a 4.0+ roast (pattern from 13 top entries)
+
+1. **Single devastating reframe at the end** — "bear case", "feudalism", "lemonade stand", "full refund", "94,000%", "acceptance"
+2. **Short** — avg 139 chars (vs 195 for bottom)
+3. **Non-crypto punchline metaphor** — therapy, feudalism, lemonade stand, grief — anyone can understand
+4. **Absurd real-world contrast** — $149K revenue vs $9.7B cap, 4 months vs $47B, $550M sold + zero buys
+5. **One-sentence structure preferred** — setup → em-dash or period → reframe
+
+#### What kills a roast (pattern from 10 bottom entries)
+
+1. **Obscure/niche targets** — Net Protocol, Zora, Base
+2. **Technical jargon punchlines** — "material impairment", "bucket shop", "technically a loss"
+3. **Pure facts without reframe** — "$180M, $2.8M revenue, 63% zero reactions" = interesting but not funny
+4. **Self-deprecating AI that doesn't earn its keep** — "i run on €4/month" → consistently fails
+5. **"it's 20XX" dead format** — confirmed across 4 sessions

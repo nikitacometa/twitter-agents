@@ -54,7 +54,7 @@ export class SelfEvaluator {
 
   async evaluate(attempt: FarmAttempt): Promise<EvaluationOutput> {
     // Pre-filter: reject before expensive LLM calls
-    const preCheck = preFilter(attempt.tweetText);
+    const preCheck = preFilter(attempt.tweetText, attempt.targetName);
     if (!preCheck.pass) {
       this.logger.info(
         { attemptId: attempt.id, reason: preCheck.reason, target: attempt.targetName },

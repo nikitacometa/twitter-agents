@@ -8,20 +8,21 @@ const ANGLES = [
   'RHETORICAL', 'SELF_AWARE', 'QUOTE_FLIP', 'UNDERSTATEMENT', 'RULE_OF_THREE',
 ] as const;
 
-// Quality-based angle weights from human review (56 rated roasts, March 2026).
-// UNDERSTATEMENT: 1 sample → 3.75 avg, underrepresented but high ceiling.
-// TIMELINE: "cz posted photo of dog" → 2.25, chronological format produces flat narratives.
-// QUOTE_FLIP: mixed (3.75 TON xAI but 2.0–2.25 on tepid closers).
+// Quality-based angle weights from human review (82 rated roasts, 4 sessions, March 2026).
+// UNDERSTATEMENT: 7 samples → 3.73 avg, only angle AI doesn't overestimate.
+// RULE_OF_THREE: 5 samples → 3.42 avg, triplet escalation + killer landing.
+// FAKE_COMPLIMENT: 8 samples → 2.52 avg, AI overestimates by +1.16. Telegraphs punchline.
+// TIMELINE: 3 samples → 2.67 avg, chronological lists lack punch.
 export const DEFAULT_ANGLE_WEIGHTS: Record<string, number> = {
-  UNDERSTATEMENT: 1.8,
+  UNDERSTATEMENT: 2.0,
+  RULE_OF_THREE: 1.5,
   DATA_BOMB: 1.3,
   COMPARISON: 1.0,
-  FAKE_COMPLIMENT: 1.0,
-  SELF_AWARE: 1.0,
   RHETORICAL: 0.9,
   QUOTE_FLIP: 0.8,
-  RULE_OF_THREE: 0.7,
-  TIMELINE: 0.6,
+  SELF_AWARE: 0.6,
+  FAKE_COMPLIMENT: 0.4,
+  TIMELINE: 0.3,
 };
 
 export type RoastAngle = (typeof ANGLES)[number];
@@ -58,7 +59,10 @@ function buildAntiPatternSection(rejects: RejectExample[]): string {
   );
 
   return `\n## ANTI-PATTERNS (rated BAD by humans — avoid similar patterns)
-Common failure modes: too long (>200 chars), fact-listing without a funny twist, weak/telegraphed punchlines, future-framing ("it's 2028"), technical jargon as punchline.
+Common failure modes: too long (>200 chars), fact-listing without a funny twist, weak/telegraphed punchlines, future-framing ("it's 2028"), technical jargon as punchline, punchline that CONCLUDES instead of REFRAMES.
+
+CONCLUDING punchline (bad): "and they call this 'decentralized'" — just restates the obvious implication.
+REFRAMING punchline (good): "peer-reviewed lemonade stand" — makes you re-read the setup with new eyes.
 ${lines.join('\n')}
 `;
 }
@@ -179,6 +183,10 @@ E. SER ADDRESS: Condescending patience, explain obvious thing to a child.
 
 F. DELAYED OBVIOUS: Present facts neutrally. Do NOT explain the implication.
    "$SAFU token. liquidity locked 30 days. dev wallet: 40%."
+
+G. DOMAIN SHIFT: Punchline from an unexpected non-crypto domain. Maximum cognitive distance.
+   "248 wallets own 85% of supply. she said 'honey that's feudalism.'"
+   "$149K revenue. $9.7B market cap. peer-reviewed lemonade stand."
 `;
 }
 
@@ -211,6 +219,11 @@ Ask yourself:
 
 3. Would removing the project name make the roast unrecognizable?
    If yes → too generic. Add a detail only this target has.
+
+4. Does the punchline CHANGE the meaning of the setup, or just CONCLUDE it?
+   Conclude (bad): "and they call this innovation" — restates what the setup already implied.
+   Reframe (good): "lemonade stand", "feudalism", "acceptance" — forces the reader to re-read the setup differently.
+   If it concludes → rewrite the punchline from a completely different domain.
 `;
 }
 
