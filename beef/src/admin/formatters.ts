@@ -13,7 +13,6 @@ const STATUS_EMOJI: Record<string, string> = {
   served_landing: '🌐',
   promoted: '⭐',
   expired: '⏰',
-  rejected: '🚫',
 };
 
 function formatAge(createdAt: string): string {

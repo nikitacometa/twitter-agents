@@ -66,7 +66,7 @@ export interface InsertFarmAttempt {
 
 export type FreshnessType = 'evergreen' | 'data_dependent';
 
-export type StockpileStatus = 'available' | 'served_bot' | 'served_landing' | 'promoted' | 'expired' | 'rejected';
+export type StockpileStatus = 'available' | 'served_bot' | 'served_landing' | 'promoted' | 'expired';
 
 export interface StockpiledRoast {
   id: number;
