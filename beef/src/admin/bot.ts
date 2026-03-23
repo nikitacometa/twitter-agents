@@ -1101,20 +1101,51 @@ export function createBot(opts: {
       return;
     }
 
-    await ctx.reply(
-      `📋 <b>Unrated Roasts</b> (${String(roasts.length)})\n\n<i>Оцени от 1 до 5:</i>`,
-      { parse_mode: 'HTML' },
-    );
+    const lines: string[] = [
+      `📋 <b>Unrated Roasts</b> (${String(roasts.length)})`,
+      '',
+      '<i>Оцени от 1 до 5:</i>',
+    ];
 
-    for (const roast of roasts) {
+    for (let i = 0; i < roasts.length; i++) {
+      const roast = roasts[i]!;
       const text = roast.tweetText.length > 220
         ? roast.tweetText.slice(0, 219) + '…'
         : roast.tweetText;
 
-      await ctx.reply(
-        `<b>#${String(roast.id)}</b> ${escapeHtml(roast.targetName)}  AI: <code>?</code>\n\n<pre>${escapeHtml(text)}</pre>`,
-        { parse_mode: 'HTML' },
-      );
+      lines.push('');
+      lines.push(`<b>${String(i + 1)}.</b> ${escapeHtml(roast.targetName)}`);
+      lines.push(`<pre>${escapeHtml(text)}</pre>`);
+    }
+
+    const fullMessage = lines.join('\n');
+
+    // Telegram limit is 4096 chars — split into chunks if needed
+    if (fullMessage.length <= 4000) {
+      await ctx.reply(fullMessage, { parse_mode: 'HTML' });
+    } else {
+      const chunks: string[] = [];
+      let current = lines.slice(0, 3).join('\n');
+
+      for (let i = 0; i < roasts.length; i++) {
+        const roast = roasts[i]!;
+        const text = roast.tweetText.length > 220
+          ? roast.tweetText.slice(0, 219) + '…'
+          : roast.tweetText;
+        const entry = `\n\n<b>${String(i + 1)}.</b> ${escapeHtml(roast.targetName)}\n<pre>${escapeHtml(text)}</pre>`;
+
+        if (current.length + entry.length > 4000) {
+          chunks.push(current);
+          current = entry.trimStart();
+        } else {
+          current += entry;
+        }
+      }
+      if (current) chunks.push(current);
+
+      for (const chunk of chunks) {
+        await ctx.reply(chunk, { parse_mode: 'HTML' });
+      }
     }
   });
 
