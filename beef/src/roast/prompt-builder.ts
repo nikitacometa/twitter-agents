@@ -297,6 +297,7 @@ export function buildRoastPrompt(
   memory?: CreativeMemory,
   imagePaths?: string[],
 ): string {
+  targetName = sanitizeInput(targetName).sanitized;
   const examples = buildExamples(character, memory);
   const contextLine = buildContextLine(targetName, memory);
   const angles = pickAngles(variantCount, memory?.angleWeights);
@@ -364,6 +365,7 @@ export function buildNoResearchPrompt(
   memory?: CreativeMemory,
   imagePaths?: string[],
 ): string {
+  targetName = sanitizeInput(targetName).sanitized;
   const examples = buildExamples(character, memory);
   const angles = pickAngles(variantCount, memory?.angleWeights);
   const angleList = angles.map((a) => `  - ${a}`).join('\n');
@@ -434,6 +436,7 @@ export function buildPersonaPrompt(
   memory?: CreativeMemory,
   imagePaths?: string[],
 ): string {
+  targetName = sanitizeInput(targetName).sanitized;
   const examples = buildExamples(character, memory);
   const angles = pickAngles(variantCount, memory?.angleWeights);
   const angleList = angles.map((a) => `  - ${a}`).join('\n');
@@ -512,6 +515,7 @@ export function buildNoResearchPersonaPrompt(
   memory?: CreativeMemory,
   imagePaths?: string[],
 ): string {
+  targetName = sanitizeInput(targetName).sanitized;
   const examples = buildExamples(character, memory);
   const angles = pickAngles(variantCount, memory?.angleWeights);
   const angleList = angles.map((a) => `  - ${a}`).join('\n');
@@ -573,6 +577,7 @@ export function buildAdversarialPrompt(
   memory?: CreativeMemory,
   imagePaths?: string[],
 ): string {
+  targetName = sanitizeInput(targetName).sanitized;
   const examples = buildExamples(character, memory);
   const angles = pickAngles(variantCount, memory?.angleWeights);
   const angleList = angles.map((a) => `  - ${a}`).join('\n');
@@ -666,6 +671,7 @@ export function buildNoResearchAdversarialPrompt(
   memory?: CreativeMemory,
   imagePaths?: string[],
 ): string {
+  targetName = sanitizeInput(targetName).sanitized;
   const examples = buildExamples(character, memory);
   const angles = pickAngles(variantCount, memory?.angleWeights);
   const angleList = angles.map((a) => `  - ${a}`).join('\n');

@@ -24,13 +24,16 @@ export class ScraperTwitterClient implements ITwitterClient, IProfileFetcher {
   private readonly dryRun: boolean;
   private readonly logger: Logger;
   private readonly botUsername: string;
+  private readonly onSessionExpired?: () => void;
   private loggedIn = false;
+  private sessionExpiredNotified = false;
 
   constructor(opts: {
     credentials: ScraperCredentials;
     dryRun: boolean;
     logger: Logger;
     cookiePath?: string;
+    onSessionExpired?: () => void;
   }) {
     // Use CycleTLS fetch to bypass Cloudflare TLS fingerprinting
     this.scraper = new Scraper({
@@ -41,6 +44,7 @@ export class ScraperTwitterClient implements ITwitterClient, IProfileFetcher {
     this.dryRun = opts.dryRun;
     this.logger = opts.logger;
     this.botUsername = opts.credentials.username;
+    this.onSessionExpired = opts.onSessionExpired;
   }
 
   get isConfigured(): boolean {
@@ -116,16 +120,16 @@ export class ScraperTwitterClient implements ITwitterClient, IProfileFetcher {
       const stillLoggedIn = await this.scraper.isLoggedIn();
       if (stillLoggedIn) return true;
 
-      this.logger.warn('Session expired — attempting re-login');
+      this.logger.error('Session expired — manual cookie refresh required');
       this.loggedIn = false;
+
+      if (this.onSessionExpired && !this.sessionExpiredNotified) {
+        this.sessionExpiredNotified = true;
+        this.onSessionExpired();
+      }
     }
 
-    try {
-      await this.loginWithCredentials();
-      return true;
-    } catch {
-      return false;
-    }
+    return false;
   }
 
   async postTweet(text: string): Promise<PostResult | null> {

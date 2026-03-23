@@ -170,6 +170,17 @@ if (config.ENABLE_TWITTER) {
       },
       dryRun: config.DRY_RUN,
       logger,
+      onSessionExpired: () => {
+        logger.error('Twitter session expired — notifying admins');
+        if (bot && config.TELEGRAM_ADMIN_IDS.length > 0) {
+          const msg = '🚨 <b>Twitter session expired!</b>\nCookies need manual refresh. Bot cannot post until cookies are updated.';
+          for (const adminId of config.TELEGRAM_ADMIN_IDS) {
+            bot.api.sendMessage(adminId, msg, { parse_mode: 'HTML' }).catch((err) => {
+              logger.warn({ err, adminId }, 'Failed to send session expiry alert');
+            });
+          }
+        }
+      },
     });
 
     try {
