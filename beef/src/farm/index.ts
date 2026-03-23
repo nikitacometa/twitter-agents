@@ -18,6 +18,8 @@
 
 import { config } from 'dotenv';
 config({ override: true });
+// Load .env.production for Twitter API creds (without override — .env values preserved)
+config({ path: '.env.production' });
 import { Command } from 'commander';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
