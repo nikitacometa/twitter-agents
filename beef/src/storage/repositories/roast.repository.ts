@@ -46,6 +46,7 @@ export class RoastRepository {
   private readonly totalLikesStmt: Database.Statement;
   private readonly pendingApprovalStmt: Database.Statement;
   private readonly rejectDuplicatePendingStmt: Database.Statement;
+  private readonly existsReplyToStmt: Database.Statement;
 
   constructor(db: Database.Database) {
     this.insertStmt = db.prepare(`
@@ -108,6 +109,12 @@ export class RoastRepository {
       AND id NOT IN (
         SELECT MAX(id) FROM roasts WHERE status = 'pending_approval' GROUP BY target_name
       )
+    `);
+
+    this.existsReplyToStmt = db.prepare(`
+      SELECT 1 FROM roasts
+      WHERE reply_to_id = ? AND status IN ('posted', 'pending_approval')
+      LIMIT 1
     `);
   }
 
@@ -181,6 +188,14 @@ export class RoastRepository {
 
   getPendingApproval(): PostedRoast[] {
     return (this.pendingApprovalStmt.all() as RoastRow[]).map(mapRow);
+  }
+
+  /**
+   * Check if the bot has already replied to a specific tweet (posted or pending approval).
+   * Used to prevent duplicate replies to the same thread.
+   */
+  existsReplyTo(replyToId: string): boolean {
+    return !!this.existsReplyToStmt.get(replyToId);
   }
 
   /**

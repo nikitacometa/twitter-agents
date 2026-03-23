@@ -153,7 +153,6 @@ export class MentionHandler {
         const target = extractTarget(m.text);
         if (target) {
           // Scenario 1: explicit "roast @X" / "roast $TOKEN"
-          // Reply to parent tweet (if under someone's tweet) so the roast appears in that thread
           const replyTarget = m.inReplyToTweetId ?? m.tweetId;
           this.queueRepo.enqueue({
             targetName: target,
@@ -168,30 +167,38 @@ export class MentionHandler {
             { tweetId: m.tweetId, target, author: m.authorName },
             'Roast request queued from mention',
           );
+        } else if (isRoastMe(m.text, this.botUsername)) {
+          // "roast me" / "@0xBeefer roast me gango" → target = the author
+          queueTarget = this.enqueueHandleRoast(m, m.authorName);
+          queued = true;
+          this.logger.info(
+            { tweetId: m.tweetId, author: m.authorName },
+            '"Roast me" request — targeting author',
+          );
         } else {
           const tagged = extractTaggedHandle(m.text, this.botUsername);
-          if (tagged) {
+          if (tagged && !this.isBotOrParentAuthor(tagged, m)) {
             // Scenario 3: roast keyword + tagged handle (non-adjacent)
             queueTarget = this.enqueueHandleRoast(m, tagged);
             queued = true;
-          } else if (m.inReplyToTweetId) {
-            // Scenario 2: roast keyword under someone's tweet
+          } else if (m.inReplyToTweetId && !this.isParentByBot(m)) {
+            // Scenario 2: roast keyword under someone's tweet (not bot's own)
             queueTarget = this.enqueueParentTweetRoast(m);
             queued = true;
           } else {
-            // Roast request but no identifiable target — casual reply instead
+            // Roast request but no valid target — casual reply instead
             queueTarget = this.enqueueCasualReply(m);
             queued = true;
           }
         }
       } else {
         const tagged = extractTaggedHandle(m.text, this.botUsername);
-        if (tagged) {
-          // Scenario 3: "@BeefThis @elonmusk" or "@BeefThis check this @user"
+        if (tagged && !this.isBotOrParentAuthor(tagged, m)) {
+          // Scenario 3: "@0xBeefer @elonmusk" or "@0xBeefer check this @user"
           queueTarget = this.enqueueHandleRoast(m, tagged);
           queued = true;
-        } else if (isBareOrSimpleMention(m.text) && m.inReplyToTweetId) {
-          // Scenario 2: bare "@BeefThis" under a tweet
+        } else if (isBareOrSimpleMention(m.text) && m.inReplyToTweetId && !this.isParentByBot(m)) {
+          // Scenario 2: bare "@0xBeefer" under a tweet (not bot's own)
           queueTarget = this.enqueueParentTweetRoast(m);
           queued = true;
         } else {
@@ -277,6 +284,20 @@ export class MentionHandler {
     return targetName;
   }
 
+  /** Check if the parent tweet was authored by the bot itself. */
+  private isParentByBot(m: MentionData): boolean {
+    return !!m.parentAuthorName
+      && m.parentAuthorName.toLowerCase() === this.botUsername.toLowerCase();
+  }
+
+  /** Check if a tagged handle is the bot or the parent tweet's author (not a roast target). */
+  private isBotOrParentAuthor(handle: string, m: MentionData): boolean {
+    const lower = handle.toLowerCase();
+    if (lower === this.botUsername.toLowerCase()) return true;
+    if (m.parentAuthorName && lower === m.parentAuthorName.toLowerCase()) return true;
+    return false;
+  }
+
   private enqueueHandleRoast(m: MentionData, handle: string): string {
     const targetName = `@${handle}`;
     // Reply to parent tweet (if under someone's tweet) so the roast appears in that thread
@@ -333,6 +354,15 @@ export function extractTaggedHandle(text: string, botUsername: string): string |
   const stripped = text.replace(new RegExp(`@${escapeRegExp(botUsername)}`, 'gi'), '');
   const match = stripped.match(/@(\w+)/);
   return match?.[1] ?? null;
+}
+
+/**
+ * Detect "roast me" patterns — user wants to be roasted themselves.
+ * Examples: "roast me", "roast me gango", "@0xBeefer roast me bro"
+ */
+export function isRoastMe(text: string, botUsername: string): boolean {
+  const stripped = text.replace(new RegExp(`@${escapeRegExp(botUsername)}`, 'gi'), '').trim();
+  return /(?:roast|beef|cook|destroy|grill|flame|burn)\s+me\b/i.test(stripped);
 }
 
 export function extractTarget(text: string): string | null {

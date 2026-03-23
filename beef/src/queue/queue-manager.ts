@@ -247,6 +247,17 @@ export class QueueManager {
       return { dequeued: true, posted: true, tweetId: existing.tweetId, target: item.targetName };
     }
 
+    // Thread-level dedup — never reply twice to the same tweet
+    const replyToId = extractReplyToId(item.context);
+    if (replyToId && this.roastRepo.existsReplyTo(replyToId)) {
+      this.logger.warn(
+        { queueId: item.id, replyToId, target: item.targetName },
+        'Skipping — already replied to this tweet',
+      );
+      this.queueRepo.complete(item.id);
+      return { dequeued: true, posted: true, target: item.targetName };
+    }
+
     // Casual replies use a separate lightweight pipeline
     if (item.source === 'casual_reply') {
       try {
@@ -259,8 +270,7 @@ export class QueueManager {
       }
     }
 
-    // Determine reply context early
-    const replyToId = extractReplyToId(item.context);
+    // Determine reply context early (replyToId already extracted above for dedup)
     const mentionTweetId = extractMentionTweetId(item.context);
     const isReply = !!replyToId;
 
@@ -753,7 +763,7 @@ export class QueueManager {
 
     if (postResult === 'pending_approval' || postResult === 'reply_blocked') {
       const blocked = postResult === 'reply_blocked';
-      this.pendingApprovals.set(roastId, {});
+      this.pendingApprovals.set(roastId, { mentionTweetId: extractMentionTweetId(item.context) });
       this.queueRepo.complete(item.id);
       this.logger.info(
         { queueId: item.id, roastId, target: item.targetName, tone: result.tone, blocked },
@@ -775,6 +785,11 @@ export class QueueManager {
       this.roastRepo.updateStatus(roastId, 'posted', postResult.tweetId);
       this.queueRepo.complete(item.id);
       this.activityLogger?.emit({ type: 'posted', data: { target: item.targetName, tweetId: postResult.tweetId } });
+      // Mark the originating mention as processed
+      const mentionTweetId = extractMentionTweetId(item.context);
+      if (mentionTweetId && this.mentionRepo) {
+        this.mentionRepo.markProcessed(mentionTweetId, postResult.tweetId);
+      }
       this.logger.info(
         { queueId: item.id, roastId, tweetId: postResult.tweetId, target: item.targetName, tone: result.tone },
         'Casual reply posted',
@@ -848,7 +863,7 @@ export class QueueManager {
 
       // Guard: mention/reply sources MUST have replyToId — posting standalone is always a bug
       const replySources: RoastSource[] = ['mention', 'reply_guy', 'casual_reply'];
-      if (replySources.includes(roast.source as RoastSource) && !replyToId) {
+      if (replySources.includes(roast.source) && !replyToId) {
         this.logger.error(
           { roastId, source: roast.source, target: roast.targetName },
           'Cannot approve mention roast without reply_to_id — would post standalone (data corruption)',
@@ -894,6 +909,11 @@ export class QueueManager {
       }
 
       this.activityLogger?.emit({ type: 'posted', data: { target: roast.targetName, tweetId: postResult.tweetId } });
+
+      // Mark the originating mention as processed
+      if (pending?.mentionTweetId && this.mentionRepo) {
+        this.mentionRepo.markProcessed(pending.mentionTweetId, postResult.tweetId);
+      }
 
       this.pendingApprovals.delete(roastId);
       return { tweetId: postResult.tweetId, text: roast.tweetText };
