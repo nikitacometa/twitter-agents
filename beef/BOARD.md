@@ -24,28 +24,39 @@ Status: `[ ]` pending, `[~]` in progress, `[x]` done, `[!]` blocked
 
 ## Backlog: Pre-Server-Deploy (critical)
 
-[ ] #B-1 — Residential proxy setup (datacenter IP = instant flag)
+[ ] #B-1 — ISP proxy setup (Decodo ~$3-5/мес) + PROXY_URL in env schema + wire into scraper
 [ ] #B-2 — DB backup cron on VPS
-[ ] #B-3 — Playwright posting auto-reconnect reliability
+[ ] #B-3 — Replace auto re-login with Telegram alert on cookie expiry
+[ ] #B-4 — Circuit breaker for Error 226 (3x/1h → disable 6h → Telegram alert)
 
 ## Backlog: Infrastructure
 
-[ ] #B-4 — CI/CD pipeline (GitHub Actions: typecheck + lint + test)
-[ ] #B-5 — Sentry initialization in production entry point
-[ ] #B-6 — MENTION_POLL_INTERVAL_MS not used in scheduler code
-[ ] #B-7 — QueueManager test coverage
-[ ] #B-8 — Scheduler overlap protection (dedup guard)
-[ ] #B-9 — Quiet hours enforcement in scheduler
-[ ] #B-10 — Health monitor active checks (not just passive)
+[ ] #B-5 — CI/CD pipeline (GitHub Actions: typecheck + lint + test)
+[ ] #B-6 — Sentry initialization in production entry point
+[ ] #B-7 — PM2 log rotation config (max_size 50M, retain 7)
+[ ] #B-8 — Deploy rollback mechanism in deploy.sh
+[ ] #B-9 — UptimeRobot/BetterUptime on /health endpoint
+[ ] #B-10 — QueueManager test coverage (processNext, approve, casual replies)
+[ ] #B-11 — Scheduler overlap protection (dedup guard)
+[ ] #B-12 — Fix farm/logger.ts — add production env guard for pino-pretty
+[ ] #B-13 — Replace console.warn in retryWithBackoff with pino logger
 
 ## Backlog: Content Quality
 
-[ ] #B-11 — Overused CT phrases pass prefilter (expand banned patterns)
-[ ] #B-12 — Missing examples for sentence structures J/K
-[ ] #B-13 — No temporal calibration (dates in roasts become stale)
-[ ] #B-14 — Max 2 sentences too rigid (allow 3 for audit trail structure I)
+[x] #B-14 — Split getRandomExamples into roast vs reply pools (casualReplies leaked into roast prompts)
+[ ] #B-15 — Curate 10 few-shot examples for 5 empty angles (DATA_BOMB, TIMELINE, COMPARISON, RHETORICAL, RULE_OF_THREE)
+[ ] #B-16 — Overused CT phrases pass prefilter (expand banned patterns)
+[ ] #B-17 — Missing examples for sentence structures J/K
+[ ] #B-18 — No temporal calibration (dates in roasts become stale)
+[ ] #B-19 — Max 2 sentences too rigid (allow 3 for audit trail structure I)
+[ ] #B-20 — Enable Perplexity enrichment by default in TargetDiscoverer
 
 ## Backlog: Growth
 
-[ ] #B-15 — Farcaster cross-posting backup channel
-[ ] #B-16 — Claude Code skills: /pre-launch-checklist, /deploy-verify, /roast-quality-check
+[ ] #B-21 — Runtime scraper→API fallback on Error 226
+[ ] #B-22 — Close learning loop: high-engagement roasts → auto-add to fire examples
+[ ] #B-23 — Inline rating buttons (1-5) in Telegram after farm/unrated output
+[ ] #B-24 — Auto-notify admins on autonomous posts (approve mode OFF)
+[ ] #B-25 — Stockpile low alert (available < 5 → Telegram notification)
+[ ] #B-26 — Farcaster cross-posting backup channel
+[ ] #B-27 — Claude Code skills: /pre-launch-checklist, /deploy-verify, /roast-quality-check

@@ -98,9 +98,13 @@ export function getAllExamples(character: CharacterConfig): CharacterExample[] {
   return Object.values(character.examples).flat();
 }
 
-export function getRandomExamples(character: CharacterConfig, count: number): CharacterExample[] {
-  const all = getAllExamples(character);
-  const shuffled = [...all].sort(() => Math.random() - 0.5);
+export function getRandomExamples(
+  character: CharacterConfig,
+  count: number,
+  section: string = 'best',
+): CharacterExample[] {
+  const examples = character.examples[section] ?? [];
+  const shuffled = [...examples].sort(() => Math.random() - 0.5);
   return shuffled.slice(0, count);
 }
 
