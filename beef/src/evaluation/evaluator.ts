@@ -151,12 +151,8 @@ export function preFilter(tweetText: string, targetName?: string): PreFilterResu
     return { pass: false, reason: `exceeds 3 sentences (${String(sentenceCount)} found)` };
   }
 
-  // 2a. Character count > 280 → auto-reject (Twitter limit)
-  if (tweetText.length > 280) {
-    return { pass: false, reason: `exceeds 280 chars (${String(tweetText.length)})` };
-  }
-
-  // 2b. Character count > 220 → auto-reject (human data: >200ch avg 2.59, diminishing returns)
+  // 2. Character count > 220 → auto-reject (human data: >200ch avg 2.59, diminishing returns)
+  // Subsumes the old 280ch Twitter limit — anything over 220 is rejected for quality reasons.
   if (tweetText.length > 220) {
     return { pass: false, reason: `too long for impact (${String(tweetText.length)} chars, max 220)` };
   }

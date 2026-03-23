@@ -534,10 +534,10 @@ describe('preFilter', () => {
     expect(result.pass).toBe(true);
   });
 
-  it('rejects tweets over 280 characters', () => {
-    const result = preFilter('a'.repeat(281));
+  it('rejects tweets over 220 characters', () => {
+    const result = preFilter('a'.repeat(221));
     expect(result.pass).toBe(false);
-    expect(result.reason).toContain('exceeds 280 chars');
+    expect(result.reason).toContain('max 220');
   });
 
   it.each([
@@ -599,6 +599,37 @@ describe('preFilter', () => {
 
   it('handles multiple dots in domain and numbers together', () => {
     const result = preFilter("pump.fun called presales scams, ran a $1.3B presale, then spent $331M buying back a token that's down 79%. as their competitor: thank you.");
+    expect(result.pass).toBe(true);
+  });
+
+  it('rejects blacklisted target by name (case-insensitive)', () => {
+    const result = preFilter('some roast text under limit', 'Zora');
+    expect(result.pass).toBe(false);
+    expect(result.reason).toContain('blacklisted target');
+  });
+
+  it('passes when targetName is undefined (no blacklist check)', () => {
+    const result = preFilter('uniswap governance spent $11M watching bots frontrun swaps');
+    expect(result.pass).toBe(true);
+  });
+
+  it('passes when targetName is not blacklisted', () => {
+    const result = preFilter('short roast text', 'CZ');
+    expect(result.pass).toBe(true);
+  });
+
+  it.each([
+    'i run on $0.002 per token so dont expect shakespeare',
+    'i cost €4 a month and it shows',
+    'my inference budget says otherwise',
+  ])('rejects self-deprecating AI opener: %s', (text) => {
+    const result = preFilter(text);
+    expect(result.pass).toBe(false);
+    expect(result.reason).toContain('self-deprecating');
+  });
+
+  it('passes AI self-reference that is not self-deprecating', () => {
+    const result = preFilter('i audited their repo and found 47 critical vulnerabilities');
     expect(result.pass).toBe(true);
   });
 });
