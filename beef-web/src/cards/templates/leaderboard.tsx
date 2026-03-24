@@ -17,24 +17,24 @@ export function Leaderboard(data: LeaderboardData): React.ReactElement {
       style={{
         display: 'flex',
         flexDirection: 'column',
-        width: '1080px',
+        width: '1200px',
         background: colors.bg,
-        height: '1080px',
+        height: '1200px',
         fontFamily: fonts.mono,
         color: colors.text,
-        padding: '48px 44px',
+        padding: '56px 52px',
       }}
     >
       {/* Header */}
-      <div style={{ display: 'flex', flexDirection: 'column', marginBottom: '32px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '6px' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', marginBottom: '36px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '8px' }}>
           {avatarDataUrl && (
-            <img src={avatarDataUrl} width={28} height={28} style={{ borderRadius: '50%' }} />
+            <img src={avatarDataUrl} width={44} height={44} style={{ borderRadius: '50%' }} />
           )}
           <span
             style={{
               fontFamily: fonts.slab,
-              fontSize: '32px',
+              fontSize: '48px',
               fontWeight: 700,
               color: colors.red,
               letterSpacing: '-0.02em',
@@ -44,7 +44,7 @@ export function Leaderboard(data: LeaderboardData): React.ReactElement {
             {data.title}
           </span>
         </div>
-        <span style={{ fontSize: '13px', color: colors.textDim, marginLeft: '40px' }}>
+        <span style={{ fontSize: '20px', color: colors.textDim, marginLeft: '60px' }}>
           {data.subtitle}
         </span>
       </div>
@@ -54,9 +54,9 @@ export function Leaderboard(data: LeaderboardData): React.ReactElement {
         style={{
           display: 'flex',
           width: '100%',
-          height: '2px',
+          height: '3px',
           background: `linear-gradient(90deg, ${colors.red}, ${colors.redBright}, ${colors.red}, transparent)`,
-          marginBottom: '20px',
+          marginBottom: '24px',
         }}
       />
 
@@ -64,26 +64,26 @@ export function Leaderboard(data: LeaderboardData): React.ReactElement {
       <div
         style={{
           display: 'flex',
-          padding: '8px 16px',
-          marginBottom: '4px',
+          padding: '10px 20px',
+          marginBottom: '6px',
         }}
       >
-        <span style={{ width: '50px', fontSize: '9px', fontWeight: 700, color: colors.textMuted, letterSpacing: '0.1em' }}>
+        <span style={{ width: '60px', fontSize: '14px', fontWeight: 700, color: colors.textMuted, letterSpacing: '0.1em' }}>
           #
         </span>
-        <span style={{ flex: 1, fontSize: '9px', fontWeight: 700, color: colors.textMuted, letterSpacing: '0.1em' }}>
+        <span style={{ flex: 1, fontSize: '14px', fontWeight: 700, color: colors.textMuted, letterSpacing: '0.1em' }}>
           TARGET
         </span>
-        <span style={{ width: '120px', fontSize: '9px', fontWeight: 700, color: colors.textMuted, letterSpacing: '0.1em' }}>
+        <span style={{ width: '160px', fontSize: '14px', fontWeight: 700, color: colors.textMuted, letterSpacing: '0.1em' }}>
           SCORE
         </span>
-        <span style={{ width: '80px', fontSize: '9px', fontWeight: 700, color: colors.textMuted, letterSpacing: '0.1em', textAlign: 'right' }}>
+        <span style={{ width: '100px', fontSize: '14px', fontWeight: 700, color: colors.textMuted, letterSpacing: '0.1em', textAlign: 'right' }}>
           ROASTS
         </span>
       </div>
 
       {/* Entries */}
-      <div style={{ display: 'flex', flexDirection: 'column', flex: 1, gap: '2px' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', flex: 1, gap: '3px' }}>
         {entries.map((entry) => {
           const isTop3 = entry.rank <= 3;
           const sColor = scoreColor(entry.score);
@@ -95,18 +95,19 @@ export function Leaderboard(data: LeaderboardData): React.ReactElement {
               style={{
                 display: 'flex',
                 alignItems: 'center',
-                padding: '12px 16px',
+                padding: '14px 20px',
+                gap: '16px',
                 background: isTop3 ? colors.bgElevated : (entry.rank % 2 === 0 ? colors.bgSurface : 'transparent'),
-                borderLeft: isTop3 ? `3px solid ${colors.red}` : '3px solid transparent',
-                borderRadius: '2px',
+                borderLeft: isTop3 ? `4px solid ${colors.red}` : '4px solid transparent',
+                borderRadius: '3px',
               }}
             >
               {/* Rank */}
               <span
                 style={{
-                  width: '50px',
+                  width: '60px',
                   fontFamily: fonts.slab,
-                  fontSize: isTop3 ? '22px' : '18px',
+                  fontSize: isTop3 ? '32px' : '26px',
                   fontWeight: 700,
                   color: isTop3 ? colors.red : colors.textMuted,
                 }}
@@ -118,7 +119,7 @@ export function Leaderboard(data: LeaderboardData): React.ReactElement {
               <span
                 style={{
                   flex: 1,
-                  fontSize: '15px',
+                  fontSize: '24px',
                   fontWeight: isTop3 ? 700 : 400,
                   color: isTop3 ? colors.text : colors.textDim,
                 }}
@@ -127,14 +128,14 @@ export function Leaderboard(data: LeaderboardData): React.ReactElement {
               </span>
 
               {/* Score bar */}
-              <div style={{ display: 'flex', flexDirection: 'column', width: '120px', gap: '3px' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', width: '160px', gap: '4px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                   <div
                     style={{
                       flex: 1,
-                      height: '5px',
+                      height: '8px',
                       background: colors.border,
-                      borderRadius: '3px',
+                      borderRadius: '4px',
                       overflow: 'hidden',
                       display: 'flex',
                     }}
@@ -144,17 +145,17 @@ export function Leaderboard(data: LeaderboardData): React.ReactElement {
                         width: `${barWidth}%`,
                         height: '100%',
                         background: sColor,
-                        borderRadius: '3px',
+                        borderRadius: '4px',
                       }}
                     />
                   </div>
                   <span
                     style={{
-                      fontSize: '12px',
+                      fontSize: '20px',
                       fontWeight: 600,
                       color: sColor,
                       fontVariantNumeric: 'tabular-nums',
-                      width: '28px',
+                      width: '40px',
                       textAlign: 'right',
                     }}
                   >
@@ -166,9 +167,9 @@ export function Leaderboard(data: LeaderboardData): React.ReactElement {
               {/* Count */}
               <span
                 style={{
-                  width: '80px',
+                  width: '100px',
                   textAlign: 'right',
-                  fontSize: '13px',
+                  fontSize: '22px',
                   fontWeight: 600,
                   color: colors.textDim,
                   fontVariantNumeric: 'tabular-nums',
@@ -187,15 +188,15 @@ export function Leaderboard(data: LeaderboardData): React.ReactElement {
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'center',
-          paddingTop: '20px',
+          paddingTop: '24px',
           borderTop: `1px solid ${colors.border}`,
-          marginTop: '16px',
+          marginTop: '20px',
         }}
       >
-        <span style={{ fontSize: '11px', fontWeight: 600, color: colors.textDim }}>
+        <span style={{ fontSize: '18px', fontWeight: 600, color: colors.textDim }}>
           @0xBeefer
         </span>
-        <span style={{ fontSize: '10px', color: colors.textMuted }}>
+        <span style={{ fontSize: '16px', color: colors.textMuted }}>
           0xbeef.wtf
         </span>
       </div>

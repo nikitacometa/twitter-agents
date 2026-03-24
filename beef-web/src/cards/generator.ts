@@ -11,6 +11,7 @@ import { KillReport } from './templates/kill-report.js';
 import { StatsDashboard } from './templates/stats-dashboard.js';
 import { Leaderboard } from './templates/leaderboard.js';
 import { Milestone } from './templates/milestone.js';
+import { StatCard } from './templates/stat-card.js';
 
 interface GenerateOptions {
   format?: 'jpeg' | 'png';
@@ -112,6 +113,14 @@ function resolveTemplate(card: CardData): TemplateResult {
         height: sizes.card.height,
         artBg: randomFireBg(),
         artOpacity: 0.7,
+      };
+    case 'stat-card':
+      return {
+        element: StatCard(card.data),
+        width: sizes.card.width,
+        height: sizes.card.height,
+        artBg: artBackgrounds.emberScatter,
+        artOpacity: 0.2,
       };
   }
 }

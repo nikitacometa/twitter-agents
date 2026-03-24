@@ -56,6 +56,6 @@ export function targetTypeColor(type: string): string {
 }
 
 export const sizes = {
-  card: { width: 1200, height: 630 },
-  square: { width: 1080, height: 1080 },
+  card: { width: 1600, height: 900 },
+  square: { width: 1200, height: 1200 },
 } as const;

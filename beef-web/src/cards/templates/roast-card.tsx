@@ -5,25 +5,26 @@ import { avatarDataUrl } from '../assets.js';
 function ScoreDots({ score }: { score: number }) {
   const filled = Math.round(score);
   return (
-    <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+    <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
       {[1, 2, 3, 4, 5].map((i) => (
         <div
           key={i}
           style={{
-            width: '10px',
-            height: '10px',
+            width: '18px',
+            height: '18px',
             borderRadius: '50%',
             background: i <= filled ? colors.red : colors.borderAccent,
-            border: `1px solid ${i <= filled ? colors.red : colors.textMuted}`,
+            border: `2px solid ${i <= filled ? colors.red : colors.textMuted}`,
           }}
         />
       ))}
       <span
         style={{
           fontFamily: fonts.mono,
-          fontSize: '13px',
+          fontSize: '22px',
+          fontWeight: 600,
           color: colors.textDim,
-          marginLeft: '6px',
+          marginLeft: '8px',
         }}
       >
         {score.toFixed(1)}
@@ -34,10 +35,10 @@ function ScoreDots({ score }: { score: number }) {
 
 function TerminalDots() {
   return (
-    <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
-      <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#ff5f57' }} />
-      <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#febc2e' }} />
-      <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#28c840' }} />
+    <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+      <div style={{ width: '14px', height: '14px', borderRadius: '50%', background: '#ff5f57' }} />
+      <div style={{ width: '14px', height: '14px', borderRadius: '50%', background: '#febc2e' }} />
+      <div style={{ width: '14px', height: '14px', borderRadius: '50%', background: '#28c840' }} />
     </div>
   );
 }
@@ -53,9 +54,9 @@ export function RoastCard(data: RoastCardData): React.ReactElement {
       style={{
         display: 'flex',
         flexDirection: 'column',
-        width: '1200px',
-        height: '630px',
-        padding: '40px 48px',
+        width: '1600px',
+        height: '900px',
+        padding: '48px 56px',
         fontFamily: fonts.mono,
         color: colors.text,
         position: 'relative',
@@ -67,14 +68,14 @@ export function RoastCard(data: RoastCardData): React.ReactElement {
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'center',
-          marginBottom: '8px',
+          marginBottom: '12px',
         }}
       >
-        <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
           <TerminalDots />
           <span
             style={{
-              fontSize: '11px',
+              fontSize: '18px',
               fontWeight: 700,
               letterSpacing: '0.12em',
               textTransform: 'uppercase',
@@ -90,13 +91,13 @@ export function RoastCard(data: RoastCardData): React.ReactElement {
           style={{
             display: 'flex',
             fontFamily: fonts.slab,
-            fontSize: '11px',
+            fontSize: '18px',
             fontWeight: 700,
             letterSpacing: '0.12em',
             textTransform: 'uppercase',
             color: colors.red,
-            border: `2px solid ${colors.red}`,
-            padding: '3px 10px',
+            border: `3px solid ${colors.red}`,
+            padding: '6px 16px',
             transform: 'rotate(12deg)',
             opacity: 0.7,
           }}
@@ -110,18 +111,18 @@ export function RoastCard(data: RoastCardData): React.ReactElement {
         style={{
           display: 'flex',
           width: '100%',
-          height: '1px',
+          height: '2px',
           background: `linear-gradient(90deg, ${colors.red}, ${colors.redBright}, ${colors.red}, transparent)`,
-          marginBottom: '28px',
+          marginBottom: '36px',
         }}
       />
 
       {/* Target name + type */}
-      <div style={{ display: 'flex', alignItems: 'baseline', gap: '16px', marginBottom: '6px' }}>
+      <div style={{ display: 'flex', alignItems: 'baseline', gap: '20px', marginBottom: '8px' }}>
         <span
           style={{
             fontFamily: fonts.slab,
-            fontSize: '38px',
+            fontSize: '56px',
             fontWeight: 700,
             color: colors.text,
             lineHeight: 1.1,
@@ -131,14 +132,14 @@ export function RoastCard(data: RoastCardData): React.ReactElement {
         </span>
         <span
           style={{
-            fontSize: '10px',
+            fontSize: '16px',
             fontWeight: 700,
             letterSpacing: '0.1em',
             textTransform: 'uppercase',
             color: typeColor,
-            border: `1px solid ${typeColor}`,
-            padding: '2px 8px',
-            borderRadius: '2px',
+            border: `2px solid ${typeColor}`,
+            padding: '4px 12px',
+            borderRadius: '3px',
           }}
         >
           {data.targetType}
@@ -150,12 +151,12 @@ export function RoastCard(data: RoastCardData): React.ReactElement {
         <span
           style={{
             display: 'flex',
-            fontSize: '10px',
+            fontSize: '16px',
             fontWeight: 600,
             letterSpacing: '0.08em',
             textTransform: 'uppercase',
             color: colors.textDim,
-            marginBottom: '20px',
+            marginBottom: '24px',
           }}
         >
           {data.angle}
@@ -172,10 +173,10 @@ export function RoastCard(data: RoastCardData): React.ReactElement {
       >
         <span
           style={{
-            fontSize: data.roastText.length > 180 ? '20px' : data.roastText.length > 120 ? '22px' : '26px',
+            fontSize: data.roastText.length > 200 ? '30px' : data.roastText.length > 140 ? '34px' : '40px',
             lineHeight: 1.5,
             color: colors.text,
-            maxWidth: '1000px',
+            maxWidth: '1400px',
           }}
         >
           {data.roastText}
@@ -187,9 +188,9 @@ export function RoastCard(data: RoastCardData): React.ReactElement {
         style={{
           display: 'flex',
           width: '100%',
-          height: '1px',
+          height: '2px',
           background: `linear-gradient(90deg, transparent, ${colors.red}40, transparent)`,
-          marginBottom: '20px',
+          marginBottom: '24px',
         }}
       />
 
@@ -206,19 +207,19 @@ export function RoastCard(data: RoastCardData): React.ReactElement {
           style={{
             display: 'flex',
             alignItems: 'center',
-            gap: '16px',
+            gap: '20px',
           }}
         >
           <span
             style={{
-              fontSize: '11px',
+              fontSize: '18px',
               fontWeight: 700,
               letterSpacing: '0.1em',
               textTransform: 'uppercase',
               color: vColor,
-              border: `1px solid ${vColor}`,
-              padding: '4px 14px',
-              borderRadius: '2px',
+              border: `2px solid ${vColor}`,
+              padding: '6px 20px',
+              borderRadius: '3px',
               background: `${vColor}12`,
             }}
           >
@@ -228,20 +229,20 @@ export function RoastCard(data: RoastCardData): React.ReactElement {
         </div>
 
         {/* Branding */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
           {avatarDataUrl && (
             <img
               src={avatarDataUrl}
-              width={36}
-              height={36}
+              width={48}
+              height={48}
               style={{ borderRadius: '50%' }}
             />
           )}
           <div style={{ display: 'flex', flexDirection: 'column' }}>
-            <span style={{ fontSize: '13px', fontWeight: 600, color: colors.text }}>
+            <span style={{ fontSize: '20px', fontWeight: 600, color: colors.text }}>
               @0xBeefer
             </span>
-            <span style={{ fontSize: '10px', color: colors.textMuted }}>
+            <span style={{ fontSize: '15px', color: colors.textMuted }}>
               {ts}
             </span>
           </div>

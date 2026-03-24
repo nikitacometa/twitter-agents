@@ -8,8 +8,8 @@ export function Milestone(data: MilestoneData): React.ReactElement {
       style={{
         display: 'flex',
         flexDirection: 'column',
-        width: '1200px',
-        height: '630px',
+        width: '1600px',
+        height: '900px',
         fontFamily: fonts.mono,
         color: colors.text,
         alignItems: 'center',
@@ -24,7 +24,7 @@ export function Milestone(data: MilestoneData): React.ReactElement {
           top: '0',
           left: '0',
           right: '0',
-          height: '3px',
+          height: '4px',
           background: `linear-gradient(90deg, transparent, ${colors.red}, ${colors.redBright}, ${colors.red}, transparent)`,
         }}
       />
@@ -35,14 +35,14 @@ export function Milestone(data: MilestoneData): React.ReactElement {
           display: 'flex',
           flexDirection: 'column',
           alignItems: 'center',
-          gap: '8px',
+          gap: '12px',
         }}
       >
         {/* Big number / milestone */}
         <span
           style={{
             fontFamily: fonts.slab,
-            fontSize: '96px',
+            fontSize: '144px',
             fontWeight: 700,
             color: colors.red,
             lineHeight: 1,
@@ -56,7 +56,7 @@ export function Milestone(data: MilestoneData): React.ReactElement {
         <span
           style={{
             fontFamily: fonts.slab,
-            fontSize: '28px',
+            fontSize: '44px',
             fontWeight: 600,
             color: colors.text,
             lineHeight: 1.3,
@@ -69,12 +69,12 @@ export function Milestone(data: MilestoneData): React.ReactElement {
         {/* Supporting text */}
         <span
           style={{
-            fontSize: '15px',
+            fontSize: '24px',
             color: colors.textDim,
             lineHeight: 1.5,
             textAlign: 'center',
-            maxWidth: '600px',
-            marginTop: '8px',
+            maxWidth: '800px',
+            marginTop: '12px',
           }}
         >
           {data.supportingText}
@@ -86,18 +86,18 @@ export function Milestone(data: MilestoneData): React.ReactElement {
         style={{
           display: 'flex',
           alignItems: 'center',
-          gap: '12px',
-          marginTop: '40px',
+          gap: '16px',
+          marginTop: '48px',
         }}
       >
         {avatarDataUrl && (
-          <img src={avatarDataUrl} width={48} height={48} style={{ borderRadius: '50%' }} />
+          <img src={avatarDataUrl} width={64} height={64} style={{ borderRadius: '50%' }} />
         )}
         <div style={{ display: 'flex', flexDirection: 'column' }}>
-          <span style={{ fontSize: '14px', fontWeight: 600, color: colors.text }}>
+          <span style={{ fontSize: '22px', fontWeight: 600, color: colors.text }}>
             @0xBeefer
           </span>
-          <span style={{ fontSize: '11px', color: colors.textMuted }}>
+          <span style={{ fontSize: '16px', color: colors.textMuted }}>
             forensic accounting ai
           </span>
         </div>
@@ -111,7 +111,7 @@ export function Milestone(data: MilestoneData): React.ReactElement {
           bottom: '0',
           left: '0',
           right: '0',
-          height: '3px',
+          height: '4px',
           background: `linear-gradient(90deg, transparent, ${colors.red}, ${colors.redBright}, ${colors.red}, transparent)`,
         }}
       />

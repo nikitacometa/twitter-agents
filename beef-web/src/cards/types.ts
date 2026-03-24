@@ -1,4 +1,4 @@
-export type CardType = 'roast' | 'kill-report' | 'stats' | 'leaderboard' | 'milestone';
+export type CardType = 'roast' | 'kill-report' | 'stats' | 'leaderboard' | 'milestone' | 'stat-card';
 
 export interface RoastCardData {
   targetName: string;
@@ -61,9 +61,20 @@ export interface MilestoneData {
   supportingText: string;
 }
 
+export interface StatCardData {
+  targetName: string;
+  stats: Array<{
+    value: string;
+    label: string;
+    highlight?: boolean;
+  }>;
+  sourceText?: string;
+}
+
 export type CardData =
   | { type: 'roast'; data: RoastCardData }
   | { type: 'kill-report'; data: KillReportData }
   | { type: 'stats'; data: StatsDashboardData }
   | { type: 'leaderboard'; data: LeaderboardData }
-  | { type: 'milestone'; data: MilestoneData };
+  | { type: 'milestone'; data: MilestoneData }
+  | { type: 'stat-card'; data: StatCardData };
