@@ -829,3 +829,100 @@ Write a single casual reply in $BEEF's voice. Match the energy of the message �
   "diaryThought": "1 sentence diary note as $BEEF about this interaction. Lowercase, forensic, self-aware. Not a roast — an observation. Max 120 chars."
 }`;
 }
+
+// ---------------------------------------------------------------------------
+// Tweet-specific roast context — /roast-tweet pipeline
+// ---------------------------------------------------------------------------
+
+export interface TweetRoastContextInput {
+  tweetText: string;
+  tweetAuthor: string;
+  tweetTimestamp?: string;
+  metrics?: { likes: number; retweets: number; replies: number; views?: number };
+  parentTweet?: { text: string; author: string };
+  quotedTweet?: { text: string; author: string };
+  enrichmentContext?: string;
+  imagePaths?: string[];
+  roastHistory?: { count: number; angles: string[]; recentClosers: string[] };
+  engagementRate?: number;
+  tweetAgeDays?: number;
+}
+
+/**
+ * Build a unified profileContext string for tweet-specific roasting.
+ * Puts the TARGET TWEET first (primary ammunition), author profile second.
+ * Output is injected as `profileContext` into generateRoasts() — no signature changes needed.
+ */
+export function buildTweetRoastContext(input: TweetRoastContextInput): string {
+  const { sanitized: safeTweet } = sanitizeInput(input.tweetText);
+  const { sanitized: safeAuthor } = sanitizeInput(input.tweetAuthor);
+  const sections: string[] = [];
+
+  // --- 1. Target tweet (primary section) ---
+  const tweetHeader = input.tweetTimestamp
+    ? `"${safeTweet}" — @${safeAuthor}, ${input.tweetTimestamp}`
+    : `"${safeTweet}" — @${safeAuthor}`;
+
+  const metricLine = input.metrics
+    ? `\nEngagement: ${String(input.metrics.likes)} likes, ${String(input.metrics.retweets)} RTs, ${String(input.metrics.replies)} replies${input.metrics.views ? `, ${String(input.metrics.views)} views` : ''}`
+    : '';
+
+  const ageLine = input.tweetAgeDays !== undefined && input.tweetAgeDays > 2
+    ? `\nNOTE: This tweet is ${String(input.tweetAgeDays)} days old. Acknowledge timing or go evergreen.`
+    : '';
+
+  const rateLine = input.engagementRate !== undefined
+    ? `\nEngagement rate: ${input.engagementRate.toFixed(3)}% — ${input.engagementRate < 0.1 ? 'their followers are decorative' : input.engagementRate < 1 ? 'below average reach' : 'decent engagement'}`
+    : '';
+
+  let conversationChain = '';
+  if (input.parentTweet) {
+    const { sanitized: safeParent } = sanitizeInput(input.parentTweet.text);
+    conversationChain += `\nIn reply to @${sanitizeInput(input.parentTweet.author).sanitized}: "${safeParent}"`;
+  }
+  if (input.quotedTweet) {
+    const { sanitized: safeQuoted } = sanitizeInput(input.quotedTweet.text);
+    conversationChain += `\nQuoting @${sanitizeInput(input.quotedTweet.author).sanitized}: "${safeQuoted}"`;
+  }
+
+  sections.push(`## TARGET TWEET (YOUR PRIMARY AMMUNITION)
+${tweetHeader}${metricLine}${rateLine}${ageLine}${conversationChain}`);
+
+  // --- 2. Media (if any) ---
+  if (input.imagePaths && input.imagePaths.length > 0) {
+    const fileList = input.imagePaths.map((p) => `  - ${p}`).join('\n');
+    sections.push(`## TWEET MEDIA
+${String(input.imagePaths.length)} images attached. Read them for roast material (charts, screenshots, memes — all fair game).
+${fileList}
+Use the Read tool to view these images. Reference what you see in your roast if it adds bite.`);
+  }
+
+  // --- 3. Author profile (supplementary) ---
+  if (input.enrichmentContext) {
+    const { sanitized: safeProfile } = sanitizeInput(input.enrichmentContext);
+    sections.push(`## AUTHOR PROFILE (supplementary — the tweet above is your primary target)
+${safeProfile}`);
+  }
+
+  // --- 4. Roast history (anti-repetition) ---
+  if (input.roastHistory && input.roastHistory.count > 0) {
+    const angleList = input.roastHistory.angles.length > 0
+      ? `Angles used: ${input.roastHistory.angles.join(', ')}.`
+      : '';
+    const closerList = input.roastHistory.recentClosers.length > 0
+      ? `\nAvoid these recent punchline endings: ${input.roastHistory.recentClosers.map((c) => `"${c}"`).join(', ')}`
+      : '';
+    sections.push(`## ROAST HISTORY
+You've roasted @${safeAuthor} ${String(input.roastHistory.count)} times before. ${angleList}${closerList}`);
+  }
+
+  // --- 5. Directive ---
+  sections.push(`## DIRECTIVE
+Roast THIS SPECIFIC TWEET — not the author in general, not the market, THIS tweet.
+Your #1 weapon: quote-flip their exact words back at them with a brutal twist.
+Their profile is supplementary color — the tweet text is your primary ammunition.
+If they flex numbers → fact-check and expose. If they cope → amplify the cope.
+One tweet, one kill shot. Make it specific enough that it only works for THIS tweet.`);
+
+  return sections.join('\n\n');
+}
