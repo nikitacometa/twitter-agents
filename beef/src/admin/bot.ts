@@ -23,6 +23,9 @@ import type { TwitterEnricher } from '@farm/twitter-enricher.js';
 import { downloadTweetMedia } from '@common/utils/media-downloader.js';
 import { buildTweetRoastContext } from '@roast/prompt-builder.js';
 import type { TweetRoastContextInput } from '@roast/prompt-builder.js';
+import type { MemeGenerator } from '@meme/meme-generator.js';
+import { ImgflipClient } from '@meme/imgflip-client.js';
+import { InputFile } from 'grammy';
 import { pickMutations, formatMutationSection } from '@farm/mutations.js';
 import {
   escapeHtml,
@@ -33,6 +36,14 @@ import {
 
 function tweetLink(tweetId: string, username: string): string {
   return `<a href="https://x.com/${username}/status/${tweetId}">Tweet</a>`;
+}
+
+function buildMemeKeyboard(roasts: { id: number }[]): InlineKeyboard {
+  const kb = new InlineKeyboard();
+  for (const r of roasts.slice(0, 8)) {
+    kb.text(`🖼 #${String(r.id)}`, `meme:${String(r.id)}`);
+  }
+  return kb;
 }
 
 interface ParsedFlags {
@@ -98,9 +109,11 @@ export function createBot(opts: {
   twitterUsername?: string;
   twitterClient?: ITwitterClient;
   twitterEnricher?: TwitterEnricher;
+  memeGenerator?: MemeGenerator;
 }): Bot {
   const { token, adminIds, openAccess, feedbackRepo, provider, logger, queueManager, configRepo, exampleRepo, patternRepo, stockpileRepo, farmAttemptRepo, roastRepo, postingMode, pollMentions } = opts;
   const twitterUsername = opts.twitterUsername || '0xBeefer';
+  const memeGen = opts.memeGenerator;
   const bot = new Bot(token);
 
   // --- Admin guard (skip if openAccess or no IDs configured) ---
@@ -135,6 +148,7 @@ export function createBot(opts: {
         '/roast &lt;target&gt; — Sonnet, 9 variants (3×3)',
         '/roasttweet &lt;tweet_url&gt; — Opus roast of a specific tweet (full enrichment + eval)',
         '/farm &lt;target&gt; — 6 variants + mutations + serious eval',
+        '/meme &lt;target&gt; | #&lt;id&gt; | &lt;tweet_url&gt; — generate meme',
         '',
         '<b>Twitter:</b>',
         '/follow @handle1 @handle2 — follow accounts (15-45s jitter)',
@@ -168,6 +182,12 @@ export function createBot(opts: {
         '  <code>--mutations N</code> creative mutations <i>(default: 2)</i>',
         '  <code>--threshold N</code> stockpile min score <i>(default: 3.5)</i>',
         '  <code>--quick</code>       1-judge eval instead of 5-judge',
+        '',
+        '<b>🖼 /meme</b> &lt;target&gt; | #&lt;id&gt; | &lt;tweet_url&gt;',
+        'Generate standalone meme roast',
+        '  <code>/meme hyperliquid</code> — meme for target name',
+        '  <code>/meme #42</code> — meme from stockpile entry',
+        '  <code>/meme https://x.com/...</code> — meme response to tweet',
         '',
         '━━━━━━━━━━━━━━━━━━━━━━',
         '<b>🐦 Twitter</b>',
@@ -617,6 +637,172 @@ export function createBot(opts: {
       }
     })();
   });
+
+  // ---------------------------------------------------------------------------
+  // /meme — generate meme from target name, stockpile #id, or tweet URL
+  // ---------------------------------------------------------------------------
+
+  bot.command('meme', async (ctx) => {
+    const raw = ctx.match?.trim();
+    if (!raw) {
+      await ctx.reply(
+        'Usage:\n/meme &lt;target&gt; — standalone meme for target\n/meme #&lt;id&gt; — meme from stockpile entry\n/meme &lt;tweet_url&gt; — witty meme response to tweet',
+        { parse_mode: 'HTML' },
+      );
+      return;
+    }
+
+    if (!memeGen) {
+      await ctx.reply('⚠️ Meme generator not configured (IMGFLIP_USERNAME/PASSWORD missing or no LLM provider).');
+      return;
+    }
+
+    const chatId = ctx.chat?.id;
+    if (!chatId) return;
+    const api = ctx.api;
+
+    void (async () => {
+      const startTime = Date.now();
+      const statusMsg = await api.sendMessage(chatId, '🎨 Generating meme...');
+
+      try {
+        // --- Mode 1: Stockpile entry (#id) ---
+        const stockpileMatch = /^#(\d+)$/.exec(raw);
+        if (stockpileMatch && stockpileRepo) {
+          const id = parseInt(stockpileMatch[1]!, 10);
+          const entry = stockpileRepo.getById(id);
+          if (!entry) {
+            await api.editMessageText(chatId, statusMsg.message_id, `❌ Stockpile #${String(id)} not found.`);
+            return;
+          }
+
+          await api.editMessageText(chatId, statusMsg.message_id, `🎨 Meme for <b>${escapeHtml(entry.targetName)}</b> (stockpile #${String(id)})...`, { parse_mode: 'HTML' });
+
+          const result = await memeGen.generate({
+            target: entry.targetName,
+            targetType: (entry.targetType ?? 'project') as 'project' | 'person',
+            roastText: entry.tweetText,
+            context: entry.researchNotes?.slice(0, 500),
+            roastAngle: entry.angle ?? undefined,
+            preferStandalone: true,
+          });
+
+          await sendMemeResult(api, chatId, statusMsg.message_id, result, entry.targetName, startTime);
+          return;
+        }
+
+        // --- Mode 2: Tweet URL ---
+        if (isTweetUrl(raw)) {
+          const twitterClient = opts.twitterClient;
+          if (!twitterClient?.getTweet) {
+            await api.editMessageText(chatId, statusMsg.message_id, '⚠️ Twitter client not available for tweet fetch.');
+            return;
+          }
+
+          const tweetId = parseTweetUrl(raw);
+          if (!tweetId) {
+            await api.editMessageText(chatId, statusMsg.message_id, '❌ Invalid tweet URL.');
+            return;
+          }
+
+          await api.editMessageText(chatId, statusMsg.message_id, '🔍 Fetching tweet...', { parse_mode: 'HTML' });
+          const tweet = await twitterClient.getTweet(tweetId);
+          if (!tweet) {
+            await api.editMessageText(chatId, statusMsg.message_id, '❌ Could not fetch tweet.');
+            return;
+          }
+
+          // Build context from tweet
+          const contextInput: TweetRoastContextInput = {
+            tweetText: tweet.text,
+            tweetAuthor: tweet.authorName,
+          };
+          const tweetContext = buildTweetRoastContext(contextInput);
+
+          await api.editMessageText(chatId, statusMsg.message_id, `🎨 Meme response to <b>${escapeHtml(tweet.authorName)}</b>...`, { parse_mode: 'HTML' });
+
+          const result = await memeGen.generate({
+            target: tweet.authorName,
+            targetType: 'person',
+            context: tweetContext,
+            preferStandalone: true,
+          });
+
+          await sendMemeResult(api, chatId, statusMsg.message_id, result, tweet.authorName, startTime, raw);
+          return;
+        }
+
+        // --- Mode 3: Target name ---
+        await api.editMessageText(chatId, statusMsg.message_id, `🎨 Meme for <b>${escapeHtml(raw)}</b>...`, { parse_mode: 'HTML' });
+
+        const result = await memeGen.generate({
+          target: raw,
+          targetType: 'project',
+          preferStandalone: true,
+        });
+
+        await sendMemeResult(api, chatId, statusMsg.message_id, result, raw, startTime);
+      } catch (error) {
+        const elapsed = Math.round((Date.now() - startTime) / 1000);
+        logger.error({ err: error, raw, elapsed }, '/meme command failed');
+        await api
+          .editMessageText(
+            chatId,
+            statusMsg.message_id,
+            `❌ Meme failed (${String(elapsed)}s): ${escapeHtml(getErrorMessage(error).slice(0, 200))}`,
+            { parse_mode: 'HTML' },
+          )
+          .catch(() => {});
+      }
+    })();
+  });
+
+  /** Send meme result as photo or text fallback. */
+  async function sendMemeResult(
+    api: Bot['api'],
+    chatId: number,
+    statusMsgId: number,
+    result: Awaited<ReturnType<MemeGenerator['generate']>>,
+    targetName: string,
+    startTime: number,
+    tweetUrl?: string,
+  ): Promise<void> {
+    const elapsed = Math.round((Date.now() - startTime) / 1000);
+
+    if (result.meme) {
+      // Delete status message and send photo
+      await api.deleteMessage(chatId, statusMsgId).catch(() => {});
+
+      const captionLines = [
+        `🎨 <b>${escapeHtml(targetName)}</b> — ${String(elapsed)}s`,
+        `Template: ${result.meme.templateName}`,
+        `Format: ${result.format}`,
+      ];
+      if (tweetUrl) {
+        captionLines.push(`<a href="${escapeHtml(tweetUrl)}">Original tweet</a>`);
+      }
+      if (result.tweetText) {
+        captionLines.push('');
+        captionLines.push(`<code>${escapeHtml(result.tweetText)}</code>`);
+      }
+
+      await api.sendPhoto(chatId, new InputFile(result.meme.localPath), {
+        caption: captionLines.join('\n'),
+        parse_mode: 'HTML',
+      });
+
+      // Cleanup tmp file after send
+      void ImgflipClient.cleanupTmpFile(result.meme.localPath);
+    } else {
+      // Text-only fallback
+      const lines = [
+        `📝 <b>${escapeHtml(targetName)}</b> — text only (${String(elapsed)}s)`,
+        '',
+        `<code>${escapeHtml(result.tweetText)}</code>`,
+      ];
+      await api.editMessageText(chatId, statusMsgId, lines.join('\n'), { parse_mode: 'HTML' });
+    }
+  }
 
   // ---------------------------------------------------------------------------
   // /follow @handle1 @handle2 ... — follow Twitter users with safe delays
@@ -1364,11 +1550,13 @@ export function createBot(opts: {
       const fullMessage = formatStockpileList(roasts, title);
 
       if (fullMessage.length <= 4000) {
-        await ctx.reply(fullMessage, { parse_mode: 'HTML' });
+        const keyboard = memeGen ? buildMemeKeyboard(roasts) : undefined;
+        await ctx.reply(fullMessage, { parse_mode: 'HTML', reply_markup: keyboard });
       } else {
         await ctx.reply(title, { parse_mode: 'HTML' });
         for (let i = 0; i < roasts.length; i++) {
-          await ctx.reply(formatStockpileRoast(roasts[i]!, i), { parse_mode: 'HTML' });
+          const keyboard = memeGen ? new InlineKeyboard().text(`🖼 Meme #${String(roasts[i]!.id)}`, `meme:${String(roasts[i]!.id)}`) : undefined;
+          await ctx.reply(formatStockpileRoast(roasts[i]!, i), { parse_mode: 'HTML', reply_markup: keyboard });
         }
       }
       return;
@@ -1408,7 +1596,8 @@ export function createBot(opts: {
     const fullMessage = formatStockpileList(roasts, title);
 
     if (fullMessage.length <= 4000) {
-      await ctx.reply(fullMessage, { parse_mode: 'HTML' });
+      const keyboard = memeGen ? buildMemeKeyboard(roasts) : undefined;
+      await ctx.reply(fullMessage, { parse_mode: 'HTML', reply_markup: keyboard });
     } else {
       // Send roasts one by one with summary header
       const available = roasts.filter((r) => r.status === 'available');
@@ -1416,8 +1605,9 @@ export function createBot(opts: {
       await ctx.reply(header, { parse_mode: 'HTML' });
 
       for (let i = 0; i < roasts.length; i++) {
+        const keyboard = memeGen ? new InlineKeyboard().text(`🖼 Meme #${String(roasts[i]!.id)}`, `meme:${String(roasts[i]!.id)}`) : undefined;
         const msg = formatStockpileRoast(roasts[i]!, i);
-        await ctx.reply(msg, { parse_mode: 'HTML' });
+        await ctx.reply(msg, { parse_mode: 'HTML', reply_markup: keyboard });
       }
     }
   });
@@ -1993,6 +2183,53 @@ export function createBot(opts: {
             `❌ <b>Regen failed:</b> ${escapeHtml(getErrorMessage(error).slice(0, 200))}`,
             { parse_mode: 'HTML' },
           ).catch(() => {});
+        }
+      })();
+
+    // --- Meme from stockpile ---
+    } else if (data.startsWith('meme:') && memeGen && stockpileRepo) {
+      const stockpileId = parseInt(data.slice(5), 10);
+      if (Number.isNaN(stockpileId)) {
+        await ctx.answerCallbackQuery({ text: 'Invalid stockpile ID', show_alert: true });
+        return;
+      }
+
+      const entry = stockpileRepo.getById(stockpileId);
+      if (!entry) {
+        await ctx.answerCallbackQuery({ text: `Stockpile #${String(stockpileId)} not found`, show_alert: true });
+        return;
+      }
+
+      await ctx.answerCallbackQuery({ text: 'Generating meme...' });
+
+      const chatId = ctx.chat?.id;
+      if (!chatId) return;
+
+      void (async () => {
+        const startTime = Date.now();
+        const statusMsg = await bot.api.sendMessage(chatId, `🎨 Meme for <b>${escapeHtml(entry.targetName)}</b>...`, { parse_mode: 'HTML' });
+        try {
+          const result = await memeGen.generate({
+            target: entry.targetName,
+            targetType: (entry.targetType ?? 'project') as 'project' | 'person',
+            roastText: entry.tweetText,
+            context: entry.researchNotes?.slice(0, 500) ?? undefined,
+            roastAngle: entry.angle ?? undefined,
+            preferStandalone: true,
+          });
+
+          await sendMemeResult(bot.api, chatId, statusMsg.message_id, result, entry.targetName, startTime);
+        } catch (error) {
+          const elapsed = Math.round((Date.now() - startTime) / 1000);
+          logger.error({ err: error, stockpileId }, 'Meme callback failed');
+          await bot.api
+            .editMessageText(
+              chatId,
+              statusMsg.message_id,
+              `❌ Meme failed (${String(elapsed)}s): ${escapeHtml(getErrorMessage(error).slice(0, 200))}`,
+              { parse_mode: 'HTML' },
+            )
+            .catch(() => {});
         }
       })();
     }

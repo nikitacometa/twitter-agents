@@ -17,6 +17,10 @@ export interface MemeInput {
   roastText?: string;
   /** Additional context: tweet text, research notes, etc. */
   context?: string;
+  /** Roast angle (DATA_BOMB, COMPARISON, etc.) — narrows template selection. */
+  roastAngle?: string;
+  /** When true, exclude meme_plus_text — force meme_only or text_only. */
+  preferStandalone?: boolean;
 }
 
 export interface MemeOutput {
@@ -73,6 +77,64 @@ function filterMemeBoxes(boxes: string[], template: MemeTemplate): FilterResult 
   return { passed: true };
 }
 
+// ─── Angle→Template Mapping ──────────────────────────────────────────────────
+
+/**
+ * Maps roast angles to compatible template IDs.
+ * Reduces 43 templates to 6-10 per angle, eliminating LLM decision fatigue.
+ */
+const ANGLE_TEMPLATE_MAP: Record<string, string[]> = {
+  // Is This A Pigeon, Change My Mind, Two Buttons, Panik Kalm Panik
+  DATA_BOMB: ['100777631', '129242436', '87743020', '226297822'],
+  // Drake, Tuxedo Winnie, Same Picture, Distracted Boyfriend
+  COMPARISON: ['181913649', '178591752', '180190441', '112126428'],
+  // This Is Fine, Roll Safe, Hide Pain Harold
+  UNDERSTATEMENT: ['55311130', '89370399', '27813981'],
+  // Disaster Girl, Laughing Leo, Woman Yelling At Cat
+  FAKE_COMPLIMENT: ['97984', '259237855', '188390779'],
+  // Batman Slapping Robin, Woman Yelling At Cat, Always Has Been
+  QUOTE_FLIP: ['438680', '188390779', '252600902'],
+  // This Is Fine, Hide Pain Harold, Roll Safe
+  SELF_AWARE: ['55311130', '27813981', '89370399'],
+  // Change My Mind, Roll Safe, Always Has Been, UNO Draw 25
+  RHETORICAL: ['129242436', '89370399', '252600902', '217743513'],
+  // Two Buttons, Panik Kalm Panik, Bike Fall, Distracted Boyfriend
+  RULE_OF_THREE: ['87743020', '226297822', '79132341', '112126428'],
+  // Trade Offer, Drake, Batman Slapping Robin, Spiderman Pointing
+  HYPOCRISY: ['309868304', '181913649', '438680', '110133729'],
+  // Anakin Padme 4 Panel, Surprised Pikachu, Monkey Puppet
+  BETRAYAL: ['322841258', '155067746', '148909805'],
+};
+
+function filterTemplatesByAngle(
+  allTemplates: MemeTemplate[],
+  angle?: string,
+  excludeIds?: string[],
+): MemeTemplate[] {
+  const excludeSet = new Set(excludeIds ?? []);
+
+  let pool: MemeTemplate[];
+  if (angle) {
+    const ids = ANGLE_TEMPLATE_MAP[angle.toUpperCase()];
+    if (ids) {
+      const idSet = new Set(ids);
+      pool = allTemplates.filter((t) => idSet.has(t.id));
+    } else {
+      // Unknown angle — fallback to Tier 1 only
+      pool = allTemplates.filter((t) => t.tier === 1);
+    }
+  } else {
+    // No angle — Tier 1 only
+    pool = allTemplates.filter((t) => t.tier === 1);
+  }
+
+  // Exclude previously used templates for this target
+  const filtered = pool.filter((t) => !excludeSet.has(t.id));
+
+  // If exclusion removed everything, return original pool
+  return filtered.length > 0 ? filtered : pool;
+}
+
 // ─── Prompt ──────────────────────────────────────────────────────────────────
 
 function buildMemePrompt(
@@ -101,39 +163,60 @@ function buildMemePrompt(
     ? `\n## RECENTLY USED TEMPLATES (avoid these unless PERFECT fit):\n${recentlyUsed.join(', ')}\n`
     : '';
 
+  // Truncate context to ~500 chars to prevent prompt bloat
+  const truncatedContext = input.context
+    ? input.context.length > 500
+      ? input.context.slice(0, 500) + '...'
+      : input.context
+    : '';
+
   const targetSection = [
     `Target: ${input.target}`,
     `Type: ${input.targetType}`,
-    input.context ? `Context: ${input.context}` : '',
     input.roastText ? `\nExisting roast text:\n"${input.roastText}"` : '',
   ].filter(Boolean).join('\n');
+
+  const contextSection = truncatedContext
+    ? `\n## KEY FACTS (use specific numbers/data in box text — numbers hit harder than words):\n${truncatedContext}\n`
+    : '';
 
   return `You are a meme generator for a crypto roast bot (@0xBeefer). Create the funniest, most savage meme possible.
 
 ## AVAILABLE TEMPLATES:
 
 ${templateList}
-${recentSection}
+${recentSection}${contextSection}
 ## TARGET:
 
 ${targetSection}
 
 ## TASK:
 
-Choose the best format for this target:
+Choose the best format:
+${input.preferStandalone ? `
+1. **meme_only** (PREFERRED) — the meme IS the roast. Caption: 1-5 words or empty. The image speaks for itself.
+   This is the strongest format when the template perfectly captures the joke.
 
-1. **meme_only** — the meme IS the entire post. Tweet text is just a short caption (max 30 chars) or empty string.
-   Use when: the visual format perfectly captures the joke. No text needed.
+2. **text_only** — no meme needed. Only if NO template fits this specific roast.
+` : input.roastText ? `
+1. **meme_only** (PREFERRED) — the meme IS a standalone visual joke. Caption: 1-5 words or empty.
+   Roast text already exists — your meme should be a DIFFERENT visual joke posted alongside it.
+   Prefer this format. The meme adds a visual angle the text can't.
 
 2. **meme_plus_text** — meme adds a DIFFERENT comedic angle than the roast text.
-   Use when: existing roast text is good AND a meme can add something the text doesn't say.
    CRITICAL: the meme must NOT repeat the roast text. It attacks from a different angle.
-   ${input.roastText ? 'Roast text is provided — use it as tweetText and create a complementary meme.' : 'Generate both roast text AND meme.'}
+   Use the provided roast text as tweetText.
 
-3. **text_only** — no meme needed, text is self-sufficient.
-   Use when: the roast is highly specific with numbers/data that doesn't fit a meme template.
+3. **text_only** — no meme needed. Only if NO template fits.
+` : `
+1. **meme_only** — the meme IS the entire post. Caption: 1-5 words or empty. The image speaks for itself.
 
-Then select the template and write box text.
+2. **meme_plus_text** — generate both roast text AND a complementary meme.
+   CRITICAL: text and meme must attack from DIFFERENT angles.
+
+3. **text_only** — no meme needed. Only if NO template fits.
+`}
+Select the template and write box text.
 
 ## RULES:
 - Each box: max chars per template's limit, max 8-10 words
@@ -177,8 +260,15 @@ export class MemeGenerator {
   }
 
   async generate(input: MemeInput): Promise<MemeOutput> {
+    // Target-specific dedup: exclude templates already used for this target
+    const targetHistory = this.historyRepo.getByTarget(input.target, 5);
+    const excludeIds = targetHistory.map((h) => h.templateId);
+
+    // Angle-based filtering: narrow 43 templates to 6-10
+    const filteredTemplates = filterTemplatesByAngle(this.templates, input.roastAngle, excludeIds);
+
     const recentlyUsed = this.historyRepo.getRecentTemplateNames(15);
-    const prompt = buildMemePrompt(input, this.templates, recentlyUsed);
+    const prompt = buildMemePrompt(input, filteredTemplates, recentlyUsed);
 
     // LLM call
     const result: AgentResult<LlmMemeOutput> = await this.provider.run('meme-generate', {
@@ -289,20 +379,17 @@ export class MemeGenerator {
   }
 
   async generateVariants(input: MemeInput, count: number): Promise<MemeOutput[]> {
-    const results: MemeOutput[] = [];
-    for (let i = 0; i < count; i++) {
-      try {
-        const result = await this.generate(input);
-        if (result.meme) {
-          results.push(result);
-        }
-      } catch (error) {
+    const promises = Array.from({ length: count }, (_, i) =>
+      this.generate(input).catch((error: unknown) => {
         this.logger.warn(
           { err: error, variant: i },
           `Meme variant ${String(i)} failed: ${getErrorMessage(error)}`,
         );
-      }
-    }
-    return results;
+        return null;
+      }),
+    );
+
+    const settled = await Promise.all(promises);
+    return settled.filter((r): r is MemeOutput => r !== null && r.meme !== null);
   }
 }

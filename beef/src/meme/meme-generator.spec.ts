@@ -21,6 +21,19 @@ const TEST_TEMPLATE: MemeTemplate = {
   examples: [{ boxes: ['a', 'b'], context: 'test' }],
 };
 
+const TEST_TEMPLATE_PIGEON: MemeTemplate = {
+  id: '100777631',
+  name: 'Is This A Pigeon',
+  boxCount: 3,
+  tier: 2,
+  structure: 'Box 1: subject. Box 2: misidentified thing. Box 3: question.',
+  tone: ['confused', 'delusional'],
+  bestFor: 'misidentification',
+  antiPatterns: 'not for comparisons',
+  charLimit: 50,
+  examples: [{ boxes: ['x', 'y', 'z'], context: 'test' }],
+};
+
 // ─── Mocks ──────────────────────────────────────────────────────────────────
 
 function mockLogger(): Logger {
@@ -453,6 +466,186 @@ describe('MemeGenerator', () => {
         expect.objectContaining({ variant: 1 }),
         expect.stringContaining('failed'),
       );
+    });
+  });
+
+  describe('angle filtering', () => {
+    it('includes Tier 2 template when angle maps to it', async () => {
+      // DATA_BOMB maps to Is This A Pigeon (100777631) — a Tier 2 template
+      const provider = mockProvider({
+        format: 'meme_only',
+        meme: {
+          templateId: '100777631',
+          boxes: ['cardano', '$149K revenue', 'is this a blockchain?'],
+          rationale: 'data bomb pigeon',
+        },
+      });
+
+      const gen = new MemeGenerator(imgflip, provider, historyRepo, log, [TEST_TEMPLATE, TEST_TEMPLATE_PIGEON]);
+      const result = await gen.generate({ ...DEFAULT_INPUT, roastAngle: 'DATA_BOMB' });
+
+      // Verify prompt was built with the pigeon template
+      // eslint-disable-next-line @typescript-eslint/unbound-method
+      const prompt = (vi.mocked(provider.run).mock.calls[0]![1] as { prompt: string }).prompt;
+      expect(prompt).toContain('Is This A Pigeon');
+      expect(result.meme).not.toBeNull();
+    });
+
+    it('excludes Tier 2 templates when no angle is provided', async () => {
+      const provider = mockProvider({
+        format: 'text_only',
+        roastText: 'test',
+        meme: null,
+      });
+
+      const gen = new MemeGenerator(imgflip, provider, historyRepo, log, [TEST_TEMPLATE, TEST_TEMPLATE_PIGEON]);
+      await gen.generate(DEFAULT_INPUT);
+
+      // eslint-disable-next-line @typescript-eslint/unbound-method
+      const prompt = (vi.mocked(provider.run).mock.calls[0]![1] as { prompt: string }).prompt;
+      // Tier 1 Drake should be in prompt, Tier 2 Pigeon should not
+      expect(prompt).toContain('Drake Hotline Bling');
+      expect(prompt).not.toContain('Is This A Pigeon');
+    });
+
+    it('falls back to Tier 1 for unknown angle', async () => {
+      const provider = mockProvider({
+        format: 'text_only',
+        roastText: 'test',
+        meme: null,
+      });
+
+      const gen = new MemeGenerator(imgflip, provider, historyRepo, log, [TEST_TEMPLATE, TEST_TEMPLATE_PIGEON]);
+      await gen.generate({ ...DEFAULT_INPUT, roastAngle: 'UNKNOWN_ANGLE' });
+
+      // eslint-disable-next-line @typescript-eslint/unbound-method
+      const prompt = (vi.mocked(provider.run).mock.calls[0]![1] as { prompt: string }).prompt;
+      expect(prompt).toContain('Drake Hotline Bling');
+      expect(prompt).not.toContain('Is This A Pigeon');
+    });
+
+    it('is case-insensitive for angle names', async () => {
+      const provider = mockProvider({
+        format: 'text_only',
+        roastText: 'test',
+        meme: null,
+      });
+
+      const gen = new MemeGenerator(imgflip, provider, historyRepo, log, [TEST_TEMPLATE, TEST_TEMPLATE_PIGEON]);
+      await gen.generate({ ...DEFAULT_INPUT, roastAngle: 'data_bomb' });
+
+      // eslint-disable-next-line @typescript-eslint/unbound-method
+      const prompt = (vi.mocked(provider.run).mock.calls[0]![1] as { prompt: string }).prompt;
+      expect(prompt).toContain('Is This A Pigeon');
+    });
+  });
+
+  describe('target dedup', () => {
+    it('calls getByTarget and excludes previously used templates', async () => {
+      const dedupeRepo = mockHistoryRepo();
+      // eslint-disable-next-line @typescript-eslint/unbound-method
+      vi.mocked(dedupeRepo.getByTarget).mockReturnValue([
+        { id: 1, templateId: '181913649', templateName: 'Drake Hotline Bling', target: 'Solana', boxes: ['a', 'b'], format: 'meme_only' as const, imageUrl: null, rationale: null, createdAt: '2026-01-01' },
+      ]);
+
+      const provider = mockProvider({
+        format: 'text_only',
+        roastText: 'test',
+        meme: null,
+      });
+
+      const gen = new MemeGenerator(imgflip, provider, dedupeRepo, log, [TEST_TEMPLATE, TEST_TEMPLATE_PIGEON]);
+      // No angle → Tier 1 only. Drake excluded by dedup → should get empty pool → fallback to full Tier 1 pool
+      await gen.generate(DEFAULT_INPUT);
+
+      // eslint-disable-next-line @typescript-eslint/unbound-method
+      expect(dedupeRepo.getByTarget).toHaveBeenCalledWith('Solana', 5);
+    });
+  });
+
+  describe('context injection', () => {
+    it('includes KEY FACTS section when context is provided', async () => {
+      const provider = mockProvider({
+        format: 'text_only',
+        roastText: 'test',
+        meme: null,
+      });
+
+      const gen = new MemeGenerator(imgflip, provider, historyRepo, log, [TEST_TEMPLATE]);
+      await gen.generate({ ...DEFAULT_INPUT, context: 'SOL TVL dropped 40%, validators = AWS' });
+
+      // eslint-disable-next-line @typescript-eslint/unbound-method
+      const prompt = (vi.mocked(provider.run).mock.calls[0]![1] as { prompt: string }).prompt;
+      expect(prompt).toContain('KEY FACTS');
+      expect(prompt).toContain('SOL TVL dropped 40%');
+    });
+
+    it('truncates context longer than 500 chars', async () => {
+      const provider = mockProvider({
+        format: 'text_only',
+        roastText: 'test',
+        meme: null,
+      });
+
+      const longContext = 'x'.repeat(600);
+      const gen = new MemeGenerator(imgflip, provider, historyRepo, log, [TEST_TEMPLATE]);
+      await gen.generate({ ...DEFAULT_INPUT, context: longContext });
+
+      // eslint-disable-next-line @typescript-eslint/unbound-method
+      const prompt = (vi.mocked(provider.run).mock.calls[0]![1] as { prompt: string }).prompt;
+      expect(prompt).not.toContain('x'.repeat(600));
+      expect(prompt).toContain('x'.repeat(500) + '...');
+    });
+
+    it('omits KEY FACTS when context is empty', async () => {
+      const provider = mockProvider({
+        format: 'text_only',
+        roastText: 'test',
+        meme: null,
+      });
+
+      const gen = new MemeGenerator(imgflip, provider, historyRepo, log, [TEST_TEMPLATE]);
+      await gen.generate({ target: 'Solana', targetType: 'project' });
+
+      // eslint-disable-next-line @typescript-eslint/unbound-method
+      const prompt = (vi.mocked(provider.run).mock.calls[0]![1] as { prompt: string }).prompt;
+      expect(prompt).not.toContain('KEY FACTS');
+    });
+  });
+
+  describe('preferStandalone', () => {
+    it('excludes meme_plus_text from format choices when preferStandalone is true', async () => {
+      const provider = mockProvider({
+        format: 'text_only',
+        roastText: 'test',
+        meme: null,
+      });
+
+      const gen = new MemeGenerator(imgflip, provider, historyRepo, log, [TEST_TEMPLATE]);
+      await gen.generate({ ...DEFAULT_INPUT, preferStandalone: true });
+
+      // eslint-disable-next-line @typescript-eslint/unbound-method
+      const prompt = (vi.mocked(provider.run).mock.calls[0]![1] as { prompt: string }).prompt;
+      expect(prompt).toContain('PREFERRED');
+      // The TASK section should not offer meme_plus_text as a choice
+      const taskSection = prompt.split('## TASK:')[1]!.split('## RULES:')[0]!;
+      expect(taskSection).not.toContain('meme_plus_text');
+    });
+
+    it('biases toward meme_only when roastText is provided', async () => {
+      const provider = mockProvider({
+        format: 'text_only',
+        roastText: 'test',
+        meme: null,
+      });
+
+      const gen = new MemeGenerator(imgflip, provider, historyRepo, log, [TEST_TEMPLATE]);
+      await gen.generate({ ...DEFAULT_INPUT, roastText: 'existing roast' });
+
+      // eslint-disable-next-line @typescript-eslint/unbound-method
+      const prompt = (vi.mocked(provider.run).mock.calls[0]![1] as { prompt: string }).prompt;
+      expect(prompt).toContain('PREFERRED');
+      expect(prompt).toContain('Roast text already exists');
     });
   });
 

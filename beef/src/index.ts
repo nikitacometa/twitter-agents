@@ -40,6 +40,9 @@ import { HealthMonitor } from './health/health-monitor.js';
 import { CachedProfileFetcher } from './twitter/cached-profile-fetcher.js';
 import { TwitterEnricher } from './farm/twitter-enricher.js';
 import { ActivityLogger } from './activity/activity-logger.js';
+import { ImgflipClient } from './meme/imgflip-client.js';
+import { MemeHistoryRepository } from './meme/meme-history.repository.js';
+import { MemeGenerator } from './meme/meme-generator.js';
 
 const config = validateEnv();
 
@@ -251,6 +254,15 @@ if (config.ENABLE_TWITTER) {
   });
 } else {
   logger.info('Twitter disabled (ENABLE_TWITTER=false) — telegram-only mode');
+}
+
+// --- Meme Generator (optional — needs Imgflip creds + LLM provider) ---
+let memeGenerator: MemeGenerator | undefined;
+if (config.IMGFLIP_USERNAME && config.IMGFLIP_PASSWORD && provider) {
+  const imgflipClient = new ImgflipClient(config.IMGFLIP_USERNAME, config.IMGFLIP_PASSWORD, logger);
+  const memeHistoryRepo = new MemeHistoryRepository(db);
+  memeGenerator = new MemeGenerator(imgflipClient, provider, memeHistoryRepo, logger);
+  logger.info('Meme generator initialized');
 }
 
 // --- Queue Manager ---
@@ -542,6 +554,7 @@ if (config.TELEGRAM_BOT_TOKEN) {
     twitterUsername: botUsername,
     twitterClient: twitter,
     twitterEnricher,
+    memeGenerator,
   });
 
   void bot.start({
