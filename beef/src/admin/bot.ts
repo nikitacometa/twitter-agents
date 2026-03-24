@@ -137,7 +137,7 @@ export function createBot(opts: {
         '/farm &lt;target&gt; — 6 variants + mutations + serious eval',
         '',
         '<b>Twitter:</b>',
-        '/follow @handle1 @handle2 — follow accounts (safe delays)',
+        '/follow @handle1 @handle2 — follow accounts (15-45s jitter)',
         '',
         '<b>Management:</b>',
         '/stats · /status · /help',
@@ -171,7 +171,7 @@ export function createBot(opts: {
         '',
         '━━━━━━━━━━━━━━━━━━━━━━',
         '<b>🐦 Twitter</b>',
-        '<code>/follow @h1 @h2 ...</code> — follow accounts (2-4min delay, anti-detection jitter)',
+        '<code>/follow @h1 @h2 ...</code> — follow accounts (15-45s jitter delay)',
         '',
         '━━━━━━━━━━━━━━━━━━━━━━',
         '<b>📋 Queue &amp; Posting</b>',
@@ -663,7 +663,7 @@ export function createBot(opts: {
 
     const statusMsg = await api.sendMessage(
       chatId,
-      `🔄 Following <b>${String(uniqueHandles.length)}</b> accounts...\n<i>Delay between follows: ~2-4 min (anti-detection)</i>`,
+      `🔄 Following <b>${String(uniqueHandles.length)}</b> accounts...\n<i>Delay between follows: ~15-45s (jitter)</i>`,
       { parse_mode: 'HTML' },
     );
 
@@ -677,10 +677,9 @@ export function createBot(opts: {
 
         // Delay before each follow (except the first)
         if (i > 0) {
-          // 120-240s with jitter (fits within 5 req/15min API rate limit)
-          const baseDelay = 120_000;
-          const jitter = Math.random() * 120_000; // 0-120s jitter
-          const delay = baseDelay + jitter;
+          // 15-45s uniform jitter (API limit: 50/15min, platform: 400/day)
+          // Safe at ~15/hour, well within both limits
+          const delay = 15_000 + Math.random() * 30_000;
           const delaySec = Math.round(delay / 1000);
 
           await api.editMessageText(
