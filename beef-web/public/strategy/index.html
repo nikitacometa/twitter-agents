@@ -486,22 +486,30 @@
       </div>
       <div class="insight">
         <div class="insight-num">04</div>
-        <p><strong>gpt-image-1.5 can replace 3 separate visual tools.</strong> It generates meme formats, data cards, and custom art through one API. Simplifies the pipeline from 3 integrations to 1.</p>
+        <p><strong>Text outperforms images on X.</strong> Buffer 2026 (52M posts): text ER = 3.56% vs image ER = 3.40%. A strong text roast without a visual beats a mediocre roast with a generic image. Visuals amplify, they don't replace.</p>
       </div>
       <div class="insight">
         <div class="insight-num">05</div>
-        <p><strong>Not every post needs a visual.</strong> Autonomous roasts: always. Reply guy replies: 50%. Casual: rarely. Over-using images in replies looks like spam.</p>
+        <p><strong>Fixed character > per-post AI generation.</strong> RoastHimJim (350K+ followers) uses 3-5 static character illustrations + AI text. No top AI agent uses AI-generated images as primary format. Create a 0xBeefer character set.</p>
       </div>
       <div class="insight">
         <div class="insight-num">06</div>
-        <p><strong>Mid-tier accounts (50K-300K) are better reply targets</strong> than mega-KOLs. Less competition in replies, higher chance of author engagement, better follower conversion.</p>
+        <p><strong>Tier-based routing, not hybrid pipeline.</strong> burn-to-request = gpt-image-1.5 ($0.034). Farm roast = imgflip automeme ($0.02) or text-only. Viral candidate = gpt-image-1.5 high ($0.133). Trend reaction = GIF ($0).</p>
       </div>
       <div class="insight">
         <div class="insight-num">07</div>
-        <p><strong>Tenor is dead.</strong> Shutdown 30 June 2026 (not August), no new API keys since January. Giphy only for GIF reactions (free tier: 100 req/hr).</p>
+        <p><strong>Mid-tier accounts (50K-300K) are better reply targets</strong> than mega-KOLs. Less competition in replies, higher chance of author engagement, better follower conversion.</p>
       </div>
       <div class="insight">
         <div class="insight-num">08</div>
+        <p><strong>Tenor is dead.</strong> Shutdown 30 June 2026, no new API keys since January. Giphy only for GIF reactions (free tier: 100 req/hr).</p>
+      </div>
+      <div class="insight">
+        <div class="insight-num">09</div>
+        <p><strong>gpt-image-1.5 is 2-5x cheaper than estimated.</strong> Medium quality: $0.034/img. Mini: $0.011/img. At 10 visuals/day = $3-10/mo. Text rendering accuracy: 96%+ (best among all models).</p>
+      </div>
+      <div class="insight">
+        <div class="insight-num">10</div>
         <p><strong>Token launch: milestone-based, not date-based.</strong> Trigger: 200+ followers OR a viral moment (50K+ impressions on a single post). Launching to 12 followers wastes liquidity.</p>
       </div>
     </div>
@@ -512,7 +520,7 @@
   <!-- MEME STRATEGY -->
   <section id="memes" class="reveal">
     <h2>Meme Strategy</h2>
-    <p>Three visual channels, one primary tool, context-dependent selection.</p>
+    <p>Text-first strategy. Branded character for identity. AI generation for premium content. Tier-based routing by post type.</p>
 
     <div class="table-wrap">
       <table>
@@ -551,33 +559,33 @@
       </table>
     </div>
 
-    <h3>Hybrid Pipeline</h3>
-    <p>For high-value autonomous roasts, generate multiple visuals and let an LLM judge pick the best:</p>
+    <h3>Tier-Based Routing</h3>
+    <p>No top AI agent uses "generate all, pick best". Instead, route by post type:</p>
 
     <div class="pipeline">
       <div class="step">
-        <span class="step-num">1.</span>
-        <span>LLM generates roast text</span>
+        <span class="step-num">$</span>
+        <span><strong>Burn-to-request</strong> (paid) &rarr; gpt-image-1.5 medium ($0.034)</span>
       </div>
-      <div class="arrow">|</div>
       <div class="step">
-        <span class="step-num">2.</span>
-        <span>Parallel generation: gpt-image-1.5 meme + imgflip template + satori data card</span>
+        <span class="step-num">A</span>
+        <span><strong>Farm roast</strong> (auto) &rarr; imgflip automeme ($0.02) or text-only</span>
       </div>
-      <div class="arrow">|</div>
       <div class="step">
-        <span class="step-num">3.</span>
-        <span>LLM-judge evaluates: "which visual best amplifies this roast?"</span>
+        <span class="step-num">V</span>
+        <span><strong>Viral candidate</strong> (manual pick) &rarr; gpt-image-1.5 high ($0.133)</span>
       </div>
-      <div class="arrow">|</div>
       <div class="step">
-        <span class="step-num">4.</span>
-        <span>Winner attached to tweet, losers discarded</span>
+        <span class="step-num">T</span>
+        <span><strong>Trend reaction</strong> &rarr; GIF from Giphy ($0)</span>
+      </div>
+      <div class="step">
+        <span class="step-num">&mdash;</span>
+        <span><strong>Strong text roast</strong> &rarr; text-only (visual dilutes the punch)</span>
       </div>
     </div>
 
-    <p><strong>When to use hybrid:</strong> autonomous roasts (5/day). Time is not critical, quality matters.</p>
-    <p><strong>When not to:</strong> reply guy replies (10-20/day). Speed matters. Use template meme or text-only.</p>
+    <p><strong>Key finding:</strong> Buffer 2026 shows text (3.56% ER) &gt; images (3.40% ER) on X. A good roast doesn't need a visual crutch.</p>
 
     <h3>Visual Attachment Rules</h3>
     <div class="table-wrap">
@@ -592,13 +600,18 @@
         <tbody>
           <tr>
             <td>Autonomous roast</td>
+            <td><strong>If amplifies</strong></td>
+            <td>Character art + text, or template meme</td>
+          </tr>
+          <tr>
+            <td>Burn-to-request</td>
             <td><strong>Always</strong></td>
-            <td>AI meme or data card (hybrid pipeline)</td>
+            <td>gpt-image-1.5 (user paid, show value)</td>
           </tr>
           <tr>
             <td>Reply guy (hot tweet)</td>
-            <td><strong>~50%</strong></td>
-            <td>Template meme (fast) or text-only</td>
+            <td><strong>30-50%</strong></td>
+            <td>Template meme or text-only</td>
           </tr>
           <tr>
             <td>Casual reply</td>
