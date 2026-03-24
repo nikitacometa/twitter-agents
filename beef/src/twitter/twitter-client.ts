@@ -170,7 +170,7 @@ export class TwitterClient implements ITwitterClient, IProfileFetcher {
         this.cachedUserId = me.data.id;
       }
       const params: Record<string, string> = {
-        'tweet.fields': 'author_id,created_at,referenced_tweets,attachments',
+        'tweet.fields': 'author_id,created_at,referenced_tweets,attachments,conversation_id',
         'user.fields': 'username',
         'media.fields': 'url,type,preview_image_url',
         expansions: 'author_id,referenced_tweets.id,referenced_tweets.id.author_id,attachments.media_keys',
@@ -216,6 +216,7 @@ export class TwitterClient implements ITwitterClient, IProfileFetcher {
           authorId: tweet.author_id ?? 'unknown',
           authorName: users.get(tweet.author_id ?? '') ?? 'unknown',
           text: tweet.text,
+          conversationId: (tweet as unknown as Record<string, unknown>).conversation_id as string | undefined,
         };
 
         // Check for replied_to reference

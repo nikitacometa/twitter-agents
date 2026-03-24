@@ -240,6 +240,7 @@ if (config.ENABLE_TWITTER) {
     configRepo,
     queueRepo,
     tweetRepo,
+    roastRepo,
     logger,
     botUsername,
     activityLogger,

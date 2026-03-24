@@ -468,6 +468,7 @@ export class ScraperTwitterClient implements ITwitterClient, IProfileFetcher {
       user_id_str: string;
       full_text?: string;
       in_reply_to_status_id_str?: string;
+      conversation_id_str?: string;
       entities?: { media?: Array<{ media_url_https?: string; type?: string }> };
       extended_entities?: { media?: Array<{ media_url_https?: string; type?: string }> };
     }
@@ -503,6 +504,7 @@ export class ScraperTwitterClient implements ITwitterClient, IProfileFetcher {
         authorId: tweet.user_id_str,
         authorName: user?.screen_name ?? 'unknown',
         text: tweet.full_text,
+        conversationId: tweet.conversation_id_str,
       };
 
       // Enrich with parent tweet data if this is a reply
@@ -628,6 +630,7 @@ export class ScraperTwitterClient implements ITwitterClient, IProfileFetcher {
       user_id_str: string;
       full_text?: string;
       in_reply_to_status_id_str?: string;
+      conversation_id_str?: string;
       entities?: { media?: Array<{ media_url_https?: string; type?: string }> };
       extended_entities?: { media?: Array<{ media_url_https?: string; type?: string }> };
     }
@@ -656,6 +659,7 @@ export class ScraperTwitterClient implements ITwitterClient, IProfileFetcher {
         authorId: tweet.user_id_str,
         authorName: user?.screen_name ?? 'unknown',
         text: tweet.full_text,
+        conversationId: tweet.conversation_id_str,
       };
 
       const parentId = tweet.in_reply_to_status_id_str;

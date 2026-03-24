@@ -1,5 +1,12 @@
 import { describe, it, expect } from 'vitest';
-import { extractTaggedHandle, classifyMention, extractTarget, isBareOrSimpleMention } from './mention-handler.js';
+import {
+  extractTaggedHandle,
+  classifyMention,
+  extractTarget,
+  isBareOrSimpleMention,
+  shouldSkipThreadMention,
+} from './mention-handler.js';
+import type { MentionData } from './twitter-client.interface.js';
 
 describe('extractTaggedHandle', () => {
   const bot = 'BeefThis';
@@ -123,5 +130,76 @@ describe('isBareOrSimpleMention', () => {
     ['@BeefThis I think this project is a scam and should be investigated', false],
   ])('"%s" → %s', (text, expected) => {
     expect(isBareOrSimpleMention(text)).toBe(expected);
+  });
+});
+
+describe('shouldSkipThreadMention', () => {
+  const bot = '0xBeefer';
+
+  function mention(overrides: Partial<MentionData> = {}): MentionData {
+    return {
+      tweetId: '200',
+      authorId: 'u1',
+      authorName: 'JohnnyCash',
+      text: '@0xBeefer hey whats up',
+      inReplyToTweetId: '100',
+      conversationId: 'conv1',
+      ...overrides,
+    };
+  }
+
+  it('never skips top-level mentions (no inReplyToTweetId)', () => {
+    const m = mention({ inReplyToTweetId: undefined });
+    expect(shouldSkipThreadMention(m, 'reply', bot, true)).toBe(false);
+  });
+
+  it('does not skip reply in fresh thread (no prior bot reply, not replying to bot)', () => {
+    const m = mention({ parentAuthorName: 'SomeOtherUser' });
+    expect(shouldSkipThreadMention(m, 'reply', bot, false)).toBe(false);
+  });
+
+  it('skips thread chatter when bot already replied in conversation', () => {
+    const m = mention({ parentAuthorName: 'SomeOtherUser' });
+    expect(shouldSkipThreadMention(m, 'reply', bot, true)).toBe(true);
+  });
+
+  it('skips reply to bot tweet (even without conversation dedup)', () => {
+    const m = mention({ parentAuthorName: '0xBeefer' });
+    expect(shouldSkipThreadMention(m, 'reply', bot, false)).toBe(true);
+  });
+
+  it('skips reply to bot tweet (case-insensitive)', () => {
+    const m = mention({ parentAuthorName: '0XBEEFER' });
+    expect(shouldSkipThreadMention(m, 'reply', bot, false)).toBe(true);
+  });
+
+  it('allows explicit "roast @target" even in existing thread', () => {
+    const m = mention({ text: '@0xBeefer roast @vitalik' });
+    expect(shouldSkipThreadMention(m, 'roast_request', bot, true)).toBe(false);
+  });
+
+  it('allows explicit "roast $TOKEN" even in existing thread', () => {
+    const m = mention({ text: '@0xBeefer roast $SOL' });
+    expect(shouldSkipThreadMention(m, 'roast_request', bot, true)).toBe(false);
+  });
+
+  it('allows "roast me" even in existing thread', () => {
+    const m = mention({ text: '@0xBeefer roast me bro' });
+    expect(shouldSkipThreadMention(m, 'roast_request', bot, true)).toBe(false);
+  });
+
+  it('skips vague roast keyword in existing thread (no target)', () => {
+    const m = mention({ text: '@0xBeefer burn them' });
+    expect(shouldSkipThreadMention(m, 'roast_request', bot, true)).toBe(true);
+  });
+
+  it('skips challenge type in existing thread', () => {
+    const m = mention({ text: '@0xBeefer thats false' });
+    expect(shouldSkipThreadMention(m, 'challenge', bot, true)).toBe(true);
+  });
+
+  it('skips when both conditions true (reply to bot + conversation dedup)', () => {
+    const m = mention({ parentAuthorName: '0xBeefer' });
+    expect(shouldSkipThreadMention(m, 'reply', bot, true)).toBe(true);
   });
 });

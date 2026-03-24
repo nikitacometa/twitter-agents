@@ -264,6 +264,17 @@ export class QueueManager {
       return { dequeued: true, posted: true, target: item.targetName };
     }
 
+    // Conversation-level dedup — max 1 reply per conversation thread
+    const conversationId = extractConversationId(item.context);
+    if (conversationId && this.roastRepo.hasRepliedInConversation(conversationId)) {
+      this.logger.warn(
+        { queueId: item.id, conversationId, target: item.targetName },
+        'Skipping — already replied in this conversation thread',
+      );
+      this.queueRepo.complete(item.id);
+      return { dequeued: true, posted: true, target: item.targetName };
+    }
+
     // Casual replies use a separate lightweight pipeline
     if (item.source === 'casual_reply') {
       try {
@@ -309,6 +320,7 @@ export class QueueManager {
             targetType: item.targetType,
             tweetText: stockpiled.tweetText,
             replyToId,
+            conversationId: extractConversationId(item.context),
             source: item.source,
             status: 'pending_approval',
             factChecked: true,
@@ -651,6 +663,7 @@ export class QueueManager {
       targetType: item.targetType,
       tweetText,
       replyToId,
+      conversationId: extractConversationId(item.context),
       source: item.source,
       status: 'pending_approval',
       factChecked: output.factCheckPassed,
@@ -779,6 +792,7 @@ export class QueueManager {
       targetType: 'person',
       tweetText: result.text,
       replyToId,
+      conversationId: extractConversationId(item.context),
       source: 'casual_reply',
       status: 'pending_approval',
       factChecked: true,
@@ -1094,6 +1108,7 @@ export class QueueManager {
         targetType: oldRoast.targetType,
         tweetText,
         replyToId: oldRoast.replyToId ?? undefined,
+        conversationId: oldRoast.conversationId ?? undefined,
         source: oldRoast.source,
         status: 'pending_approval',
         factChecked: output.factCheckPassed,
@@ -1216,6 +1231,12 @@ export function extractHandleFromTarget(targetName: string): string | undefined 
 export function extractMentionTweetId(context: string | null): string | undefined {
   if (!context) return undefined;
   const match = context.match(/\|mention:(\d+)/);
+  return match?.[1];
+}
+
+export function extractConversationId(context: string | null): string | undefined {
+  if (!context) return undefined;
+  const match = context.match(/\|conversation:(\d+)/);
   return match?.[1];
 }
 

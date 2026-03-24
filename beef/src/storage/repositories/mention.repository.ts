@@ -22,8 +22,8 @@ export class MentionRepository {
 
   constructor(db: Database.Database) {
     this.insertStmt = db.prepare(`
-      INSERT OR IGNORE INTO mentions (tweet_id, author_id, author_name, text, request_type)
-      VALUES (?, ?, ?, ?, ?)
+      INSERT OR IGNORE INTO mentions (tweet_id, author_id, author_name, text, request_type, conversation_id)
+      VALUES (?, ?, ?, ?, ?, ?)
     `);
 
     this.markProcessedStmt = db.prepare(`
@@ -44,6 +44,7 @@ export class MentionRepository {
     authorName: string;
     text: string;
     requestType?: MentionRequestType;
+    conversationId?: string;
   }): void {
     this.insertStmt.run(
       mention.tweetId,
@@ -51,6 +52,7 @@ export class MentionRepository {
       mention.authorName,
       mention.text,
       mention.requestType ?? null,
+      mention.conversationId ?? null,
     );
   }
 

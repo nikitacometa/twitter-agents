@@ -5,6 +5,7 @@ import type { UserRepository } from '@storage/repositories/user.repository.js';
 import type { ConfigRepository } from '@storage/repositories/config.repository.js';
 import type { QueueRepository } from '@storage/repositories/queue.repository.js';
 import type { TweetRepository } from '@storage/repositories/tweet.repository.js';
+import type { RoastRepository } from '@storage/repositories/roast.repository.js';
 import type { MentionRequestType } from '@common/types/index.js';
 import type { MentionData } from './twitter-client.interface.js';
 import type { ActivityLogger } from '../activity/activity-logger.js';
@@ -40,6 +41,7 @@ export class MentionHandler {
   private readonly configRepo: ConfigRepository;
   private readonly queueRepo: QueueRepository;
   private readonly tweetRepo?: TweetRepository;
+  private readonly roastRepo?: RoastRepository;
   private readonly logger: Logger;
   private readonly botUsername: string;
   private readonly activityLogger?: ActivityLogger;
@@ -52,6 +54,7 @@ export class MentionHandler {
     configRepo: ConfigRepository;
     queueRepo: QueueRepository;
     tweetRepo?: TweetRepository;
+    roastRepo?: RoastRepository;
     logger: Logger;
     botUsername?: string;
     activityLogger?: ActivityLogger;
@@ -62,6 +65,7 @@ export class MentionHandler {
     this.configRepo = opts.configRepo;
     this.queueRepo = opts.queueRepo;
     this.tweetRepo = opts.tweetRepo;
+    this.roastRepo = opts.roastRepo;
     this.logger = opts.logger;
     this.botUsername = opts.botUsername?.trim() || '0xBeefer';
     this.activityLogger = opts.activityLogger;
@@ -116,6 +120,7 @@ export class MentionHandler {
         authorName: m.authorName,
         text: m.text,
         requestType,
+        conversationId: m.conversationId,
       });
 
       this.userRepo.upsert({
@@ -146,6 +151,26 @@ export class MentionHandler {
         }
       }
 
+      // Thread-aware filtering: skip chatter in threads where bot already participated
+      if (this.shouldSkipThreadMention(m, requestType)) {
+        this.logger.info(
+          { tweetId: m.tweetId, author: m.authorName, conversationId: m.conversationId, requestType },
+          'Mention skipped — thread chatter (bot already in conversation)',
+        );
+        summaries.push({
+          tweetId: m.tweetId,
+          authorName: m.authorName,
+          text: m.text,
+          requestType,
+          queued: false,
+          inReplyToTweetId: m.inReplyToTweetId,
+          parentAuthorName: m.parentAuthorName,
+          parentTextSnippet: m.parentTweetText?.slice(0, 100),
+        });
+        processed++;
+        continue;
+      }
+
       let queued = false;
       let queueTarget: string | undefined;
 
@@ -154,12 +179,13 @@ export class MentionHandler {
         if (target) {
           // Scenario 1: explicit "roast @X" / "roast $TOKEN"
           const replyTarget = m.inReplyToTweetId ?? m.tweetId;
+          const convPart = m.conversationId ? `|conversation:${m.conversationId}` : '';
           this.queueRepo.enqueue({
             targetName: target,
             targetType: 'project',
             source: 'mention',
             priority: 3,
-            context: `reply_to:${replyTarget}|by:@${m.authorName}|mention:${m.tweetId}`,
+            context: `reply_to:${replyTarget}|by:@${m.authorName}|mention:${m.tweetId}${convPart}`,
           });
           queued = true;
           queueTarget = target;
@@ -244,6 +270,7 @@ export class MentionHandler {
     const mediaPart = m.parentMediaUrls?.length
       ? `|media:${m.parentMediaUrls.join(',')}`
       : '';
+    const convPart = m.conversationId ? `|conversation:${m.conversationId}` : '';
     const targetName = tweetSnippet
       ? `tweet by @${parentAuthor}: "${tweetSnippet}"`
       : `tweet by @${parentAuthor}`;
@@ -252,7 +279,7 @@ export class MentionHandler {
       targetType: 'project',
       source: 'mention',
       priority: 3,
-      context: `reply_to:${m.inReplyToTweetId!}|by:@${m.authorName}|mention:${m.tweetId}${mediaPart}`,
+      context: `reply_to:${m.inReplyToTweetId!}|by:@${m.authorName}|mention:${m.tweetId}${mediaPart}${convPart}`,
     });
     this.logger.info(
       {
@@ -270,18 +297,26 @@ export class MentionHandler {
   private enqueueCasualReply(m: MentionData): string {
     const targetName = `@${m.authorName}`;
     const textSnippet = m.text.slice(0, 200);
+    const convPart = m.conversationId ? `|conversation:${m.conversationId}` : '';
     this.queueRepo.enqueue({
       targetName,
       targetType: 'person',
       source: 'casual_reply',
       priority: 5,
-      context: `reply_to:${m.tweetId}|by:@${m.authorName}|text:${textSnippet}`,
+      context: `reply_to:${m.tweetId}|by:@${m.authorName}|text:${textSnippet}${convPart}`,
     });
     this.logger.info(
       { tweetId: m.tweetId, author: m.authorName },
       'Casual reply queued from mention',
     );
     return targetName;
+  }
+
+  private shouldSkipThreadMention(m: MentionData, requestType: MentionRequestType): boolean {
+    const hasRepliedInConversation = m.conversationId
+      ? (this.roastRepo?.hasRepliedInConversation(m.conversationId) ?? false)
+      : false;
+    return shouldSkipThreadMention(m, requestType, this.botUsername, hasRepliedInConversation);
   }
 
   /** Check if the parent tweet was authored by the bot itself. */
@@ -303,12 +338,13 @@ export class MentionHandler {
     // Reply to parent tweet (if under someone's tweet) so the roast appears in that thread
     const replyTarget = m.inReplyToTweetId ?? m.tweetId;
     const roastMeFlag = opts?.roastMe ? '|roast_me:1' : '';
+    const convPart = m.conversationId ? `|conversation:${m.conversationId}` : '';
     this.queueRepo.enqueue({
       targetName,
       targetType: opts?.roastMe ? 'person' : 'project',
       source: 'mention',
       priority: 3,
-      context: `reply_to:${replyTarget}|by:@${m.authorName}|mention:${m.tweetId}|handle:@${handle}${roastMeFlag}`,
+      context: `reply_to:${replyTarget}|by:@${m.authorName}|mention:${m.tweetId}|handle:@${handle}${roastMeFlag}${convPart}`,
     });
     this.logger.info(
       { tweetId: m.tweetId, handle, author: m.authorName, roastMe: !!opts?.roastMe },
@@ -380,4 +416,32 @@ export function extractTarget(text: string): string | null {
   }
 
   return null;
+}
+
+/**
+ * Determine whether a mention in a thread should be skipped.
+ *
+ * Skip when the bot has already participated in the conversation (via conversation_id)
+ * OR the mention is a direct reply to a bot tweet — UNLESS the mention contains an
+ * explicit roast command ("roast @X", "roast me", "roast $TOKEN").
+ */
+export function shouldSkipThreadMention(
+  m: MentionData,
+  requestType: MentionRequestType,
+  botUsername: string,
+  hasRepliedInConversation: boolean,
+): boolean {
+  if (!m.inReplyToTweetId) return false;
+
+  const replyingToBot = !!m.parentAuthorName
+    && m.parentAuthorName.toLowerCase() === botUsername.toLowerCase();
+
+  if (!hasRepliedInConversation && !replyingToBot) return false;
+
+  if (requestType === 'roast_request') {
+    if (extractTarget(m.text)) return false;
+    if (isRoastMe(m.text, botUsername)) return false;
+  }
+
+  return true;
 }

@@ -7,6 +7,7 @@ export interface InsertRoast {
   tweetText: string;
   tweetId?: string;
   replyToId?: string;
+  conversationId?: string;
   source: RoastSource;
   status?: RoastStatus;
   factChecked?: boolean;
@@ -21,6 +22,7 @@ interface RoastRow {
   tweet_text: string;
   tweet_id: string | null;
   reply_to_id: string | null;
+  conversation_id: string | null;
   source: string;
   status: string;
   fact_checked: number;
@@ -47,11 +49,12 @@ export class RoastRepository {
   private readonly pendingApprovalStmt: Database.Statement;
   private readonly rejectDuplicatePendingStmt: Database.Statement;
   private readonly existsReplyToStmt: Database.Statement;
+  private readonly existsConversationReplyStmt: Database.Statement;
 
   constructor(db: Database.Database) {
     this.insertStmt = db.prepare(`
-      INSERT INTO roasts (target_name, target_type, tweet_text, tweet_id, reply_to_id, source, status, fact_checked, context_data, agent_output)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO roasts (target_name, target_type, tweet_text, tweet_id, reply_to_id, conversation_id, source, status, fact_checked, context_data, agent_output)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
     this.getByIdStmt = db.prepare('SELECT * FROM roasts WHERE id = ?');
@@ -116,6 +119,12 @@ export class RoastRepository {
       WHERE reply_to_id = ? AND status IN ('posted', 'pending_approval')
       LIMIT 1
     `);
+
+    this.existsConversationReplyStmt = db.prepare(`
+      SELECT 1 FROM roasts
+      WHERE conversation_id = ? AND status IN ('posted', 'pending_approval')
+      LIMIT 1
+    `);
   }
 
   insert(roast: InsertRoast): number {
@@ -125,6 +134,7 @@ export class RoastRepository {
       roast.tweetText,
       roast.tweetId ?? null,
       roast.replyToId ?? null,
+      roast.conversationId ?? null,
       roast.source,
       roast.status ?? 'posted',
       roast.factChecked ? 1 : 0,
@@ -192,10 +202,18 @@ export class RoastRepository {
 
   /**
    * Check if the bot has already replied to a specific tweet (posted or pending approval).
-   * Used to prevent duplicate replies to the same thread.
+   * Used to prevent duplicate replies to the same tweet.
    */
   existsReplyTo(replyToId: string): boolean {
     return !!this.existsReplyToStmt.get(replyToId);
+  }
+
+  /**
+   * Check if the bot has already replied anywhere in a conversation thread.
+   * Used to prevent the bot from replying to every message in a thread it participated in.
+   */
+  hasRepliedInConversation(conversationId: string): boolean {
+    return !!this.existsConversationReplyStmt.get(conversationId);
   }
 
   /**
@@ -215,6 +233,7 @@ function mapRow(row: RoastRow): PostedRoast {
     tweetText: row.tweet_text,
     tweetId: row.tweet_id,
     replyToId: row.reply_to_id,
+    conversationId: row.conversation_id,
     source: row.source as RoastSource,
     status: row.status as RoastStatus,
     factChecked: row.fact_checked === 1,

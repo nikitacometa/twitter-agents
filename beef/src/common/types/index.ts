@@ -35,6 +35,7 @@ export interface PostedRoast {
   tweetText: string;
   tweetId: string | null;
   replyToId: string | null;
+  conversationId: string | null;
   source: RoastSource;
   status: RoastStatus;
   factChecked: boolean;

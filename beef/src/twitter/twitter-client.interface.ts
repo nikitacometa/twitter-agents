@@ -25,6 +25,8 @@ export interface MentionData {
   parentAuthorName?: string;
   /** Image URLs attached to the parent tweet. */
   parentMediaUrls?: string[];
+  /** Root tweet ID of the conversation thread (Twitter API v2 conversation_id). */
+  conversationId?: string;
 }
 
 export interface FollowUserResult {
