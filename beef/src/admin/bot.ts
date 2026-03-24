@@ -588,7 +588,9 @@ export function createBot(opts: {
         const keyboard = new InlineKeyboard()
           .text('🔄 Regen', `rt-regen:${ctxKey}`);
 
-        await api.editMessageText(chatId, statusMsg.message_id, headerLines.join('\n'), {
+        // Delete status message and send results as a new message
+        await api.deleteMessage(chatId, statusMsg.message_id).catch(() => {});
+        await api.sendMessage(chatId, headerLines.join('\n'), {
           parse_mode: 'HTML',
           reply_markup: keyboard,
           link_preview_options: { is_disabled: true },
@@ -1975,7 +1977,12 @@ export function createBot(opts: {
           const regenKeyboard = new InlineKeyboard()
             .text('🔄 Regen', `rt-regen:${ctxKey}`);
 
-          await ctx.editMessageText(regenLines.join('\n'), {
+          // Delete "Regenerating..." message, send results as new message
+          const regenMsgId = ctx.callbackQuery?.message?.message_id;
+          if (chatId && regenMsgId) {
+            await bot.api.deleteMessage(chatId, regenMsgId).catch(() => {});
+          }
+          await ctx.reply(regenLines.join('\n'), {
             parse_mode: 'HTML',
             reply_markup: variants.length > 0 ? regenKeyboard : undefined,
             link_preview_options: { is_disabled: true },
