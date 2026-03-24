@@ -7,6 +7,7 @@ import {
   extractTriggerText,
   extractHandleFromTarget,
   extractMentionTweetId,
+  extractConversationId,
   extractParentTweetId,
   parseTweetUrl,
   isTweetUrl,
@@ -230,5 +231,24 @@ describe('extractMentionTweetId', () => {
     ['mention:123'],
   ])('returns undefined for %s', (ctx) => {
     expect(extractMentionTweetId(ctx)).toBeUndefined();
+  });
+});
+
+describe('extractConversationId', () => {
+  it.each([
+    ['reply_to:1|by:@user|conversation:999888777', '999888777'],
+    ['reply_to:1|mention:123|conversation:456', '456'],
+    ['reply_to:1|by:@a|text:hello|conversation:1', '1'],
+  ])('extracts conversation id from "%s" → "%s"', (ctx, expected) => {
+    expect(extractConversationId(ctx)).toBe(expected);
+  });
+
+  it.each([
+    [null],
+    [''],
+    ['reply_to:1|by:@user'],
+    ['conversation:123'],
+  ])('returns undefined for %s', (ctx) => {
+    expect(extractConversationId(ctx)).toBeUndefined();
   });
 });

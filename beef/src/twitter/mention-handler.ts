@@ -303,7 +303,7 @@ export class MentionHandler {
       targetType: 'person',
       source: 'casual_reply',
       priority: 5,
-      context: `reply_to:${m.tweetId}|by:@${m.authorName}|text:${textSnippet}${convPart}`,
+      context: `reply_to:${m.tweetId}|by:@${m.authorName}${convPart}|text:${textSnippet}`,
     });
     this.logger.info(
       { tweetId: m.tweetId, author: m.authorName },
@@ -442,6 +442,9 @@ export function shouldSkipThreadMention(
     if (extractTarget(m.text)) return false;
     if (isRoastMe(m.text, botUsername)) return false;
   }
+
+  // Challenges must always get through — they dispute a bot roast in the same thread
+  if (requestType === 'challenge') return false;
 
   return true;
 }

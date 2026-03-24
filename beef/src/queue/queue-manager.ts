@@ -1236,7 +1236,7 @@ export function extractMentionTweetId(context: string | null): string | undefine
 
 export function extractConversationId(context: string | null): string | undefined {
   if (!context) return undefined;
-  const match = context.match(/\|conversation:(\d+)/);
+  const match = context.match(/\|conversation:([^|]+)/);
   return match?.[1];
 }
 

@@ -193,9 +193,9 @@ describe('shouldSkipThreadMention', () => {
     expect(shouldSkipThreadMention(m, 'roast_request', bot, true)).toBe(true);
   });
 
-  it('skips challenge type in existing thread', () => {
+  it('allows challenge in existing thread (accountability layer)', () => {
     const m = mention({ text: '@0xBeefer thats false' });
-    expect(shouldSkipThreadMention(m, 'challenge', bot, true)).toBe(true);
+    expect(shouldSkipThreadMention(m, 'challenge', bot, true)).toBe(false);
   });
 
   it('skips when both conditions true (reply to bot + conversation dedup)', () => {
