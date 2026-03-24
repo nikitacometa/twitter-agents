@@ -669,93 +669,101 @@ export function createBot(opts: {
 
     // Fire-and-forget: don't block grammY's update loop
     void (async () => {
-      const results: { username: string; ok: boolean; detail: string }[] = [];
-      let rateLimited = false;
+      try {
+        const results: { username: string; ok: boolean; detail: string }[] = [];
+        let rateLimited = false;
 
-      for (let i = 0; i < uniqueHandles.length; i++) {
-        const handle = uniqueHandles[i]!;
+        for (let i = 0; i < uniqueHandles.length; i++) {
+          const handle = uniqueHandles[i]!;
 
-        // Delay before each follow (except the first)
-        if (i > 0) {
-          // 15-45s uniform jitter (API limit: 50/15min, platform: 400/day)
-          // Safe at ~15/hour, well within both limits
-          const delay = 15_000 + Math.random() * 30_000;
-          const delaySec = Math.round(delay / 1000);
+          // Delay before each follow (except the first)
+          if (i > 0) {
+            // 15-45s uniform jitter (API limit: 50/15min, platform: 400/day)
+            const delay = 15_000 + Math.random() * 30_000;
+            const delaySec = Math.round(delay / 1000);
 
+            await api.editMessageText(
+              chatId,
+              statusMsg.message_id,
+              [
+                `🔄 Following <b>${String(uniqueHandles.length)}</b> accounts...`,
+                `✅ Done: ${String(i)}/${String(uniqueHandles.length)}`,
+                `⏳ Next: @${escapeHtml(handle)} in ~${String(delaySec)}s`,
+              ].join('\n'),
+              { parse_mode: 'HTML' },
+            ).catch(() => {});
+
+            await new Promise((resolve) => setTimeout(resolve, delay));
+          }
+
+          // Update status: currently following
           await api.editMessageText(
             chatId,
             statusMsg.message_id,
             [
               `🔄 Following <b>${String(uniqueHandles.length)}</b> accounts...`,
-              `✅ Done: ${String(i)}/${String(uniqueHandles.length)}`,
-              `⏳ Next: @${escapeHtml(handle)} in ~${String(delaySec)}s`,
+              `👉 Now: @${escapeHtml(handle)} (${String(i + 1)}/${String(uniqueHandles.length)})`,
             ].join('\n'),
             { parse_mode: 'HTML' },
           ).catch(() => {});
 
-          await new Promise((resolve) => setTimeout(resolve, delay));
+          const result = await followFn(handle);
+
+          if (result.success) {
+            const detail = result.pending ? 'pending (private account)' : 'followed';
+            results.push({ username: handle, ok: true, detail });
+          } else {
+            results.push({ username: handle, ok: false, detail: result.error ?? 'unknown error' });
+            if (result.error?.includes('429')) {
+              rateLimited = true;
+              for (let j = i + 1; j < uniqueHandles.length; j++) {
+                results.push({ username: uniqueHandles[j]!, ok: false, detail: 'skipped (rate limited)' });
+              }
+              break;
+            }
+          }
         }
 
-        // Update status: currently following
+        // Build report (idempotent: already-followed accounts show as ✅)
+        const succeeded = results.filter((r) => r.ok);
+        const failed = results.filter((r) => !r.ok);
+
+        const reportLines: string[] = [
+          `<b>📋 Follow Report</b>`,
+          `✅ Followed: <b>${String(succeeded.length)}</b> / ${String(uniqueHandles.length)}`,
+        ];
+
+        if (succeeded.length > 0) {
+          reportLines.push('');
+          for (const r of succeeded) {
+            reportLines.push(`  ✅ @${escapeHtml(r.username)} — ${escapeHtml(r.detail)}`);
+          }
+        }
+
+        if (failed.length > 0) {
+          reportLines.push('');
+          for (const r of failed) {
+            reportLines.push(`  ❌ @${escapeHtml(r.username)} — ${escapeHtml(r.detail)}`);
+          }
+        }
+
+        if (rateLimited) {
+          reportLines.push('');
+          reportLines.push('⚠️ <i>Rate limited — retry remaining handles in 15 minutes.</i>');
+        }
+
+        await api.editMessageText(chatId, statusMsg.message_id, reportLines.join('\n'), {
+          parse_mode: 'HTML',
+        }).catch(() => {});
+      } catch (error) {
+        logger.error({ err: error }, '/follow command failed unexpectedly');
         await api.editMessageText(
           chatId,
           statusMsg.message_id,
-          [
-            `🔄 Following <b>${String(uniqueHandles.length)}</b> accounts...`,
-            `👉 Now: @${escapeHtml(handle)} (${String(i + 1)}/${String(uniqueHandles.length)})`,
-          ].join('\n'),
+          `❌ <b>Follow failed:</b> ${escapeHtml(getErrorMessage(error).slice(0, 200))}`,
           { parse_mode: 'HTML' },
         ).catch(() => {});
-
-        const result = await followFn(handle);
-
-        if (result.success) {
-          const detail = result.pending ? 'pending (private account)' : 'followed';
-          results.push({ username: handle, ok: true, detail });
-        } else {
-          results.push({ username: handle, ok: false, detail: result.error ?? 'unknown error' });
-          if (result.error?.includes('429')) {
-            rateLimited = true;
-            // Add remaining handles as skipped
-            for (let j = i + 1; j < uniqueHandles.length; j++) {
-              results.push({ username: uniqueHandles[j]!, ok: false, detail: 'skipped (rate limited)' });
-            }
-            break;
-          }
-        }
       }
-
-      // Build report
-      const succeeded = results.filter((r) => r.ok);
-      const failed = results.filter((r) => !r.ok);
-
-      const reportLines: string[] = [
-        `<b>📋 Follow Report</b>`,
-        `✅ Followed: <b>${String(succeeded.length)}</b> / ${String(uniqueHandles.length)}`,
-      ];
-
-      if (succeeded.length > 0) {
-        reportLines.push('');
-        for (const r of succeeded) {
-          reportLines.push(`  ✅ @${escapeHtml(r.username)} — ${r.detail}`);
-        }
-      }
-
-      if (failed.length > 0) {
-        reportLines.push('');
-        for (const r of failed) {
-          reportLines.push(`  ❌ @${escapeHtml(r.username)} — ${escapeHtml(r.detail)}`);
-        }
-      }
-
-      if (rateLimited) {
-        reportLines.push('');
-        reportLines.push('⚠️ <i>Rate limited — retry remaining handles in 15 minutes.</i>');
-      }
-
-      await api.editMessageText(chatId, statusMsg.message_id, reportLines.join('\n'), {
-        parse_mode: 'HTML',
-      }).catch(() => {});
     })();
   });
 

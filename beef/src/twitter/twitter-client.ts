@@ -400,8 +400,13 @@ export class TwitterClient implements ITwitterClient, IProfileFetcher {
         pending: result.data.pending_follow,
       };
     } catch (error) {
-      if (error instanceof ApiResponseError && error.code === 429) {
-        return { username, success: false, error: 'Rate limited (429) — try again later' };
+      if (error instanceof ApiResponseError) {
+        if (error.code === 429) {
+          return { username, success: false, error: 'Rate limited (429) — try again later' };
+        }
+        if (error.code === 403) {
+          return { username, success: false, error: 'Forbidden (403) — account may be suspended, deactivated, or has you blocked' };
+        }
       }
       this.logger.error({ err: error, username }, 'Failed to follow user');
       return { username, success: false, error: getErrorMessage(error) };
