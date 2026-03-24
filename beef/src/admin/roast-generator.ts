@@ -53,6 +53,7 @@ export async function generateRoasts(
   evaluationThreshold?: number,
   roastMeMode?: boolean,
   targetType?: 'person' | 'project' | 'token' | 'trend',
+  tweetMode?: boolean,
 ): Promise<GenerateRoastsResult> {
   const engine = getEngine(provider, logger, evaluationMode, evaluationThreshold);
 
@@ -67,12 +68,12 @@ export async function generateRoasts(
     farmAttemptRepo,
   });
   if (profileContext && memory) {
-    memory = { ...memory, profileContext, roastMeMode, targetType };
+    memory = { ...memory, profileContext, roastMeMode, targetType, tweetMode };
   } else if (profileContext) {
-    memory = { fireExamples: [], profileContext, roastMeMode, targetType };
+    memory = { fireExamples: [], profileContext, roastMeMode, targetType, tweetMode };
   }
-  if (memory && (roastMeMode || targetType)) {
-    memory = { ...memory, roastMeMode, targetType };
+  if (memory && (roastMeMode || targetType || tweetMode)) {
+    memory = { ...memory, roastMeMode, targetType, tweetMode };
   }
 
   if (memory && (memory.fireExamples.length > 0 || memory.angleWeights || memory.rejectExamples || memory.externalExamples)) {

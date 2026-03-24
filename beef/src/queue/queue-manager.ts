@@ -15,6 +15,7 @@ import type { ITwitterClient } from '@twitter/twitter-client.interface.js';
 import type { IProfileFetcher } from '@twitter/twitter-client.interface.js';
 import { generateRoasts } from '@admin/roast-generator.js';
 import type { GenerateRoastsResult } from '@admin/roast-generator.js';
+import { buildTweetRoastContext } from '@roast/prompt-builder.js';
 import { RoastEngine } from '@roast/roast-engine.js';
 import { SelfEvaluator } from '@farm/self-evaluator.js';
 import type { FarmAttempt } from '@farm/types.js';
@@ -211,6 +212,7 @@ export class QueueManager {
     const mediaPart = tweet.mediaUrls?.length
       ? `|media:${tweet.mediaUrls.join(',')}`
       : '';
+    const textB64 = Buffer.from(tweet.text).toString('base64');
     const targetName = tweetSnippet
       ? `tweet by @${tweet.authorName}: "${tweetSnippet}"`
       : `tweet by @${tweet.authorName}`;
@@ -220,7 +222,7 @@ export class QueueManager {
       targetType: 'project',
       source: 'mention',
       priority: 1,
-      context: `reply_to:${tweet.tweetId}${mediaPart}`,
+      context: `reply_to:${tweet.tweetId}|tweet_text_b64:${textB64}${mediaPart}`,
     });
 
     this.logger.info(
@@ -402,6 +404,19 @@ export class QueueManager {
           : mentionContext;
       }
 
+      // Tweet-mode: if queue context contains encoded tweet text, build tweet-specific context
+      let isTweetMode = false;
+      const tweetText = extractTweetTextFromContext(item.context);
+      if (tweetText) {
+        profileContext = buildTweetRoastContext({
+          tweetText,
+          tweetAuthor: username ?? 'unknown',
+          enrichmentContext: profileContext,
+          imagePaths,
+        });
+        isTweetMode = true;
+      }
+
       this.activityLogger?.emit({ type: 'target_locked', data: { target: item.targetName } });
       this.activityLogger?.emit({ type: 'cooking', data: { target: item.targetName, strategies: 3 } });
 
@@ -412,6 +427,7 @@ export class QueueManager {
         'farm-generate', 2, this.configRepo, this.exampleRepo, this.patternRepo,
         imagePaths, profileContext, undefined, this.stockpile, 2, this.farmAttemptRepo,
         undefined, isRoastMe || undefined, item.targetType as 'person' | 'project' | 'token' | 'trend',
+        isTweetMode || undefined,
       );
 
       if (output.variants.length === 0) {
@@ -1212,6 +1228,17 @@ export function extractParentTweetId(context: string | null): string | undefined
   if (!context) return undefined;
   const match = context.match(/\|parent:(\d+)/);
   return match?.[1];
+}
+
+export function extractTweetTextFromContext(context: string | null): string | undefined {
+  if (!context) return undefined;
+  const match = context.match(/\|tweet_text_b64:([A-Za-z0-9+/=]+)/);
+  if (!match?.[1]) return undefined;
+  try {
+    return Buffer.from(match[1], 'base64').toString('utf-8');
+  } catch {
+    return undefined;
+  }
 }
 
 export function extractMediaUrls(context: string | null): string[] {

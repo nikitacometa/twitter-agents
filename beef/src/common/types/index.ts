@@ -191,6 +191,8 @@ export interface CreativeMemory {
   roastMeMode?: boolean;
   /** Target type hint — 'person' vs 'project' changes prompt framing */
   targetType?: 'person' | 'project' | 'token' | 'trend';
+  /** True when roasting a specific tweet — adjusts TASK/RESEARCH to focus on tweet content */
+  tweetMode?: boolean;
   /** Recent punchline closers from stockpile — used to prevent repetition */
   recentClosers?: string[];
 }

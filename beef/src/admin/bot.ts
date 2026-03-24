@@ -548,7 +548,7 @@ export function createBot(opts: {
           profileContext,
           'quick', stockpileRepo, 0,
           farmAttemptRepo, undefined,
-          false, 'person',
+          false, 'person', true,
         );
 
         const elapsed = Math.round((Date.now() - startTime) / 1000);
@@ -1950,7 +1950,7 @@ export function createBot(opts: {
             regenContext,
             'quick', stockpileRepo, 0,
             farmAttemptRepo, undefined,
-            false, 'person',
+            false, 'person', true,
           );
 
           const tweetUrl = storedCtx.tweetUrl.startsWith('http') ? storedCtx.tweetUrl : `https://${storedCtx.tweetUrl}`;
