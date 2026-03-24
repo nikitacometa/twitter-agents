@@ -623,7 +623,7 @@ export function createBot(opts: {
     const raw = ctx.match?.trim();
     if (!raw) {
       await ctx.reply(
-        'Usage: /follow @handle1 @handle2 ...\nAlso accepts comma-separated: /follow handle1, handle2',
+        'Usage: /follow @handle1 https://x.com/handle2 ...\nAccepts handles, x.com and twitter.com URLs, comma or space separated.',
         { parse_mode: 'HTML' },
       );
       return;
@@ -635,14 +635,21 @@ export function createBot(opts: {
       return;
     }
 
-    // Parse handles: strip @, split by whitespace or comma
+    // Parse handles: accept @handle, bare handle, or x.com/twitter.com URLs
     const handles = raw
       .split(/[\s,]+/)
-      .map((h) => h.replace(/^@/, '').trim())
+      .map((token) => {
+        const trimmed = token.trim();
+        // Extract username from twitter.com or x.com URLs
+        const urlMatch = /^https?:\/\/(?:www\.)?(?:twitter\.com|x\.com)\/([a-zA-Z0-9_]{1,15})\/?(?:\?.*)?$/.exec(trimmed);
+        if (urlMatch) return urlMatch[1]!;
+        // Strip leading @
+        return trimmed.replace(/^@/, '');
+      })
       .filter((h) => h.length > 0 && /^[a-zA-Z0-9_]{1,15}$/.test(h));
 
     if (handles.length === 0) {
-      await ctx.reply('❌ No valid Twitter handles found. Handles must be 1-15 alphanumeric/underscore characters.');
+      await ctx.reply('❌ No valid Twitter handles found. Accepts handles (1-15 chars) or x.com/twitter.com profile URLs.');
       return;
     }
 
