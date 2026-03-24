@@ -3,7 +3,7 @@ import { writeFileSync } from 'node:fs';
 import { generateCard } from './generator.js';
 import type { CardType, CardData } from './types.js';
 
-const VALID_TYPES = ['roast', 'kill-report', 'stats', 'leaderboard', 'milestone', 'stat-card'] as const;
+const VALID_TYPES = ['roast', 'stats-overview', 'leaderboard', 'number-card', 'stat-duo', 'stat-quad'] as const;
 
 async function main() {
   const args = process.argv.slice(2);
@@ -28,7 +28,6 @@ async function main() {
   let dataJson: string;
   const rawData = args[dataIdx + 1];
   if (rawData === '-') {
-    // Read from stdin
     const chunks: Buffer[] = [];
     for await (const chunk of process.stdin) {
       chunks.push(chunk as Buffer);

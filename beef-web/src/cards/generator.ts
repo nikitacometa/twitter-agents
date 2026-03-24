@@ -3,15 +3,15 @@ import { Resvg } from '@resvg/resvg-js';
 import sharp from 'sharp';
 import { satoriFonts } from './fonts.js';
 import { sizes } from './theme.js';
-import { randomFireBg, artBackgrounds } from './assets.js';
+import { artScenes } from './assets.js';
 import type { CardData } from './types.js';
 
 import { RoastCard } from './templates/roast-card.js';
-import { KillReport } from './templates/kill-report.js';
-import { StatsDashboard } from './templates/stats-dashboard.js';
+import { StatsOverview } from './templates/stats-overview.js';
 import { Leaderboard } from './templates/leaderboard.js';
-import { Milestone } from './templates/milestone.js';
-import { StatCard } from './templates/stat-card.js';
+import { NumberCard } from './templates/number-card.js';
+import { StatDuo } from './templates/stat-duo.js';
+import { StatQuad } from './templates/stat-quad.js';
 
 interface GenerateOptions {
   format?: 'jpeg' | 'png';
@@ -24,28 +24,26 @@ export async function generateCard(
 ): Promise<Buffer> {
   const { format = 'jpeg', quality = 90 } = options;
 
-  // 1. Select template and dimensions
   const { element, width, height, artBg, artOpacity = 1.0 } = resolveTemplate(card);
 
-  // 2. Render JSX → SVG via satori
+  // 1. Render JSX → SVG via satori
   const svg = await satori(element, {
     width,
     height,
     fonts: satoriFonts,
   });
 
-  // 3. SVG → PNG via resvg
+  // 2. SVG → PNG via resvg
   const resvg = new Resvg(svg, {
     fitTo: { mode: 'width', value: width },
   });
   const rendered = resvg.render();
   const dataPng = rendered.asPng();
 
-  // 4. Composite with art background (if available) and optimize
+  // 3. Composite with art background and add border frame
   let output: Buffer;
 
   if (artBg) {
-    // Reduce art opacity by darkening it toward black
     const artLayer = await sharp(artBg)
       .resize(width, height, { fit: 'cover' })
       .modulate({ brightness: artOpacity })
@@ -61,7 +59,34 @@ export async function generateCard(
       .toBuffer();
   }
 
+  // 4. Add red border frame for light/dark theme compatibility
+  output = await addBorderFrame(output, width, height, format, quality);
+
   return output;
+}
+
+async function addBorderFrame(
+  input: Buffer,
+  width: number,
+  height: number,
+  format: 'jpeg' | 'png',
+  quality: number,
+): Promise<Buffer> {
+  const borderWidth = 3;
+  const borderColor = { r: 204, g: 0, b: 0, alpha: 0.6 };
+
+  // Create a border overlay as SVG
+  const borderSvg = `<svg width="${width}" height="${height}" xmlns="http://www.w3.org/2000/svg">
+    <rect x="0" y="0" width="${width}" height="${height}"
+      fill="none"
+      stroke="rgba(${borderColor.r},${borderColor.g},${borderColor.b},${borderColor.alpha})"
+      stroke-width="${borderWidth * 2}" />
+  </svg>`;
+
+  return sharp(input)
+    .composite([{ input: Buffer.from(borderSvg), blend: 'over' }])
+    .toFormat(format, format === 'jpeg' ? { quality, progressive: true } : {})
+    .toBuffer();
 }
 
 interface TemplateResult {
@@ -69,17 +94,7 @@ interface TemplateResult {
   width: number;
   height: number;
   artBg: Buffer | null;
-  artOpacity?: number; // 0-1, default 1.0
-}
-
-function randomDramaticFireBg(): Buffer | null {
-  const variants = [
-    artBackgrounds.fireBg1,
-    artBackgrounds.fireBg2,
-    artBackgrounds.fireDramatic,
-  ].filter(Boolean) as Buffer[];
-  if (variants.length === 0) return null;
-  return variants[Math.floor(Math.random() * variants.length)] ?? null;
+  artOpacity?: number;
 }
 
 function resolveTemplate(card: CardData): TemplateResult {
@@ -89,48 +104,48 @@ function resolveTemplate(card: CardData): TemplateResult {
         element: RoastCard(card.data),
         width: sizes.card.width,
         height: sizes.card.height,
-        artBg: randomDramaticFireBg(),
-        artOpacity: 0.6,
+        artBg: artScenes.accuse,
+        artOpacity: 0.7,
       };
-    case 'kill-report':
+    case 'stats-overview':
       return {
-        element: KillReport(card.data),
+        element: StatsOverview(card.data),
         width: sizes.card.width,
         height: sizes.card.height,
-        artBg: artBackgrounds.dataGrid ?? artBackgrounds.emberScatter,
-        artOpacity: 0.6,
-      };
-    case 'stats':
-      return {
-        element: StatsDashboard(card.data),
-        width: sizes.card.width,
-        height: sizes.card.height,
-        artBg: artBackgrounds.smokeDark,
-        artOpacity: 0.4,
+        artBg: artScenes.analyst,
+        artOpacity: 0.7,
       };
     case 'leaderboard':
       return {
         element: Leaderboard(card.data),
         width: sizes.square.width,
         height: sizes.square.height,
-        artBg: artBackgrounds.emberScatter,
-        artOpacity: 0.15,
+        artBg: artScenes.arena,
+        artOpacity: 0.3,
       };
-    case 'milestone':
+    case 'number-card':
       return {
-        element: Milestone(card.data),
+        element: NumberCard(card.data),
         width: sizes.card.width,
         height: sizes.card.height,
-        artBg: randomDramaticFireBg(),
-        artOpacity: 0.7,
+        artBg: artScenes.explosion,
+        artOpacity: 0.8,
       };
-    case 'stat-card':
+    case 'stat-duo':
       return {
-        element: StatCard(card.data),
+        element: StatDuo(card.data),
+        width: sizes.square.width,
+        height: sizes.square.height,
+        artBg: artScenes.present,
+        artOpacity: 0.3,
+      };
+    case 'stat-quad':
+      return {
+        element: StatQuad(card.data),
         width: sizes.card.width,
         height: sizes.card.height,
-        artBg: artBackgrounds.characterStats ?? artBackgrounds.emberScatter,
-        artOpacity: 0.4,
+        artBg: artScenes.analyst,
+        artOpacity: 0.6,
       };
   }
 }

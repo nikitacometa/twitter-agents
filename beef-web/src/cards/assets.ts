@@ -23,23 +23,11 @@ export const avatarDataUrl = loadAsBase64(
   'image/png',
 );
 
-// AI art backgrounds — loaded as buffers for sharp compositing
-export const artBackgrounds = {
-  fireBg1: loadBuffer(join(ART_DIR, 'fire-bg-1.png')),
-  fireBg2: loadBuffer(join(ART_DIR, 'fire-bg-2.png')),
-  smokeDark: loadBuffer(join(ART_DIR, 'smoke-dark.png')),
-  emberScatter: loadBuffer(join(ART_DIR, 'ember-scatter.png')),
-  grillMarks: loadBuffer(join(ART_DIR, 'grill-marks.png')),
-  skullCorner: loadBuffer(join(ART_DIR, 'skull-corner.png')),
-  characterPresenting: loadBuffer(join(ART_DIR, 'character-presenting.png')),
-  characterStats: loadBuffer(join(ART_DIR, 'character-stats.png')),
-  fireDramatic: loadBuffer(join(ART_DIR, 'fire-dramatic.png')),
-  dataGrid: loadBuffer(join(ART_DIR, 'data-grid.png')),
+// AI art scene backgrounds — loaded as buffers for sharp compositing
+export const artScenes = {
+  accuse: loadBuffer(join(ART_DIR, 'scene-accuse.png')),
+  analyst: loadBuffer(join(ART_DIR, 'scene-analyst.png')),
+  arena: loadBuffer(join(ART_DIR, 'scene-arena.png')),
+  explosion: loadBuffer(join(ART_DIR, 'scene-explosion.png')),
+  present: loadBuffer(join(ART_DIR, 'scene-present.png')),
 } as const;
-
-// Pick a random art variant
-export function randomFireBg(): Buffer | null {
-  const variants = [artBackgrounds.fireBg1, artBackgrounds.fireBg2].filter(Boolean) as Buffer[];
-  if (variants.length === 0) return null;
-  return variants[Math.floor(Math.random() * variants.length)] ?? null;
-}

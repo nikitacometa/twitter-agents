@@ -1,47 +1,18 @@
-export type CardType = 'roast' | 'kill-report' | 'stats' | 'leaderboard' | 'milestone' | 'stat-card';
+export type CardType = 'roast' | 'stats-overview' | 'leaderboard' | 'number-card' | 'stat-duo' | 'stat-quad';
 
 export interface RoastCardData {
   targetName: string;
   targetType: 'project' | 'token' | 'trend' | 'person';
   roastText: string;
   qualityScore: number;
-  angle?: string;
   timestamp?: string;
 }
 
-export interface KillReportData {
-  targetName: string;
-  targetType: string;
-  roastText: string;
-  qualityScore: number;
-  scores: {
-    savage: number;
-    factual: number;
-    funny: number;
-    original: number;
-    shareable: number;
-    crypto_native: number;
-    degen: number;
-    timely: number;
-  };
-  angle: string;
-  strategy: string;
-  timestamp?: string;
-}
-
-export interface StatsDashboardData {
+export interface StatsOverviewData {
   totalRoasts: number;
-  stockpileSize: number;
   avgQualityScore: number;
   projectsAudited: number;
-  topTargets: Array<{
-    name: string;
-    roastCount: number;
-    avgScore: number;
-    bestAngle: string;
-  }>;
-  uptime: string;
-  lastRoastTime: string;
+  topTargets: Array<{ name: string; count: number }>;
 }
 
 export interface LeaderboardData {
@@ -55,26 +26,36 @@ export interface LeaderboardData {
   }>;
 }
 
-export interface MilestoneData {
+export interface NumberCardData {
   number: string;
   achievement: string;
   supportingText: string;
 }
 
-export interface StatCardData {
-  targetName: string;
-  stats: Array<{
-    value: string;
-    label: string;
-    highlight?: boolean;
-  }>;
+export interface StatDuoData {
+  targetName?: string;
+  stats: [
+    { value: string; label: string },
+    { value: string; label: string },
+  ];
+  sourceText?: string;
+}
+
+export interface StatQuadData {
+  targetName?: string;
+  stats: [
+    { value: string; label: string },
+    { value: string; label: string },
+    { value: string; label: string },
+    { value: string; label: string },
+  ];
   sourceText?: string;
 }
 
 export type CardData =
   | { type: 'roast'; data: RoastCardData }
-  | { type: 'kill-report'; data: KillReportData }
-  | { type: 'stats'; data: StatsDashboardData }
+  | { type: 'stats-overview'; data: StatsOverviewData }
   | { type: 'leaderboard'; data: LeaderboardData }
-  | { type: 'milestone'; data: MilestoneData }
-  | { type: 'stat-card'; data: StatCardData };
+  | { type: 'number-card'; data: NumberCardData }
+  | { type: 'stat-duo'; data: StatDuoData }
+  | { type: 'stat-quad'; data: StatQuadData };

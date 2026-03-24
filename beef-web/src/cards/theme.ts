@@ -20,6 +20,9 @@ export const colors = {
   blood: '#4a0000',
   char: '#1a0000',
   violet: '#a78bfa',
+  overlay: 'rgba(10,10,10,0.88)',
+  overlayLight: 'rgba(10,10,10,0.75)',
+  borderFrame: 'rgba(204,0,0,0.6)',
 } as const;
 
 export const fonts = {
