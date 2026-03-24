@@ -187,6 +187,10 @@ export interface CreativeMemory {
   externalExamples?: FireExample[];
   learnedTechniques?: string[];
   profileContext?: string;
+  /** True when the target explicitly asked to be roasted ("roast me") */
+  roastMeMode?: boolean;
+  /** Target type hint — 'person' vs 'project' changes prompt framing */
+  targetType?: 'person' | 'project' | 'token' | 'trend';
 }
 
 // --- External examples ---

@@ -18,7 +18,7 @@ export interface ScraperCredentials {
 }
 
 export class ScraperTwitterClient implements ITwitterClient, IProfileFetcher {
-  private readonly scraper: Scraper;
+  readonly scraper: Scraper;
   private readonly credentials: ScraperCredentials;
   private readonly cookieStore: CookieStore;
   private readonly dryRun: boolean;

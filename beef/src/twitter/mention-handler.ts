@@ -169,7 +169,7 @@ export class MentionHandler {
           );
         } else if (isRoastMe(m.text, this.botUsername)) {
           // "roast me" / "@0xBeefer roast me gango" → target = the author
-          queueTarget = this.enqueueHandleRoast(m, m.authorName);
+          queueTarget = this.enqueueHandleRoast(m, m.authorName, { roastMe: true });
           queued = true;
           this.logger.info(
             { tweetId: m.tweetId, author: m.authorName },
@@ -298,19 +298,20 @@ export class MentionHandler {
     return false;
   }
 
-  private enqueueHandleRoast(m: MentionData, handle: string): string {
+  private enqueueHandleRoast(m: MentionData, handle: string, opts?: { roastMe?: boolean }): string {
     const targetName = `@${handle}`;
     // Reply to parent tweet (if under someone's tweet) so the roast appears in that thread
     const replyTarget = m.inReplyToTweetId ?? m.tweetId;
+    const roastMeFlag = opts?.roastMe ? '|roast_me:1' : '';
     this.queueRepo.enqueue({
       targetName,
-      targetType: 'project',
+      targetType: opts?.roastMe ? 'person' : 'project',
       source: 'mention',
       priority: 3,
-      context: `reply_to:${replyTarget}|by:@${m.authorName}|mention:${m.tweetId}|handle:@${handle}`,
+      context: `reply_to:${replyTarget}|by:@${m.authorName}|mention:${m.tweetId}|handle:@${handle}${roastMeFlag}`,
     });
     this.logger.info(
-      { tweetId: m.tweetId, handle, author: m.authorName },
+      { tweetId: m.tweetId, handle, author: m.authorName, roastMe: !!opts?.roastMe },
       'Handle roast queued from mention',
     );
     return targetName;

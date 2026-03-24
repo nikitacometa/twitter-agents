@@ -22,6 +22,7 @@ import { classifyFreshness, calculateExpiry } from '@farm/freshness.js';
 import { getErrorMessage } from '@common/utils/error.util.js';
 import { isQuietHour } from '@scheduler/scheduler.js';
 import { downloadTweetMedia } from '@common/utils/media-downloader.js';
+import type { TwitterEnricher } from '@farm/twitter-enricher.js';
 import type { ActivityLogger } from '../activity/activity-logger.js';
 
 export interface QueueProcessResult {
@@ -63,6 +64,7 @@ export class QueueManager {
   private readonly enableMentionReplies: boolean;
   private readonly casualReplyLimit: number;
   private readonly evaluationThreshold: number;
+  private readonly twitterEnricher?: TwitterEnricher;
   private readonly activityLogger?: ActivityLogger;
   private cachedRoastEngine: RoastEngine | null = null;
   private cachedEvaluator: SelfEvaluator | null = null;
@@ -84,6 +86,7 @@ export class QueueManager {
     farmAttemptRepo?: FarmAttemptRepository;
     mentionRepo?: MentionRepository;
     tweetRepo?: TweetRepository;
+    twitterEnricher?: TwitterEnricher;
     logger: Logger;
     dailyLimit: number;
     mentionReplyLimit?: number;
@@ -105,6 +108,7 @@ export class QueueManager {
     this.farmAttemptRepo = opts.farmAttemptRepo;
     this.mentionRepo = opts.mentionRepo;
     this.tweetRepo = opts.tweetRepo;
+    this.twitterEnricher = opts.twitterEnricher;
     this.logger = opts.logger;
     this.dailyLimit = opts.dailyLimit;
     this.mentionReplyLimit = opts.mentionReplyLimit ?? 20;
@@ -374,14 +378,18 @@ export class QueueManager {
 
       const imagePaths = downloaded?.paths.length ? downloaded.paths : undefined;
 
-      // Profile enrichment for all scenarios
+      // Profile enrichment for all scenarios — prefer TwitterEnricher (richer data) over basic profileFetcher
       let profileContext: string | undefined;
-      if (this.profileFetcher) {
-        const handle = extractHandleFromContext(item.context);
-        const parentAuthor = extractParentAuthorFromTarget(item.targetName);
-        const targetHandle = extractHandleFromTarget(item.targetName);
-        const username = handle ?? parentAuthor ?? targetHandle;
-        if (username && username !== 'anon') {
+      const handle = extractHandleFromContext(item.context);
+      const parentAuthor = extractParentAuthorFromTarget(item.targetName);
+      const targetHandle = extractHandleFromTarget(item.targetName);
+      const username = handle ?? parentAuthor ?? targetHandle;
+      if (username && username !== 'anon') {
+        if (this.twitterEnricher?.isConfigured) {
+          const enriched = await this.twitterEnricher.enrich(username);
+          profileContext = enriched?.profileContext;
+        }
+        if (!profileContext && this.profileFetcher) {
           profileContext = await this.buildProfileContext(username);
         }
       }
@@ -398,10 +406,12 @@ export class QueueManager {
       this.activityLogger?.emit({ type: 'cooking', data: { target: item.targetName, strategies: 3 } });
 
       // Full farm flow: generate (3 strategies × 2 variants + mutations) → evaluate → stockpile → post best
+      const isRoastMe = extractRoastMeFlag(item.context);
       const output = await generateRoasts(
         item.targetName, this.provider, this.logger, this.feedbackRepo,
         'farm-generate', 2, this.configRepo, this.exampleRepo, this.patternRepo,
         imagePaths, profileContext, undefined, this.stockpile, 2, this.farmAttemptRepo,
+        undefined, isRoastMe || undefined, item.targetType as 'person' | 'project' | 'token' | 'trend',
       );
 
       if (output.variants.length === 0) {
@@ -1191,6 +1201,11 @@ export function extractMentionTweetId(context: string | null): string | undefine
   if (!context) return undefined;
   const match = context.match(/\|mention:(\d+)/);
   return match?.[1];
+}
+
+export function extractRoastMeFlag(context: string | null): boolean {
+  if (!context) return false;
+  return /\|roast_me:1/.test(context);
 }
 
 export function extractParentTweetId(context: string | null): string | undefined {

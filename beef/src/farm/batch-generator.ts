@@ -190,7 +190,7 @@ export class BatchGenerator {
       'Generating roasts',
     );
 
-    const basePrompt = this.buildStrategyPrompt(strategy, targetName, profileContext ?? undefined);
+    const basePrompt = this.buildStrategyPrompt(strategy, targetName, profileContext ?? undefined, targetType);
     const prompt = mutationSection
       ? basePrompt + '\n' + mutationSection
       : basePrompt;
@@ -252,7 +252,12 @@ export class BatchGenerator {
     };
   }
 
-  private buildStrategyPrompt(strategy: PromptStrategy, targetName: string, profileContext?: string): string {
+  private buildStrategyPrompt(
+    strategy: PromptStrategy,
+    targetName: string,
+    profileContext?: string,
+    targetType?: string,
+  ): string {
     let memory = buildCreativeMemory({
       targetName,
       logger: this.logger,
@@ -264,13 +269,16 @@ export class BatchGenerator {
       farmAttemptRepo: this.farmAttempt,
     });
 
-    // Inject Twitter profile data into creative memory
+    // Inject Twitter profile data and target type into creative memory
+    const memoryType = targetType === 'person' ? 'person' as const : undefined;
     if (profileContext) {
       if (memory) {
-        memory = { ...memory, profileContext };
+        memory = { ...memory, profileContext, targetType: memoryType };
       } else {
-        memory = { fireExamples: [], profileContext };
+        memory = { fireExamples: [], profileContext, targetType: memoryType };
       }
+    } else if (memoryType && memory) {
+      memory = { ...memory, targetType: memoryType };
     }
 
     switch (strategy) {

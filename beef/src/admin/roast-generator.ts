@@ -51,6 +51,8 @@ export async function generateRoasts(
   mutationCount?: number,
   farmAttemptRepo?: FarmAttemptRepository,
   evaluationThreshold?: number,
+  roastMeMode?: boolean,
+  targetType?: 'person' | 'project' | 'token' | 'trend',
 ): Promise<GenerateRoastsResult> {
   const engine = getEngine(provider, logger, evaluationMode, evaluationThreshold);
 
@@ -65,9 +67,12 @@ export async function generateRoasts(
     farmAttemptRepo,
   });
   if (profileContext && memory) {
-    memory = { ...memory, profileContext };
+    memory = { ...memory, profileContext, roastMeMode, targetType };
   } else if (profileContext) {
-    memory = { fireExamples: [], profileContext };
+    memory = { fireExamples: [], profileContext, roastMeMode, targetType };
+  }
+  if (memory && (roastMeMode || targetType)) {
+    memory = { ...memory, roastMeMode, targetType };
   }
 
   if (memory && (memory.fireExamples.length > 0 || memory.angleWeights || memory.rejectExamples || memory.externalExamples)) {

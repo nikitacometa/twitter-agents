@@ -38,6 +38,7 @@ import type { QueueProcessResult } from './queue/queue-manager.js';
 import { EngagementTracker } from './learning/engagement-tracker.js';
 import { HealthMonitor } from './health/health-monitor.js';
 import { CachedProfileFetcher } from './twitter/cached-profile-fetcher.js';
+import { TwitterEnricher } from './farm/twitter-enricher.js';
 import { ActivityLogger } from './activity/activity-logger.js';
 
 const config = validateEnv();
@@ -156,6 +157,7 @@ try {
 // --- Twitter Client (only when ENABLE_TWITTER=true) ---
 let twitter: ITwitterClient | undefined;
 let profileFetcher: IProfileFetcher | undefined;
+let twitterEnricher: TwitterEnricher | undefined;
 let mentionHandler: MentionHandler | undefined;
 let engagementTracker: EngagementTracker | undefined;
 
@@ -191,6 +193,7 @@ if (config.ENABLE_TWITTER) {
         targetRepo,
         logger,
       });
+      twitterEnricher = new TwitterEnricher({ scraper: scraperClient.scraper, logger });
       logger.info('Twitter client: scraper mode (cookie auth)');
     } catch (error) {
       logger.error({ err: error }, 'Scraper login failed — falling back to API mode');
@@ -267,6 +270,7 @@ if (provider) {
     farmAttemptRepo,
     mentionRepo,
     tweetRepo,
+    twitterEnricher,
     logger,
     dailyLimit: config.ROASTS_PER_DAY,
     mentionReplyLimit: config.MENTION_REPLIES_PER_DAY,
