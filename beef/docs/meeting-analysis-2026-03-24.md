@@ -77,7 +77,7 @@
 Данные подтверждают: X/Twitter даёт replies 150x author-reply weight в алгоритме. Для нового аккаунта с 12 фолловерами reply guy — единственный реалистичный канал роста. Autonomous roasts уходят в пустоту без аудитории.
 
 **2. Визуалы — правильная ставка.**
-X/Twitter даёт +178% engagement для постов с изображениями. Три типа визуалов (карточки, мемы, арт) — хорошая диверсификация. Порядок приоритетов правильный: карточки (быстро, дёшево) → мемы (вирусный потенциал) → арт (wow, но дорого).
+Посты с изображениями получают значительно больше engagement (точная цифра зависит от исследования и периода — часто цитируют +150-200%, но это данные 2014-2020 годов). В 2025-2026 визуал скорее table stakes, чем конкурентное преимущество. Три типа визуалов (карточки, мемы, арт) — хорошая диверсификация. Для роаст-бота мемы > карточки по вирусному потенциалу.
 
 **3. Медвежка как тема — отличный тайминг.**
 CT sentiment действительно bear. Trump family token extraction, fartcoin collapse, массовый выход — всё это резонирует. Бот, который артикулирует то, что все думают, но боятся сказать — это organic engagement.
@@ -246,15 +246,102 @@ await scraper.sendTweet('Roast text', undefined, [
 ]);
 ```
 
-**AI image generation:**
+**AI image generation — gpt-image-1.5 (основной выбор):**
 
-| Модель | Цена | Примечание |
-|--------|------|-----------|
-| gpt-image-1-mini | $0.005/img | Самый дешёвый, хорош для data cards |
-| gpt-image-1 | $0.04–$0.20/img | Лучшее качество, понимает текст внутри изображений |
-| FLUX Schnell (fal.ai) | $0.003–$0.007/img | Быстрый, дешёвый |
+Используем **gpt-image-1.5** (OpenAI, latest model). Ключевые преимущества:
+- Отлично рендерит текст внутри изображений (мем-подписи, data labels)
+- Понимает контекст и стиль — можно запросить "crypto meme in Drake format" или "roast card dark theme"
+- Может генерировать как мем-стиль, так и data card aesthetic
+- Стоимость ~$0.02–$0.08/image (зависит от размера и quality)
 
-При 10 визуалов/день = $0.05–$0.30/день. Экономически незначимо. Но: аудитория хуже резонирует с generic AI art vs узнаваемые мем-форматы.
+| Модель | Цена | Для чего |
+|--------|------|----------|
+| **gpt-image-1.5** | ~$0.02–$0.08/img | **Основной**: мемы, карточки, AI-арт — всё через один API |
+| FLUX Schnell (fal.ai) | $0.003–$0.007/img | Fallback: дешевле, но хуже текст |
+
+При 15-20 визуалов/день = $0.30–$1.60/день ($9–$48/мес). Незначимо при потенциальном impact на engagement.
+
+**Ключевое преимущество gpt-image-1.5 для нас:** один API может генерировать ВСЕ типы визуалов — мемы, карточки, арт. Это упрощает pipeline и позволяет гибридный подход (см. секцию "Мем-стратегия").
+
+---
+
+## Мем-стратегия: как $BEEF делает визуалы
+
+### Три канала генерации
+
+| Канал | Инструмент | Когда использовать | Стоимость |
+|-------|-----------|-------------------|----------|
+| **AI-мемы** | gpt-image-1.5 | Оригинальные посты, ответы на горячие твиты | ~$0.05/шт |
+| **Шаблонные мемы** | imgflip API / memegen.link | Быстрые replies, классические форматы | $0–$0.01/шт |
+| **Data cards** | satori + resvg-js | Статистика, сравнения, "receipts" | $0 (рендер локально) |
+
+### Гибридный pipeline — generate → evaluate → pick best
+
+Не нужно выбирать один канал. Для важных постов (autonomous roasts, viral-potential targets) — **генерируем 2-3 варианта параллельно, выбираем лучший:**
+
+```
+1. LLM генерирует roast text
+2. Параллельно запускаем:
+   a) gpt-image-1.5 → AI-мем по тексту роаста
+   b) LLM выбирает imgflip-шаблон → API генерирует template meme
+   c) satori → data card (если есть числовые данные)
+3. LLM-judge оценивает: "какой визуал лучше подходит к этому роасту?"
+4. Побеждает лучший → прикрепляется к твиту
+```
+
+**Когда гибрид оправдан:** autonomous roasts (5/день) — время не критично, качество важно.
+**Когда не оправдан:** reply guy replies (10-20/день) — нужна скорость. Один канал: template meme или text-only.
+
+### Когда прикреплять визуал
+
+Не каждый пост нуждается в картинке. Правила:
+
+| Тип поста | Визуал | Обоснование |
+|-----------|--------|-------------|
+| Autonomous roast (проект/токен) | **Всегда** — AI-мем или data card | Standalone пост, визуал = hook для скролла |
+| Reply на горячий твит (reply guy) | **50% постов** — чередовать | Слишком много картинок = выглядит как спам |
+| Casual reply | **Редко** — GIF или без | Лёгкий тон, не перегружать |
+| Announcement / thread | **Всегда** — AI-арт или branded card | Максимальный impact |
+
+### imgflip Premium: стоит ли $9.99/мес?
+
+**Да, стоит.** Что даёт:
+- `/automeme` — LLM сам выбирает шаблон по тексту (экономит один LLM-вызов)
+- `/search_memes` — доступ к 1M+ шаблонов (vs 100 в free tier)
+- Больший лимит captioned images (free tier ~100/мес)
+- Качество выше memegen.link (больше шаблонов, лучший рендер)
+
+**ROI:** $9.99/мес за потенциально значительный boost в engagement. При бюджете проекта $1.3-3.5K — это 0.3% бюджета.
+
+### Конкретные мем-форматы для роастов
+
+**Top-5 шаблонов для крипто-роастов:**
+
+| Формат | Когда | Пример для $BEEF |
+|--------|-------|-----------------|
+| Drake Hotline Bling | Выбор между X и Y | "Actual utility" (отвергает) / "Another governance token" (принимает) |
+| Distracted Boyfriend | Проект/фаундер гонится за хайпом | Фаундер → новый хайп-нарратив, подруга → roadmap promises |
+| This Is Fine (Dog) | Рынок/токен падает | Токен -94%, фаундер "we're building" |
+| Uno Draw 25 | Абсурдный выбор | "Deliver product" или "Draw 25 governance proposals" |
+| Expanding Brain | Уровни абсурда | 4 уровня: buy → hold → sell → "it's actually good for the ecosystem" |
+
+### gpt-image-1.5 как универсальный генератор
+
+gpt-image-1.5 может заменить и шаблонные мемы, и data cards:
+- **Мем-стиль:** "Generate a Drake meme format image: top panel rejecting 'shipping product', bottom panel approving 'another partnership announcement'. Crypto Twitter aesthetic, dark humor."
+- **Data card:** "Generate a dark-themed data card showing: Project X, TVL: $2M → $50K, Promises: 14, Delivered: 0. Red accent color, terminal aesthetic."
+- **Custom art:** "A bull skull on fire, crypto charts crashing in the background, smoke forming the text 'audited'. Dark, moody, Diablo-like aesthetic."
+
+**Преимущество:** один API, один pipeline, бесконечное разнообразие.
+**Недостаток:** медленнее шаблонных мемов (~5-15сек vs мгновенно), дороже, менее предсказуемо.
+
+### Рекомендованный подход
+
+**Phase 1 (запуск):** gpt-image-1.5 для всех визуалов. Один pipeline, быстрая реализация.
+**Phase 2 (оптимизация):** добавить imgflip для быстрых reply мемов. gpt-image-1.5 для premium постов.
+**Phase 3 (масштаб):** гибридный pipeline с LLM-judge для автономных roasts.
+
+---
 
 ### Повторяемость паттернов — анализ кода
 
@@ -306,14 +393,18 @@ type ThematicLens = 'financial' | 'behavioral' | 'narrative' | 'cultural' | 'per
 Не требует изменений в: Twitter client, queue, scheduler, admin bot.
 
 #### F2. Media Upload (enabler для всех визуалов)
-**Сложность:** Medium | **Impact:** Critical enabler | **Время:** 2-3 дня
+**Сложность:** Low-Medium | **Impact:** Critical enabler | **Время:** 1 день
+
+`agent-twitter-client` уже поддерживает `mediaData` в `sendTweet()`. Основная работа — прокинуть Buffer через pipeline.
 
 Изменения:
-- `twitter-client.interface.ts`: расширить `postTweet(text, mediaIds?)` и `replyToTweet(text, replyToId, mediaIds?)`
-- `twitter-client.ts` (Official API): добавить `uploadMedia(buffer: Buffer, mimeType: string): Promise<string>` через v1.1 endpoint
-- `scraper-twitter-client.ts`: добавить `mediaData` parameter в `sendTweet()` call
-- `queue-manager.ts`: передавать media через pipeline
-- `agent.types.ts`: добавить `mediaBuffer?: Buffer` в output types
+- `twitter-client.interface.ts`: добавить `mediaData?: Array<{data: Buffer, mediaType: string}>` в `postTweet()` и `replyToTweet()`
+- `scraper-twitter-client.ts`: передать `mediaData` в `scraper.sendTweet()` (уже поддерживается)
+- `twitter-client.ts` (Official API): добавить `v2.uploadMedia()` + attach `media_ids` к tweet
+- `queue-manager.ts`: передавать media buffer через pipeline
+- `agent.types.ts`: добавить `mediaBuffers?: Array<{data: Buffer, mediaType: string}>` в output
+
+**Реальная сложность — не upload, а generation.** Media upload — это проброс Buffer. Основная работа в F3-F5: генерация контента.
 
 #### F3. Data Cards (визуальные карточки)
 **Сложность:** Medium | **Impact:** High | **Время:** 2-3 дня (после F2)
@@ -358,32 +449,24 @@ Pipeline:
 3. LLM picks best match OR random из топ-5
 4. Fetch GIF → Buffer → upload как `image/gif` (URL нельзя вставить напрямую)
 
-#### F6. Reply Guy Pipeline (упомянуто как параллельная работа)
-**Сложность:** High | **Impact:** Critical | **Время:** 5-7 дней
+#### F6. Reply Guy Pipeline — **ЧАСТИЧНО РЕАЛИЗОВАНО**
+**Сложность:** Medium (осталось) | **Impact:** Critical | **Время:** 2-3 дня (доработка)
 
-**⚠️ Ключевое ограничение:** с 23.02.2026 X API блокирует unsolicited replies. Reply guy pipeline **обязан** использовать Playwright для постинга, не API. API replies работают только для mention-based ответов.
+**Что уже есть:**
+- `/roast-tweet <url>` — Telegram-команда, генерирует роаст конкретного твита (Opus, enrichment, eval)
+- `buildTweetRoastContext()` — tweet-specific prompt с метриками, профилем автора, media
+- Post/regen/reply кнопки в Telegram
+- `reply_guy` source type в DB schema
 
-Новый модуль: `src/reply-guy/`
-```
-src/reply-guy/
-├── tweet-discoverer.ts   # Find hot tweets via Lists/Search
-├── relevance-scorer.ts   # LLM-scored relevance + roastability
-├── reply-generator.ts    # Specialized reply prompts
-└── rate-limiter.ts       # Per-day/per-hour/per-target limits
-```
+**Что осталось:**
+- **Tweet discovery**: автоматический поиск горячих твитов (Lists polling / Search)
+- **Auto-scheduling**: cron job для periodic discovery
+- **Rate limiter**: per-target/per-day лимиты
+- **Approval flow**: обнаружил → сгенерировал → отправил в Telegram → человек постит
 
-Rate limiting правила:
-- Max 1 reply на аккаунт в 24 часа (anti-spam detection)
-- Min 60-90 секунд между replies (human typing speed)
-- Случайные интервалы, не фиксированные
-- Целевые аккаунты: mid-tier 50K–300K фолловеров (не mega-KOLs)
-- Тайминг: reply в течение 15-30 минут от публикации твита
+**⚠️ Ключевое ограничение:** с ~февраля 2026 X API ограничивает автоматические replies. Unsolicited replies лучше постить через Playwright или вручную.
 
-Изменения в:
-- `scheduler.ts`: новый job для tweet discovery (polling Lists каждые 5-10 мин)
-- `queue-manager.ts`: source 'reply_guy' (уже в types!)
-- `admin/bot.ts`: команды для управления reply guy targets
-- `twitter-client.ts`: Playwright-based reply method (не API)
+Целевые аккаунты: mid-tier 50K–300K фолловеров. Max 1 reply/аккаунт/24ч. Тайминг: < 30 мин от публикации.
 
 #### F7. Bear Market Theme / Topical Roasts
 **Сложность:** Low | **Impact:** Medium-High | **Время:** 1 день
@@ -406,39 +489,41 @@ Rate limiting правила:
 
 ---
 
-## Рекомендованный порядок реализации
+## Рекомендованный порядок реализации (пересмотренный)
 
-### Phase 0: Launch Day (25 марта) — уже готово
-- [x] Announcement thread от бота
+### Что уже готово
+- [x] `/roast-tweet` — reply guy routing через Telegram (Opus, enrichment, eval, post/regen)
 - [x] Stockpile из фермы (14+ готовых роастов)
-- [ ] Ручные реплаи на горячие твиты (Воронин находит, бот генерит)
-- [ ] Профиль: обновить bio, подписаться на target-аккаунты
+- [x] `buildTweetRoastContext()` — tweet-specific prompts
+- [x] Telegram approval workflow (ручной постинг)
 
-### Phase 1: Foundation (дни 1-3) — критический путь
+### Phase 1: Visual Pipeline (дни 1-3) — критический путь
 | # | Фича | Время | Обоснование |
 |---|-------|-------|-------------|
-| 1 | **F1. Thematic Lenses** | 1-2 дня | Решает #1 проблему повторяемости. Минимальные изменения в коде |
-| 2 | **F2. Media Upload** | 2-3 дня | Enabler для всех визуалов. Без этого F3-F5 невозможны |
-| 3 | **F6. Reply Guy Pipeline** (параллельная сессия) | 5-7 дней | Основной growth driver |
+| 1 | **F2. Media Upload** | 1 день | Проброс Buffer через interface. `agent-twitter-client` уже поддерживает |
+| 2 | **gpt-image-1.5 integration** | 1-2 дня | Единый visual генератор. OpenAI API → Buffer → tweet |
+| 3 | **F1. Thematic Lenses** | 1-2 дня | Решает повторяемость. Параллельно с визуалами |
 
-### Phase 2: Visual Layer (дни 3-7)
+### Phase 2: Мем-движок (дни 3-7)
 | # | Фича | Время | Обоснование |
 |---|-------|-------|-------------|
-| 4 | **F3. Data Cards** | 2-3 дня | Быстрый visual MVP. Playwright уже есть |
-| 5 | **F4. Template Memes** | 3-4 дня | Вирусный потенциал. Бесплатный API |
-| 6 | **F7. Bear Market Theme** | 1 день | Контент-стратегия, не код |
+| 4 | **Meme prompt pipeline** | 2-3 дня | LLM решает тип визуала → генерация → прикрепление к роасту |
+| 5 | **imgflip integration** | 1 день | $9.99/мес, быстрые template memes для replies |
+| 6 | **F7. Bear Market Theme** | 1 день | Контент-задача: новые targets + cultural lens |
 
-### Phase 3: Enhancement (дни 7-14)
+### Phase 3: Автоматизация (дни 7-14)
 | # | Фича | Время | Обоснование |
 |---|-------|-------|-------------|
-| 7 | **F5. GIF Reactions** | 1-2 дня | Supplementary к мемам |
-| 8 | Engagement tracking + auto-learn | 3-4 дня | Feedback loop на basis реплаев |
+| 7 | **Reply Guy auto-discovery** | 2-3 дня | Lists polling → auto-suggest targets в Telegram |
+| 8 | **Гибридный visual pipeline** | 2-3 дня | Generate multiple → LLM-judge → pick best |
+| 9 | **F5. GIF Reactions** (Giphy) | 1 день | Supplementary к мемам |
 
 ### Phase 4: Advanced (после токена)
 | # | Фича | Время | Обоснование |
 |---|-------|-------|-------------|
-| 9 | **F8. On-chain Analysis** | 5-7 дней | Killer feature, но нужна аудитория |
-| 10 | Скриншоты в роастах | 2-3 дня | Quality of life |
+| 10 | **F8. On-chain Analysis** | 5-7 дней | Killer feature при 500+ фолловерах |
+| 11 | **Data cards** (satori) | 2-3 дня | Branded карточки со статистикой |
+| 12 | Engagement tracking + auto-learn | 3-4 дня | Feedback loop |
 
 ---
 
@@ -474,25 +559,32 @@ Rate limiting правила:
 | Followers | 12 | 30+ | 100+ | 300+ |
 | Daily impressions | — | 5K | 20K | 50K |
 | Reply engagement rate | — | 2%+ | 3%+ | 5%+ |
-| Roasts posted | 3-5 | 15+ | 40+ | 80+ |
-| Replies (reply guy) | 8-10 | 15 | 20 | 25 |
-| Визуалов с media | 0 | 2-3 | 5+ | 10+ |
+| Autonomous roasts | 3-5 | 5/день | 5/день | 5/день |
+| Reply guy replies | 10 | 15 | 20-30 | 30-50 |
+| Постов с визуалом | 0 | 3-5 | 10+ | 15+ |
+| % постов с визуалом | 0% | 30% | 50% | 60-70% |
 
 ---
 
 ## Выводы
 
-**Встреча была продуктивной.** Основные решения правильные:
-1. Reply guy = #1 growth driver (подтверждено данными алгоритма X: reply = 13.5x лайка)
-2. Визуалы = #2 рычаг (подтверждено +178% engagement)
-3. Bear market theme = organic fit для roast бота (85% negative sentiment на CT)
-4. Manual posting на старте = pragmatic
+### Что подтвердилось
+1. Reply guy = #1 growth driver. `/roast-tweet` уже работает — ядро pipeline готово
+2. Bear market = идеальный момент для roast бота
+3. Manual posting через Telegram — правильный первый шаг
 
-**Корректировки:**
-1. **КРИТИЧЕСКОЕ**: X заблокировал API replies с 23.02.2026 — unsolicited replies только через Playwright. Mention-based replies через API разрешены
-2. Лимит реплаев: 8-10 day 1, не 10-15. Warming up: дни 1-3 без replies вообще
-3. Повторяемость паттернов: решать через thematic lenses, не только ротацию рубрик
-4. Токен: привязать к milestone (200 followers), не к дате
-5. Визуалы: satori для карточек (не Playwright — 10x меньше RAM), memegen.link для мемов (бесплатно)
-6. GIF: Giphy, не Tenor (умирает август 2026). GIF загружать как медиафайл
-7. Media upload — критический enabler, v2 API (v1.1 deprecated), 85 req/24ч на free tier
+### Что пересмотрено после ревизии
+1. **Визуальная стратегия упрощена:** gpt-image-1.5 как универсальный генератор (мемы + карточки + арт через один API). Не нужно 3 отдельных pipeline на старте
+2. **Приоритеты перестроены:** media upload (1 день) → gpt-image-1.5 (1-2 дня) → meme prompts (2-3 дня). Визуалы раньше, потому что reply routing уже готов
+3. **imgflip Premium ($9.99/мес) стоит покупки** — для быстрых template memes в replies
+4. **Гибридный pipeline** (generate multiple → pick best) — только для autonomous roasts, не для replies
+5. **Не каждый пост с картинкой:** autonomous = всегда, replies = 50%, casual = редко
+6. **Warming up скорректирован:** аккаунту 2 недели, можно начинать с 10 replies/день
+7. **Токен: milestone-based** (200 followers ИЛИ viral moment), не date-based
+8. **Tenor мёртв** → только Giphy для GIF
+9. **X API reply ограничения (~февраль 2026):** unsolicited replies лучше постить вручную или через Playwright
+
+### Ключевые цифры из self-review
+- "+178% engagement" — **непроверенная**, скорее всего устаревшие данные 2014 года. Визуал важен, но точная цифра спорна
+- "150x author-reply weight" — это для _диалога_, не для одиночного reply. Одиночный reply ~13.5x лайка
+- Warming up "дни 1-3 без replies" — для **новых** аккаунтов, наш уже ~2 недели active

@@ -133,7 +133,7 @@ export function createBot(opts: {
         '',
         '<b>Generation:</b>',
         '/roast &lt;target&gt; — Sonnet, 9 variants (3×3)',
-        '/roast-tweet &lt;tweet_url&gt; — Opus roast of a specific tweet (full enrichment + eval)',
+        '/roasttweet &lt;tweet_url&gt; — Opus roast of a specific tweet (full enrichment + eval)',
         '/farm &lt;target&gt; — 6 variants + mutations + serious eval',
         '',
         '<b>Management:</b>',
@@ -156,7 +156,7 @@ export function createBot(opts: {
         '  <code>--variants N</code>  per strategy <i>(default: 3, total: N×3)</i>',
         '  <code>--mutations N</code> mutation count <i>(default: 1)</i>',
         '',
-        '<b>⚡ /roast-tweet</b> &lt;tweet_url&gt;',
+        '<b>⚡ /roasttweet</b> &lt;tweet_url&gt;',
         'Opus roast of a specific tweet (full enrichment + eval)',
         '',
         '<b>🌾 /farm</b> &lt;target&gt; [flags]',
@@ -424,11 +424,11 @@ export function createBot(opts: {
     cleanup?: () => Promise<void>;
   }>();
 
-  bot.command('roast_tweet', async (ctx) => {
+  bot.command('roasttweet', async (ctx) => {
     const raw = ctx.match?.trim();
     if (!raw || !isTweetUrl(raw)) {
       await ctx.reply(
-        'Usage: /roast_tweet &lt;tweet_url&gt;\nExample: /roast_tweet https://x.com/user/status/123456',
+        'Usage: /roasttweet &lt;tweet_url&gt;\nExample: /roasttweet https://x.com/user/status/123456',
         { parse_mode: 'HTML' },
       );
       return;
@@ -1753,7 +1753,7 @@ export function createBot(opts: {
       const ctxKey = data.slice(9);
       const storedCtx = roastTweetContexts.get(ctxKey);
       if (!storedCtx) {
-        await ctx.answerCallbackQuery({ text: 'Context expired — run /roast_tweet again', show_alert: true });
+        await ctx.answerCallbackQuery({ text: 'Context expired — run /roasttweet again', show_alert: true });
         return;
       }
 
