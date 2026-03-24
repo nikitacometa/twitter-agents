@@ -453,10 +453,27 @@ export class QueueManager {
         data: { target: item.targetName, variantCount: output.variants.length },
       });
 
-      // Evaluate all variants through 5-judge panel and collect passing ones
-      const { best, newStockpileCount, bestScore, stockpiledVariants } = await this.evaluateAndStockpile(
-        output, item.targetName, item.targetType,
-      );
+      // Evaluate variants — full judge panel in primary mode, self-score in degraded
+      let best: { text: string; score: number; angle: string } | undefined;
+      let bestScore: number | undefined;
+      let newStockpileCount = 0;
+      let stockpiledVariants: Array<{ text: string; score: number; angle: string }> = [];
+
+      if (this.provider.mode === 'primary') {
+        const evalResult = await this.evaluateAndStockpile(output, item.targetName, item.targetType);
+        best = evalResult.best;
+        bestScore = evalResult.bestScore;
+        newStockpileCount = evalResult.newStockpileCount;
+        stockpiledVariants = evalResult.stockpiledVariants;
+      } else {
+        this.logger.info(
+          { target: item.targetName, mode: this.provider.mode },
+          'Degraded mode — using self-score ranking',
+        );
+        const sorted = [...output.variants].sort((a, b) => b.score - a.score);
+        best = sorted[0];
+        bestScore = best?.score;
+      }
 
       if (best) {
         this.activityLogger?.emit({
@@ -1094,9 +1111,22 @@ export class QueueManager {
         return { dequeued: true, posted: false, target: oldRoast.targetName, error: 'No variants generated on regeneration' };
       }
 
-      const { best, newStockpileCount, bestScore, stockpiledVariants } = await this.evaluateAndStockpile(
-        output, oldRoast.targetName, oldRoast.targetType,
-      );
+      let best: { text: string; score: number; angle: string } | undefined;
+      let bestScore: number | undefined;
+      let newStockpileCount = 0;
+      let stockpiledVariants: Array<{ text: string; score: number; angle: string }> = [];
+
+      if (this.provider.mode === 'primary') {
+        const evalResult = await this.evaluateAndStockpile(output, oldRoast.targetName, oldRoast.targetType);
+        best = evalResult.best;
+        bestScore = evalResult.bestScore;
+        newStockpileCount = evalResult.newStockpileCount;
+        stockpiledVariants = evalResult.stockpiledVariants;
+      } else {
+        const sorted = [...output.variants].sort((a, b) => b.score - a.score);
+        best = sorted[0];
+        bestScore = best?.score;
+      }
 
       const tweetText = best
         ? best.text

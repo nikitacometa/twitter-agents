@@ -1,12 +1,11 @@
 import type { Logger } from 'pino';
-import {
-  type AgentResult,
-  type AgentTask,
-  type LLMProvider,
-  type ProviderCapabilities,
-  type ProviderMode,
-  type ProviderName,
-  TaskRequiresResearchError,
+import type {
+  AgentResult,
+  AgentTask,
+  LLMProvider,
+  ProviderCapabilities,
+  ProviderMode,
+  ProviderName,
 } from './agent.types.js';
 import { getErrorMessage } from '@common/utils/error.util.js';
 
@@ -25,15 +24,14 @@ export class ProviderManager implements LLMProvider {
 
   constructor(
     private readonly primary: LLMProvider,
-    private readonly fallback: LLMProvider | null,
+    private readonly fallbacks: LLMProvider[],
     private readonly alerter: Alerter,
     private readonly logger: Logger,
   ) {}
 
   get capabilities(): ProviderCapabilities {
-    return this._mode === 'primary'
-      ? this.primary.capabilities
-      : (this.fallback?.capabilities ?? this.primary.capabilities);
+    if (this._mode === 'primary') return this.primary.capabilities;
+    return this.fallbacks[0]?.capabilities ?? this.primary.capabilities;
   }
 
   get mode(): ProviderMode {
@@ -41,13 +39,7 @@ export class ProviderManager implements LLMProvider {
   }
 
   async run<T>(taskId: string, task: AgentTask): Promise<AgentResult<T>> {
-    // Research tasks cannot run in degraded mode
-    if (task.requiresResearch && this._mode === 'degraded') {
-      this.logger.warn({ taskId }, 'Task requires research — skipped in degraded mode');
-      throw new TaskRequiresResearchError(taskId);
-    }
-
-    // Try primary provider
+    // Always try primary first (enables auto-recovery even in degraded mode)
     let primaryError: unknown;
     try {
       const result = await this.primary.run<T>(taskId, task);
@@ -67,15 +59,25 @@ export class ProviderManager implements LLMProvider {
       throw primaryError;
     }
 
-    // At threshold: try fallback for non-research tasks
-    if (this.fallback && !task.requiresResearch) {
+    // At threshold: enter degraded mode and try fallbacks in order
+    if (this.fallbacks.length > 0) {
       if (this._mode !== 'degraded') {
         await this.enterDegradedMode();
       }
-      return this.fallback.run<T>(taskId, task);
+
+      for (const fb of this.fallbacks) {
+        try {
+          return await fb.run<T>(taskId, task);
+        } catch (fbError) {
+          this.logger.warn(
+            { taskId, provider: fb.name, err: fbError },
+            `Fallback provider ${fb.name} failed, trying next: ${getErrorMessage(fbError)}`,
+          );
+        }
+      }
     }
 
-    // No fallback available (or research required): throw original error
+    // All fallbacks exhausted (or none configured) — throw original error
     throw primaryError;
   }
 
@@ -84,7 +86,12 @@ export class ProviderManager implements LLMProvider {
     if (primaryOk && this._mode !== 'primary') {
       this.handleRecoveryAsync();
     }
-    return primaryOk || (this.fallback ? await this.fallback.healthCheck() : false);
+    if (primaryOk) return true;
+
+    for (const fb of this.fallbacks) {
+      if (await fb.healthCheck()) return true;
+    }
+    return false;
   }
 
   /**
@@ -117,7 +124,9 @@ export class ProviderManager implements LLMProvider {
       this.recoveryTimer = null;
     }
     this.primary.shutdown();
-    this.fallback?.shutdown();
+    for (const fb of this.fallbacks) {
+      fb.shutdown();
+    }
   }
 
   private handleRecovery(): void {
@@ -139,9 +148,10 @@ export class ProviderManager implements LLMProvider {
   private async enterDegradedMode(): Promise<void> {
     this._mode = 'degraded';
     this.startRecoveryTimer();
-    this.logger.warn('Entering degraded mode — only non-research tasks via SDK fallback');
+    const fbNames = this.fallbacks.map((fb) => fb.name).join(' → ');
+    this.logger.warn(`Entering degraded mode — fallback chain: ${fbNames}`);
     await this.alerter.send(
-      '⚠️ Claude Code CLI unavailable. Degraded mode: only simple replies. Research tasks queued.',
+      `⚠️ Claude Code CLI unavailable. Degraded mode: fallback chain [${fbNames}].`,
     );
   }
 

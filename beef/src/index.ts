@@ -23,9 +23,11 @@ import { FarmAttemptRepository } from './storage/repositories/farm-attempt.repos
 import { TweetRepository } from './storage/repositories/tweet.repository.js';
 import { TargetRepository } from './storage/repositories/target.repository.js';
 import { ClaudeCodeProvider } from './agent/claude-code.provider.js';
+import { createCodexProvider } from './agent/codex.provider.js';
 import {
   createAnthropicSDKProvider,
 } from './agent/anthropic-sdk.provider.js';
+import type { LLMProvider } from './agent/agent.types.js';
 import { ProviderManager } from './agent/provider-manager.js';
 import { createBot } from './admin/bot.js';
 import type { ITwitterClient, IProfileFetcher } from './twitter/twitter-client.interface.js';
@@ -129,7 +131,15 @@ if (config.ACTIVITY_FEED_ENABLED) {
 let provider: ProviderManager | null = null;
 try {
   const primary = new ClaudeCodeProvider(logger, llmLogRepo);
-  const fallback = createAnthropicSDKProvider(config.ANTHROPIC_API_KEY, logger, llmLogRepo);
+
+  const fallbacks: LLMProvider[] = [];
+  if (config.CODEX_ENABLED) {
+    const codex = createCodexProvider(logger, llmLogRepo);
+    if (codex) fallbacks.push(codex);
+  }
+  const sdk = createAnthropicSDKProvider(config.ANTHROPIC_API_KEY, logger, llmLogRepo);
+  if (sdk) fallbacks.push(sdk);
+
   const alerter = {
     send: async (msg: string) => {
       logger.warn({ alert: msg }, 'Provider alert');
@@ -151,8 +161,8 @@ try {
       }
     },
   };
-  provider = new ProviderManager(primary, fallback, alerter, logger);
-  logger.info('LLM providers initialized');
+  provider = new ProviderManager(primary, fallbacks, alerter, logger);
+  logger.info({ fallbacks: fallbacks.map((f) => f.name) }, 'LLM providers initialized');
 } catch (error) {
   logger.warn({ err: error }, 'LLM providers not available — manual eval only');
 }

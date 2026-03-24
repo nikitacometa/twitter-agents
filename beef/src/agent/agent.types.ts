@@ -31,7 +31,7 @@ export interface AgentResult<T = unknown> {
   provider: ProviderName;
 }
 
-export type ProviderName = 'claude-code' | 'anthropic-sdk';
+export type ProviderName = 'claude-code' | 'codex' | 'anthropic-sdk';
 
 export interface ProviderCapabilities {
   hasPerplexity: boolean;

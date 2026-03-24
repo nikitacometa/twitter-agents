@@ -1,0 +1,11 @@
+{
+  "type": "object",
+  "required": ["text", "tone", "mentionsBeef"],
+  "additionalProperties": false,
+  "properties": {
+    "text": { "type": "string" },
+    "tone": { "type": "string" },
+    "mentionsBeef": { "type": "boolean" },
+    "diaryThought": { "type": "string" }
+  }
+}

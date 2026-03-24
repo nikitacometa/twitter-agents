@@ -1,12 +1,11 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { ProviderManager, type Alerter } from './provider-manager.js';
-import {
-  type AgentResult,
-  type AgentTask,
-  type LLMProvider,
-  type ProviderCapabilities,
-  type ProviderName,
-  TaskRequiresResearchError,
+import type {
+  AgentResult,
+  AgentTask,
+  LLMProvider,
+  ProviderCapabilities,
+  ProviderName,
 } from './agent.types.js';
 
 function createMockProvider(
@@ -21,7 +20,7 @@ function createMockProvider(
     name,
     capabilities: {
       hasPerplexity: name === 'claude-code',
-      hasWebSearch: name === 'claude-code',
+      hasWebSearch: name === 'claude-code' || name === 'codex',
       hasFileAccess: name === 'claude-code',
       maxTurns: name === 'claude-code' ? 25 : 1,
       ...capabilities,
@@ -68,7 +67,7 @@ describe('ProviderManager', () => {
     primary = createMockProvider('claude-code');
     fallback = createMockProvider('anthropic-sdk');
     alerter = createMockAlerter();
-    manager = new ProviderManager(primary, fallback, alerter, mockLogger);
+    manager = new ProviderManager(primary, [fallback], alerter, mockLogger);
   });
 
   it('uses primary provider by default', async () => {
@@ -87,11 +86,11 @@ describe('ProviderManager', () => {
     expect(manager.mode).toBe('primary');
   });
 
-  it('falls back to SDK after 3 primary failures for non-research tasks', async () => {
+  it('falls back to SDK after 3 primary failures', async () => {
     primary.run.mockRejectedValue(new Error('CLI down'));
     fallback.run.mockResolvedValue(makeResult({ ok: true }, 'anthropic-sdk'));
 
-    // First 3 calls fail on primary, 3rd triggers degraded mode
+    // First 2 calls fail on primary, rethrown
     for (let i = 0; i < 2; i++) {
       await expect(manager.run(`fail-${String(i)}`, makeTask(false))).rejects.toThrow();
     }
@@ -105,7 +104,7 @@ describe('ProviderManager', () => {
     );
   });
 
-  it('rejects research tasks in degraded mode', async () => {
+  it('passes research tasks through to fallbacks in degraded mode', async () => {
     primary.run.mockRejectedValue(new Error('CLI down'));
     fallback.run.mockResolvedValue(makeResult({ ok: true }, 'anthropic-sdk'));
 
@@ -114,18 +113,19 @@ describe('ProviderManager', () => {
       try {
         await manager.run(`fail-${String(i)}`, makeTask(false));
       } catch {
-        // expected
+        // expected for first 2
       }
     }
 
     expect(manager.mode).toBe('degraded');
-    await expect(manager.run('research-1', makeTask(true))).rejects.toThrow(
-      TaskRequiresResearchError,
-    );
+
+    // Research tasks now pass through to fallback (routing happens in RoastEngine)
+    const result = await manager.run('research-1', makeTask(true));
+    expect(result.provider).toBe('anthropic-sdk');
   });
 
-  it('retries primary on every call even after threshold failures (no fallback)', async () => {
-    const managerNoFallback = new ProviderManager(primary, null, alerter, mockLogger);
+  it('retries primary on every call even with no fallbacks', async () => {
+    const managerNoFallback = new ProviderManager(primary, [], alerter, mockLogger);
     primary.run.mockRejectedValue(new Error('CLI down'));
 
     for (let i = 0; i < 4; i++) {
@@ -157,17 +157,54 @@ describe('ProviderManager', () => {
     }
     expect(manager.mode).toBe('degraded');
 
-    // Primary recovers — next non-research call goes through primary
-    // (ProviderManager tries primary first even in degraded mode)
-    // Actually in degraded mode it still tries primary first
+    // Primary recovers — ProviderManager tries primary first even in degraded mode
     const result = await manager.run('recover-1', makeTask(false));
     expect(result.provider).toBe('claude-code');
     expect(manager.mode).toBe('primary');
   });
 
-  it('shuts down both providers', () => {
-    manager.shutdown();
+  it('iterates through multiple fallbacks in order', async () => {
+    const codex = createMockProvider('codex');
+    const sdk = createMockProvider('anthropic-sdk');
+    const mgr = new ProviderManager(primary, [codex, sdk], alerter, mockLogger);
+
+    primary.run.mockRejectedValue(new Error('CLI down'));
+    codex.run.mockRejectedValue(new Error('Codex rate limited'));
+    sdk.run.mockResolvedValue(makeResult({ ok: true }, 'anthropic-sdk'));
+
+    // Trigger degraded (3 failures)
+    for (let i = 0; i < 2; i++) {
+      await expect(mgr.run(`fail-${String(i)}`, makeTask(false))).rejects.toThrow();
+    }
+
+    // 3rd: primary fails → codex fails → sdk succeeds
+    const result = await mgr.run('chain-1', makeTask(false));
+    expect(result.provider).toBe('anthropic-sdk');
+    expect(codex.run).toHaveBeenCalled();
+    expect(sdk.run).toHaveBeenCalled();
+  });
+
+  it('throws original error when all fallbacks fail', async () => {
+    const codex = createMockProvider('codex');
+    const mgr = new ProviderManager(primary, [codex], alerter, mockLogger);
+
+    primary.run.mockRejectedValue(new Error('CLI down'));
+    codex.run.mockRejectedValue(new Error('Codex down'));
+
+    for (let i = 0; i < 2; i++) {
+      await expect(mgr.run(`fail-${String(i)}`, makeTask(false))).rejects.toThrow();
+    }
+
+    // 3rd: both fail — original primary error thrown
+    await expect(mgr.run('all-fail', makeTask(false))).rejects.toThrow('CLI down');
+  });
+
+  it('shuts down all providers', () => {
+    const codex = createMockProvider('codex');
+    const mgr = new ProviderManager(primary, [codex, fallback], alerter, mockLogger);
+    mgr.shutdown();
     expect(primary.shutdown).toHaveBeenCalledOnce();
+    expect(codex.shutdown).toHaveBeenCalledOnce();
     expect(fallback.shutdown).toHaveBeenCalledOnce();
   });
 
@@ -176,15 +213,34 @@ describe('ProviderManager', () => {
     expect(await manager.healthCheck()).toBe(true);
   });
 
-  it('health check falls back to SDK if primary is down', async () => {
+  it('health check falls back through chain if primary is down', async () => {
     primary.healthCheck.mockResolvedValue(false);
     fallback.healthCheck.mockResolvedValue(true);
     expect(await manager.healthCheck()).toBe(true);
   });
 
-  it('health check returns false if both are down', async () => {
+  it('health check returns false if all are down', async () => {
     primary.healthCheck.mockResolvedValue(false);
     fallback.healthCheck.mockResolvedValue(false);
     expect(await manager.healthCheck()).toBe(false);
+  });
+
+  it('returns fallback capabilities in degraded mode', async () => {
+    primary.run.mockRejectedValue(new Error('CLI down'));
+    fallback.run.mockResolvedValue(makeResult({ ok: true }, 'anthropic-sdk'));
+
+    expect(manager.capabilities.hasPerplexity).toBe(true);
+
+    // Trigger degraded
+    for (let i = 0; i < 3; i++) {
+      try {
+        await manager.run(`fail-${String(i)}`, makeTask(false));
+      } catch {
+        // expected
+      }
+    }
+
+    expect(manager.mode).toBe('degraded');
+    expect(manager.capabilities.hasPerplexity).toBe(false);
   });
 });

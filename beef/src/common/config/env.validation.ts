@@ -23,7 +23,13 @@ const envSchema = z
     TWITTER_PHONE: z.string().optional(),
     TWITTER_2FA_SECRET: z.string().optional(),
 
-    // Anthropic SDK — fallback only (primary = Claude Code CLI via Claude Max)
+    // Codex CLI — secondary fallback (ChatGPT Plus subscription)
+    CODEX_ENABLED: z
+      .enum(['true', 'false'])
+      .default('true')
+      .transform((v) => v === 'true'),
+
+    // Anthropic SDK — tertiary fallback (pay-per-token)
     ANTHROPIC_API_KEY: z.string().optional(),
 
     // Database

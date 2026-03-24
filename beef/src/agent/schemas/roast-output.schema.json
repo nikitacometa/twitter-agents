@@ -1,0 +1,24 @@
+{
+  "type": "object",
+  "required": ["variants", "bestIndex", "factCheckPassed"],
+  "additionalProperties": false,
+  "properties": {
+    "variants": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["text", "score", "angle"],
+        "additionalProperties": false,
+        "properties": {
+          "text": { "type": "string" },
+          "score": { "type": "number" },
+          "angle": { "type": "string" }
+        }
+      }
+    },
+    "bestIndex": { "type": "integer" },
+    "researchNotes": { "type": ["string", "null"] },
+    "factCheckPassed": { "type": "boolean" },
+    "diaryThought": { "type": "string" }
+  }
+}

@@ -117,13 +117,14 @@ export class RoastEngine {
     let researchNotes = strategyResults.researchNotes;
     let factCheckPassed = strategyResults.factCheckPassed;
 
-    // If all strategies failed, try no-research fallback (only for roast-quick/reply profiles)
+    // If all strategies failed, try no-research fallback as last resort
     if (allVariants.length === 0) {
-      const researchProfiles: Set<string> = new Set(['roast-research', 'roast-power', 'farm-generate', 'farm-discover']);
-      if (researchProfiles.has(effectiveProfile)) {
+      // In degraded mode (no Perplexity), strategies already used no-research prompts,
+      // so a second no-research attempt is unlikely to help — throw the original error
+      if (!this.provider.capabilities.hasPerplexity) {
         throw strategyResults.error instanceof Error
           ? strategyResults.error
-          : new Error('All prompt strategies failed — primary provider unavailable');
+          : new Error('All prompt strategies failed in degraded mode');
       }
       this.logger.warn({ taskId }, 'All strategies failed, trying no-research fallback');
       const fallbackPrompt = buildNoResearchPrompt(targetName, this.character, effectiveVariantCount, memory, imagePaths);
@@ -373,10 +374,13 @@ export class RoastEngine {
     strategiesSucceeded: PromptStrategy[];
     error?: unknown;
   }> {
+    const useResearch = this.provider.capabilities.hasPerplexity;
+    const effectiveProfile = useResearch ? profile : 'roast-quick';
+
     const strategyPrompts = PROMPT_STRATEGIES.map((strategy) => {
       const mutations = mutationCount && mutationCount > 0 ? pickMutations(mutationCount) : [];
       const mutationSection = formatMutationSection(mutations);
-      const base = this.buildStrategyPrompt(strategy, targetName, variantCount, true, memory, imagePaths);
+      const base = this.buildStrategyPrompt(strategy, targetName, variantCount, useResearch, memory, imagePaths);
       return {
         strategy,
         prompt: mutationSection ? base + '\n' + mutationSection : base,
@@ -384,7 +388,7 @@ export class RoastEngine {
     });
 
     this.logger.info(
-      { taskId, strategies: PROMPT_STRATEGIES, variantsPerStrategy: variantCount },
+      { taskId, strategies: PROMPT_STRATEGIES, variantsPerStrategy: variantCount, useResearch },
       'Running multi-strategy generation',
     );
 
@@ -392,8 +396,8 @@ export class RoastEngine {
       strategyPrompts.map(({ strategy, prompt }) =>
         this.provider.run<AgentRoastOutput>(`${taskId}-${strategy}`, {
           prompt,
-          profile,
-          requiresResearch: true,
+          profile: effectiveProfile,
+          requiresResearch: useResearch,
           imagePaths,
         }),
       ),

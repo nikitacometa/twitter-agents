@@ -59,7 +59,7 @@ function createProviderFrom(db: ReturnType<typeof createDatabase>, logger: Retur
   const llmLog = new LlmLogRepository(db);
   const primary = new ClaudeCodeProvider(logger, llmLog);
   const alerter = { send: (msg: string) => Promise.resolve(logger.warn({ alert: msg }, 'Farm alert')) };
-  return new ProviderManager(primary, null, alerter, logger);
+  return new ProviderManager(primary, [], alerter, logger);
 }
 
 /**
