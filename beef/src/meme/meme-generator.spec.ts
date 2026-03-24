@@ -545,7 +545,7 @@ describe('MemeGenerator', () => {
       const dedupeRepo = mockHistoryRepo();
       // eslint-disable-next-line @typescript-eslint/unbound-method
       vi.mocked(dedupeRepo.getByTarget).mockReturnValue([
-        { id: 1, templateId: '181913649', templateName: 'Drake Hotline Bling', target: 'Solana', boxes: ['a', 'b'], format: 'meme_only' as const, imageUrl: null, rationale: null, createdAt: '2026-01-01' },
+        { id: 1, templateId: '181913649', templateName: 'Drake Hotline Bling', target: 'Solana', boxes: ['a', 'b'], format: 'meme_only' as const, imageUrl: null, rationale: null, stockpileId: null, createdAt: '2026-01-01' },
       ]);
 
       const provider = mockProvider({
@@ -580,21 +580,21 @@ describe('MemeGenerator', () => {
       expect(prompt).toContain('SOL TVL dropped 40%');
     });
 
-    it('truncates context longer than 500 chars', async () => {
+    it('truncates context longer than 1500 chars', async () => {
       const provider = mockProvider({
         format: 'text_only',
         roastText: 'test',
         meme: null,
       });
 
-      const longContext = 'x'.repeat(600);
+      const longContext = 'x'.repeat(1800);
       const gen = new MemeGenerator(imgflip, provider, historyRepo, log, [TEST_TEMPLATE]);
       await gen.generate({ ...DEFAULT_INPUT, context: longContext });
 
       // eslint-disable-next-line @typescript-eslint/unbound-method
       const prompt = (vi.mocked(provider.run).mock.calls[0]![1] as { prompt: string }).prompt;
-      expect(prompt).not.toContain('x'.repeat(600));
-      expect(prompt).toContain('x'.repeat(500) + '...');
+      expect(prompt).not.toContain('x'.repeat(1800));
+      expect(prompt).toContain('x'.repeat(1500) + '...');
     });
 
     it('omits KEY FACTS when context is empty', async () => {

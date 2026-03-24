@@ -41,32 +41,18 @@ describe('MemeHistoryRepository', () => {
   });
 
   it('returns recent template names in recency order', () => {
-    repo.insert({
-      templateId: '181913649',
-      templateName: 'Drake Hotline Bling',
-      target: 'Solana',
-      boxes: ['a', 'b'],
-      format: 'meme_only',
-    });
-
-    repo.insert({
-      templateId: '87743020',
-      templateName: 'Two Buttons',
-      target: 'Ethereum',
-      boxes: ['a', 'b'],
-      format: 'meme_plus_text',
-    });
-
-    repo.insert({
-      templateId: '181913649',
-      templateName: 'Drake Hotline Bling',
-      target: 'Bitcoin',
-      boxes: ['c', 'd'],
-      format: 'meme_only',
-    });
+    // Use explicit timestamps to ensure deterministic ordering
+    const insertWithTime = db.prepare(`
+      INSERT INTO meme_history (template_id, template_name, target, boxes, format, created_at)
+      VALUES (?, ?, ?, ?, ?, ?)
+    `);
+    insertWithTime.run('87743020', 'Two Buttons', 'Ethereum', '["a","b"]', 'meme_plus_text', '2026-01-01 10:00:00');
+    insertWithTime.run('181913649', 'Drake Hotline Bling', 'Solana', '["a","b"]', 'meme_only', '2026-01-01 11:00:00');
+    insertWithTime.run('181913649', 'Drake Hotline Bling', 'Bitcoin', '["c","d"]', 'meme_only', '2026-01-01 12:00:00');
 
     const names = repo.getRecentTemplateNames(5);
     expect(names).toHaveLength(2);
+    // Drake last used at 12:00, Two Buttons at 10:00
     expect(names[0]).toBe('Drake Hotline Bling');
     expect(names[1]).toBe('Two Buttons');
   });
@@ -138,5 +124,24 @@ describe('MemeHistoryRepository', () => {
     const entries = repo.getByTarget('test');
     expect(entries[0]!.imageUrl).toBeNull();
     expect(entries[0]!.rationale).toBeNull();
+    expect(entries[0]!.stockpileId).toBeNull();
+  });
+
+  it('stores and retrieves stockpileId', () => {
+    // Insert a stockpile entry to satisfy FK constraint
+    db.prepare(`INSERT INTO roast_stockpile (id, target_name, target_type, tweet_text, quality_score) VALUES (?, ?, ?, ?, ?)`)
+      .run(42, 'test', 'project', 'test tweet', 4.0);
+
+    repo.insert({
+      templateId: '1',
+      templateName: 'Drake',
+      target: 'test',
+      boxes: ['a', 'b'],
+      format: 'meme_only',
+      stockpileId: 42,
+    });
+
+    const entries = repo.getByTarget('test');
+    expect(entries[0]!.stockpileId).toBe(42);
   });
 });

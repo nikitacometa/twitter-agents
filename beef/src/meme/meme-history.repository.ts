@@ -11,6 +11,7 @@ export interface InsertMemeHistory {
   format: MemeFormat;
   imageUrl?: string;
   rationale?: string;
+  stockpileId?: number;
 }
 
 interface MemeHistoryRow {
@@ -22,6 +23,7 @@ interface MemeHistoryRow {
   format: string;
   image_url: string | null;
   rationale: string | null;
+  stockpile_id: number | null;
   created_at: string;
 }
 
@@ -34,6 +36,7 @@ export interface MemeHistoryEntry {
   format: MemeFormat;
   imageUrl: string | null;
   rationale: string | null;
+  stockpileId: number | null;
   createdAt: string;
 }
 
@@ -47,14 +50,18 @@ export class MemeHistoryRepository {
 
   constructor(db: Database.Database) {
     this.insertStmt = db.prepare(`
-      INSERT INTO meme_history (template_id, template_name, target, boxes, format, image_url, rationale)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO meme_history (template_id, template_name, target, boxes, format, image_url, rationale, stockpile_id)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
     this.recentTemplateNamesStmt = db.prepare(`
-      SELECT DISTINCT template_name FROM meme_history
-      ORDER BY created_at DESC
-      LIMIT ?
+      SELECT template_name, last_used FROM (
+        SELECT template_name, MAX(created_at) AS last_used
+        FROM meme_history
+        GROUP BY template_name
+        ORDER BY last_used DESC
+        LIMIT ?
+      ) ORDER BY last_used DESC
     `);
 
     this.getByTargetStmt = db.prepare(`
@@ -76,6 +83,7 @@ export class MemeHistoryRepository {
       entry.format,
       entry.imageUrl ?? null,
       entry.rationale ?? null,
+      entry.stockpileId ?? null,
     );
     return Number(result.lastInsertRowid);
   }
@@ -106,6 +114,7 @@ function mapRow(row: MemeHistoryRow): MemeHistoryEntry {
     format: row.format as MemeFormat,
     imageUrl: row.image_url,
     rationale: row.rationale,
+    stockpileId: row.stockpile_id,
     createdAt: row.created_at,
   };
 }

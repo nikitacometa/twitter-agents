@@ -3,7 +3,9 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { randomUUID } from 'node:crypto';
 import type { Logger } from 'pino';
+
 const IMGFLIP_API_URL = 'https://api.imgflip.com/caption_image';
+const FETCH_TIMEOUT_MS = 20_000;
 
 interface ImgflipResponse {
   success: boolean;
@@ -38,9 +40,13 @@ export class ImgflipClient {
       body.append(`boxes[${String(i)}][text]`, boxes[i]!);
     }
 
+    // Cap font size for readability on mobile
+    body.append('max_font_size', '40');
+
     const response = await fetch(IMGFLIP_API_URL, {
       method: 'POST',
       body,
+      signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
     });
 
     if (!response.ok) {
@@ -62,7 +68,7 @@ export class ImgflipClient {
   }
 
   async downloadToTmp(imageUrl: string): Promise<string> {
-    const response = await fetch(imageUrl);
+    const response = await fetch(imageUrl, { signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) });
     if (!response.ok) {
       throw new Error(`Failed to download meme image: HTTP ${String(response.status)}`);
     }
@@ -77,11 +83,12 @@ export class ImgflipClient {
     return filePath;
   }
 
-  static async cleanupTmpFile(filePath: string): Promise<void> {
+  static async cleanupTmpFile(filePath: string, logger?: Logger): Promise<void> {
     try {
       await unlink(filePath);
-    } catch {
-      // Ignore cleanup failures
+    } catch (error) {
+      if (error instanceof Error && 'code' in error && error.code === 'ENOENT') return;
+      logger?.warn({ err: error, filePath }, 'Failed to cleanup tmp meme file');
     }
   }
 }

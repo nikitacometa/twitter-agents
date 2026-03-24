@@ -21,6 +21,10 @@ export interface MemeInput {
   roastAngle?: string;
   /** When true, exclude meme_plus_text — force meme_only or text_only. */
   preferStandalone?: boolean;
+  /** When true, meme is a visual reply to a specific tweet — prompt emphasizes tweet content. */
+  isTweetResponse?: boolean;
+  /** Stockpile entry ID — saved to meme_history for traceability. */
+  stockpileId?: number;
 }
 
 export interface MemeOutput {
@@ -35,6 +39,8 @@ export interface MemeOutput {
     boxes: string[];
     rationale: string;
   } | null;
+  /** Set when format was downgraded from meme to text_only due to an error. */
+  degradationReason?: 'unknown_template' | 'box_filter_failed' | 'imgflip_error' | 'invalid_llm_output';
 }
 
 /** Raw LLM output schema. */
@@ -163,10 +169,10 @@ function buildMemePrompt(
     ? `\n## RECENTLY USED TEMPLATES (avoid these unless PERFECT fit):\n${recentlyUsed.join(', ')}\n`
     : '';
 
-  // Truncate context to ~500 chars to prevent prompt bloat
+  // Truncate context — keep enough for specific numbers/facts (the core of good memes)
   const truncatedContext = input.context
-    ? input.context.length > 500
-      ? input.context.slice(0, 500) + '...'
+    ? input.context.length > 1500
+      ? input.context.slice(0, 1500) + '...'
       : input.context
     : '';
 
@@ -180,12 +186,20 @@ function buildMemePrompt(
     ? `\n## KEY FACTS (use specific numbers/data in box text — numbers hit harder than words):\n${truncatedContext}\n`
     : '';
 
+  const tweetSection = input.isTweetResponse ? `
+## TWEET RESPONSE MODE:
+This meme is a REPLY to a specific tweet. The meme MUST respond to the tweet's content, claims, or absurdity.
+- Reference what the person actually said — not generic takes about them
+- The viewer should understand the joke by seeing the tweet + your meme together
+- Pick a template that creates contrast with or commentary on the tweet's claim
+` : '';
+
   return `You are a meme generator for a crypto roast bot (@0xBeefer). Create the funniest, most savage meme possible.
 
 ## AVAILABLE TEMPLATES:
 
 ${templateList}
-${recentSection}${contextSection}
+${recentSection}${contextSection}${tweetSection}
 ## TARGET:
 
 ${targetSection}
@@ -221,9 +235,20 @@ Select the template and write box text.
 ## RULES:
 - Each box: max chars per template's limit, max 8-10 words
 - Boxes must follow the template's STRUCTURE exactly
-- Be SPECIFIC to this target — no generic crypto humor
-- Box text: lowercase, CT slang ok, no hashtags, no emoji
+- Be SPECIFIC to this target — use real numbers/data, no generic crypto humor
+- Box text: match the template's tone (ALL CAPS for confrontational templates like Batman Slapping, lowercase for chill ones like Roll Safe). CT slang ok. No hashtags, no emoji
 - If meme_plus_text: meme must attack from a DIFFERENT angle than roast text
+
+## PERFECT OUTPUT EXAMPLES:
+
+Target: Cardano, Context: "$149K annual revenue, $47B market cap"
+{"format":"meme_only","caption":"","meme":{"templateId":"100777631","boxes":["cardano holders","$149K revenue on $47B mcap","is this a blockchain?"],"rationale":"pigeon = misidentification — holders mistake $149K revenue for success"}}
+
+Target: Hyperliquid, Context: "moved $2.5B from bridge to multisig after exploit"
+{"format":"meme_only","caption":"decentralization loading","meme":{"templateId":"181913649","boxes":["trustless on-chain bridge","3 of 4 multisig controlled by team"],"rationale":"drake = rejecting good for worse — centralized over decentralized"}}
+
+Target: Terra/Luna, Context: "TVL dropped from $18B to $0 in 3 days"
+{"format":"meme_only","caption":"","meme":{"templateId":"55311130","boxes":["$18B tvl evaporating in 72 hours","the algo stablecoin is working as designed"],"rationale":"this-is-fine = denial during catastrophe"}}
 
 ## OUTPUT (JSON only, no other text):
 {
@@ -261,13 +286,22 @@ export class MemeGenerator {
 
   async generate(input: MemeInput): Promise<MemeOutput> {
     // Target-specific dedup: exclude templates already used for this target
-    const targetHistory = this.historyRepo.getByTarget(input.target, 5);
-    const excludeIds = targetHistory.map((h) => h.templateId);
+    let excludeIds: string[] = [];
+    let recentlyUsed: string[] = [];
+    try {
+      const targetHistory = this.historyRepo.getByTarget(input.target, 5);
+      excludeIds = targetHistory.map((h) => h.templateId);
+      recentlyUsed = this.historyRepo.getRecentTemplateNames(15);
+    } catch (error) {
+      this.logger.warn(
+        { err: error, target: input.target },
+        'Meme history lookup failed — proceeding without dedup',
+      );
+    }
 
     // Angle-based filtering: narrow 43 templates to 6-10
     const filteredTemplates = filterTemplatesByAngle(this.templates, input.roastAngle, excludeIds);
 
-    const recentlyUsed = this.historyRepo.getRecentTemplateNames(15);
     const prompt = buildMemePrompt(input, filteredTemplates, recentlyUsed);
 
     // LLM call
@@ -279,12 +313,38 @@ export class MemeGenerator {
 
     const llmOutput = result.data;
 
+    // Runtime validation — LLM may return unexpected shapes
+    const validFormats: MemeFormat[] = ['meme_only', 'meme_plus_text', 'text_only'];
+    if (!llmOutput.format || !validFormats.includes(llmOutput.format)) {
+      this.logger.warn({ format: llmOutput.format }, 'LLM returned invalid format — falling back to text_only');
+      return {
+        format: 'text_only',
+        tweetText: input.roastText ?? '',
+        meme: null,
+        degradationReason: 'invalid_llm_output',
+      };
+    }
+
     // Handle text_only
     if (llmOutput.format === 'text_only' || !llmOutput.meme) {
       return {
         format: 'text_only',
         tweetText: llmOutput.roastText ?? input.roastText ?? '',
         meme: null,
+      };
+    }
+
+    // Validate meme structure
+    if (!llmOutput.meme.templateId || !Array.isArray(llmOutput.meme.boxes)) {
+      this.logger.warn(
+        { meme: llmOutput.meme },
+        'LLM returned malformed meme object — falling back to text_only',
+      );
+      return {
+        format: 'text_only',
+        tweetText: llmOutput.roastText ?? llmOutput.caption ?? input.roastText ?? '',
+        meme: null,
+        degradationReason: 'invalid_llm_output',
       };
     }
 
@@ -299,39 +359,49 @@ export class MemeGenerator {
         format: 'text_only',
         tweetText: llmOutput.roastText ?? llmOutput.caption ?? input.roastText ?? '',
         meme: null,
+        degradationReason: 'unknown_template',
       };
     }
 
-    // Pre-filter boxes
-    const filterResult = filterMemeBoxes(llmOutput.meme.boxes, template);
+    // Pre-filter boxes (with one retry on failure)
+    let boxes = llmOutput.meme.boxes;
+    const filterResult = filterMemeBoxes(boxes, template);
     if (!filterResult.passed) {
-      this.logger.warn(
-        { reason: filterResult.reason, template: template.name, boxes: llmOutput.meme.boxes },
-        'Meme boxes failed pre-filter — falling back to text_only',
-      );
-      return {
-        format: 'text_only',
-        tweetText: llmOutput.roastText ?? llmOutput.caption ?? input.roastText ?? '',
-        meme: null,
-      };
+      // Retry: ask LLM to fix the specific issue
+      const retryResult = await this.retryBoxes(input, template, boxes, filterResult.reason ?? 'unknown');
+      if (retryResult) {
+        boxes = retryResult;
+      } else {
+        this.logger.warn(
+          { reason: filterResult.reason, template: template.name, boxes },
+          'Meme boxes failed pre-filter + retry — falling back to text_only',
+        );
+        return {
+          format: 'text_only',
+          tweetText: llmOutput.roastText ?? llmOutput.caption ?? input.roastText ?? '',
+          meme: null,
+          degradationReason: 'box_filter_failed',
+        };
+      }
     }
 
     // Generate image via Imgflip
     let imageUrl: string;
     let localPath: string;
     try {
-      const captionResult = await this.imgflip.captionImage(template.id, llmOutput.meme.boxes);
+      const captionResult = await this.imgflip.captionImage(template.id, boxes);
       imageUrl = captionResult.url;
       localPath = await this.imgflip.downloadToTmp(imageUrl);
     } catch (error) {
       this.logger.error(
-        { err: error, template: template.name },
+        { err: error, templateId: template.id, templateName: template.name, boxes },
         `Imgflip API failed: ${getErrorMessage(error)}`,
       );
       return {
         format: 'text_only',
         tweetText: llmOutput.roastText ?? llmOutput.caption ?? input.roastText ?? '',
         meme: null,
+        degradationReason: 'imgflip_error',
       };
     }
 
@@ -348,10 +418,11 @@ export class MemeGenerator {
       templateId: template.id,
       templateName: template.name,
       target: input.target,
-      boxes: llmOutput.meme.boxes,
+      boxes,
       format: llmOutput.format,
       imageUrl,
       rationale: llmOutput.meme.rationale,
+      stockpileId: input.stockpileId,
     });
 
     this.logger.info(
@@ -372,10 +443,50 @@ export class MemeGenerator {
         localPath,
         templateId: template.id,
         templateName: template.name,
-        boxes: llmOutput.meme.boxes,
+        boxes,
         rationale: llmOutput.meme.rationale,
       },
     };
+  }
+
+  /** Retry box generation when filter fails — one corrective LLM call. */
+  private async retryBoxes(
+    input: MemeInput,
+    template: MemeTemplate,
+    failedBoxes: string[],
+    reason: string,
+  ): Promise<string[] | null> {
+    try {
+      const retryPrompt = [
+        `Fix the meme boxes for template "${template.name}" (${String(template.boxCount)} boxes, max ${String(template.charLimit)} chars/box).`,
+        `Structure: ${template.structure}`,
+        `Target: ${input.target}`,
+        `Original boxes that failed: ${JSON.stringify(failedBoxes)}`,
+        `Failure reason: ${reason}`,
+        '',
+        'Return ONLY a JSON array of fixed box texts, e.g.: ["box 1", "box 2"]',
+      ].join('\n');
+
+      const retryResult: AgentResult<string[]> = await this.provider.run('meme-generate', {
+        prompt: retryPrompt,
+        profile: 'meme-generate',
+        requiresResearch: false,
+      });
+
+      if (!Array.isArray(retryResult.data)) return null;
+
+      const retryFilter = filterMemeBoxes(retryResult.data, template);
+      if (!retryFilter.passed) {
+        this.logger.debug({ reason: retryFilter.reason }, 'Meme box retry also failed filter');
+        return null;
+      }
+
+      this.logger.info({ template: template.name }, 'Meme box retry succeeded');
+      return retryResult.data;
+    } catch (error) {
+      this.logger.debug({ err: error }, 'Meme box retry failed');
+      return null;
+    }
   }
 
   async generateVariants(input: MemeInput, count: number): Promise<MemeOutput[]> {

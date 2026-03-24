@@ -663,9 +663,11 @@ export function createBot(opts: {
 
     void (async () => {
       const startTime = Date.now();
-      const statusMsg = await api.sendMessage(chatId, '🎨 Generating meme...');
+      let statusMsgId: number | undefined;
 
       try {
+        const statusMsg = await api.sendMessage(chatId, '🎨 Generating meme...');
+        statusMsgId = statusMsg.message_id;
         // --- Mode 1: Stockpile entry (#id) ---
         const stockpileMatch = /^#(\d+)$/.exec(raw);
         if (stockpileMatch && stockpileRepo) {
@@ -682,9 +684,10 @@ export function createBot(opts: {
             target: entry.targetName,
             targetType: (entry.targetType ?? 'project') as 'project' | 'person',
             roastText: entry.tweetText,
-            context: entry.researchNotes?.slice(0, 500),
+            context: entry.researchNotes?.slice(0, 1500),
             roastAngle: entry.angle ?? undefined,
             preferStandalone: true,
+            stockpileId: id,
           });
 
           await sendMemeResult(api, chatId, statusMsg.message_id, result, entry.targetName, startTime);
@@ -725,6 +728,7 @@ export function createBot(opts: {
             target: tweet.authorName,
             targetType: 'person',
             context: tweetContext,
+            isTweetResponse: true,
             preferStandalone: true,
           });
 
@@ -745,14 +749,12 @@ export function createBot(opts: {
       } catch (error) {
         const elapsed = Math.round((Date.now() - startTime) / 1000);
         logger.error({ err: error, raw, elapsed }, '/meme command failed');
-        await api
-          .editMessageText(
-            chatId,
-            statusMsg.message_id,
-            `❌ Meme failed (${String(elapsed)}s): ${escapeHtml(getErrorMessage(error).slice(0, 200))}`,
-            { parse_mode: 'HTML' },
-          )
-          .catch(() => {});
+        const errText = `❌ Meme failed (${String(elapsed)}s): ${escapeHtml(getErrorMessage(error).slice(0, 200))}`;
+        if (statusMsgId) {
+          await api.editMessageText(chatId, statusMsgId, errText, { parse_mode: 'HTML' }).catch(() => {});
+        } else {
+          await api.sendMessage(chatId, errText, { parse_mode: 'HTML' }).catch(() => {});
+        }
       }
     })();
   });
@@ -770,9 +772,6 @@ export function createBot(opts: {
     const elapsed = Math.round((Date.now() - startTime) / 1000);
 
     if (result.meme) {
-      // Delete status message and send photo
-      await api.deleteMessage(chatId, statusMsgId).catch(() => {});
-
       const captionLines = [
         `🎨 <b>${escapeHtml(targetName)}</b> — ${String(elapsed)}s`,
         `Template: ${result.meme.templateName}`,
@@ -786,17 +785,21 @@ export function createBot(opts: {
         captionLines.push(`<code>${escapeHtml(result.tweetText)}</code>`);
       }
 
-      await api.sendPhoto(chatId, new InputFile(result.meme.localPath), {
-        caption: captionLines.join('\n'),
-        parse_mode: 'HTML',
-      });
-
-      // Cleanup tmp file after send
-      void ImgflipClient.cleanupTmpFile(result.meme.localPath);
+      // Send photo BEFORE deleting status — if sendPhoto fails, user still sees status
+      try {
+        await api.sendPhoto(chatId, new InputFile(result.meme.localPath), {
+          caption: captionLines.join('\n'),
+          parse_mode: 'HTML',
+        });
+        await api.deleteMessage(chatId, statusMsgId).catch(() => {});
+      } finally {
+        void ImgflipClient.cleanupTmpFile(result.meme.localPath);
+      }
     } else {
       // Text-only fallback
+      const degradation = result.degradationReason ? ` [${result.degradationReason}]` : '';
       const lines = [
-        `📝 <b>${escapeHtml(targetName)}</b> — text only (${String(elapsed)}s)`,
+        `📝 <b>${escapeHtml(targetName)}</b> — text only (${String(elapsed)}s)${degradation}`,
         '',
         `<code>${escapeHtml(result.tweetText)}</code>`,
       ];
@@ -2207,29 +2210,31 @@ export function createBot(opts: {
 
       void (async () => {
         const startTime = Date.now();
-        const statusMsg = await bot.api.sendMessage(chatId, `🎨 Meme for <b>${escapeHtml(entry.targetName)}</b>...`, { parse_mode: 'HTML' });
+        let cbStatusMsgId: number | undefined;
         try {
+          const statusMsg = await bot.api.sendMessage(chatId, `🎨 Meme for <b>${escapeHtml(entry.targetName)}</b>...`, { parse_mode: 'HTML' });
+          cbStatusMsgId = statusMsg.message_id;
+
           const result = await memeGen.generate({
             target: entry.targetName,
             targetType: (entry.targetType ?? 'project') as 'project' | 'person',
             roastText: entry.tweetText,
-            context: entry.researchNotes?.slice(0, 500) ?? undefined,
+            context: entry.researchNotes?.slice(0, 1500) ?? undefined,
             roastAngle: entry.angle ?? undefined,
             preferStandalone: true,
+            stockpileId,
           });
 
           await sendMemeResult(bot.api, chatId, statusMsg.message_id, result, entry.targetName, startTime);
         } catch (error) {
           const elapsed = Math.round((Date.now() - startTime) / 1000);
           logger.error({ err: error, stockpileId }, 'Meme callback failed');
-          await bot.api
-            .editMessageText(
-              chatId,
-              statusMsg.message_id,
-              `❌ Meme failed (${String(elapsed)}s): ${escapeHtml(getErrorMessage(error).slice(0, 200))}`,
-              { parse_mode: 'HTML' },
-            )
-            .catch(() => {});
+          const errText = `❌ Meme failed (${String(elapsed)}s): ${escapeHtml(getErrorMessage(error).slice(0, 200))}`;
+          if (cbStatusMsgId) {
+            await bot.api.editMessageText(chatId, cbStatusMsgId, errText, { parse_mode: 'HTML' }).catch(() => {});
+          } else {
+            await bot.api.sendMessage(chatId, errText, { parse_mode: 'HTML' }).catch(() => {});
+          }
         }
       })();
     }
