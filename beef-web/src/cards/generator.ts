@@ -72,6 +72,16 @@ interface TemplateResult {
   artOpacity?: number; // 0-1, default 1.0
 }
 
+function randomDramaticFireBg(): Buffer | null {
+  const variants = [
+    artBackgrounds.fireBg1,
+    artBackgrounds.fireBg2,
+    artBackgrounds.fireDramatic,
+  ].filter(Boolean) as Buffer[];
+  if (variants.length === 0) return null;
+  return variants[Math.floor(Math.random() * variants.length)] ?? null;
+}
+
 function resolveTemplate(card: CardData): TemplateResult {
   switch (card.type) {
     case 'roast':
@@ -79,7 +89,7 @@ function resolveTemplate(card: CardData): TemplateResult {
         element: RoastCard(card.data),
         width: sizes.card.width,
         height: sizes.card.height,
-        artBg: randomFireBg(),
+        artBg: randomDramaticFireBg(),
         artOpacity: 0.6,
       };
     case 'kill-report':
@@ -87,8 +97,8 @@ function resolveTemplate(card: CardData): TemplateResult {
         element: KillReport(card.data),
         width: sizes.card.width,
         height: sizes.card.height,
-        artBg: artBackgrounds.emberScatter,
-        artOpacity: 0.5,
+        artBg: artBackgrounds.dataGrid ?? artBackgrounds.emberScatter,
+        artOpacity: 0.6,
       };
     case 'stats':
       return {
@@ -111,7 +121,7 @@ function resolveTemplate(card: CardData): TemplateResult {
         element: Milestone(card.data),
         width: sizes.card.width,
         height: sizes.card.height,
-        artBg: randomFireBg(),
+        artBg: randomDramaticFireBg(),
         artOpacity: 0.7,
       };
     case 'stat-card':
@@ -119,8 +129,8 @@ function resolveTemplate(card: CardData): TemplateResult {
         element: StatCard(card.data),
         width: sizes.card.width,
         height: sizes.card.height,
-        artBg: artBackgrounds.emberScatter,
-        artOpacity: 0.2,
+        artBg: artBackgrounds.characterStats ?? artBackgrounds.emberScatter,
+        artOpacity: 0.4,
       };
   }
 }

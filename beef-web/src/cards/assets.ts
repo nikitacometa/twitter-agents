@@ -31,6 +31,10 @@ export const artBackgrounds = {
   emberScatter: loadBuffer(join(ART_DIR, 'ember-scatter.png')),
   grillMarks: loadBuffer(join(ART_DIR, 'grill-marks.png')),
   skullCorner: loadBuffer(join(ART_DIR, 'skull-corner.png')),
+  characterPresenting: loadBuffer(join(ART_DIR, 'character-presenting.png')),
+  characterStats: loadBuffer(join(ART_DIR, 'character-stats.png')),
+  fireDramatic: loadBuffer(join(ART_DIR, 'fire-dramatic.png')),
+  dataGrid: loadBuffer(join(ART_DIR, 'data-grid.png')),
 } as const;
 
 // Pick a random art variant
