@@ -363,3 +363,61 @@ AI score is **not predictive** of human quality. The 3.5-3.6 range contains both
 3. **Pure facts without reframe** — "$180M, $2.8M revenue, 63% zero reactions" = interesting but not funny
 4. **Self-deprecating AI that doesn't earn its keep** — "i run on €4/month" → consistently fails
 5. **"it's 20XX" dead format** — confirmed across 4 sessions
+
+---
+
+## Session 5 — 2026-03-24 (human review, new farm batch)
+
+**Scope:** 11 roasts across 3 targets: Cardano (4), TRON (4), Siren (3).
+
+**Evaluators:** Nikita Gorokhov (User) + Nikita Voronin. Blind review.
+
+### Full ratings
+
+| # | Target | Text | User | Voronin | Avg | Notes |
+|---|--------|------|------|---------|-----|-------|
+| 1 | Cardano | "cardano made $149K last year on a $9.7B market cap. the IRS would classify this as a hobby." | 3.3 | 4.5 | **3.90** | |
+| 2 | TRON | "justin sun gave bloomberg his wallets to make the billionaires index, they found he owns 63% of all TRX, and he sued. outstanding self-audit." | 4.0 | 3.0 | **3.50** | |
+| 3 | TRON | "the united nations called tron 'the preferred choice for crypto money launderers.' in fairness, that's product-market fit." | 4.2 | 3.5 | **3.85** | Voronin: "product-market fit jokes getting overused" |
+| 4 | Cardano | "promised africa the world's largest blockchain deployment — then axed the product, fired the team, and donated the code. peer-reviewed exit strategy." | 3.8 | 2.7 | **3.25** | |
+| 5 | Siren | "siren's ai scans for 'whale movements and contract security risks' while one entity holds 66.5% of supply. the tool works, you're just not supposed to point it at itself." | 3.9 | 4.0 | **3.95** | Closest agreement (Δ=0.1) |
+| 6 | Cardano | "the founder called last year 'an old donkey with a gas problem' and this year 'a beast year.' i checked — it's a horoscope, not a roadmap." | 4.5 | 4.2 | **4.35** | Best of batch — founder's own quote flipped |
+| 7 | TRON | "tron hosts $84B in usdt on a $29B market cap chain. the cargo is worth three times the ship." | 2.4 | 3.3 | **2.85** | User: "is that even a problem?" — metaphor doesn't attack |
+| 8 | TRON | "tron plagiarized its whitepaper from filecoin, got caught, then became the chain behind half of all crypto crime. remarkable pivot." | 3.8 | 2.5 | **3.15** | |
+| 9 | Cardano | "i audited a blockchain built entirely around peer review. its peers reviewed it and called it a ghost chain." | 2.5 | 2.0 | **2.25** | User: "unclear punchline" — cliché, no specificity |
+| 10 | Siren | "siren: one entity owns nearly every token, built an AI to tell strangers when to buy the rest, named it after monsters that sing you into the ocean." | 4.2 | 2.5 | **3.35** | Max disagreement (Δ=1.7) |
+| 11 | Siren | "one entity paid $21.8M for 66.5% of SIREN supply at $0.045, now sitting on $1.04B. i need you to sit with the possibility that you are not early — you are the exit." | 4.0 | — | **4.00** | User: "про exit сочно" |
+
+### Summary statistics
+
+| Metric | Value |
+|--------|-------|
+| Total roasts rated | 11 |
+| Avg human (User) | 3.69 |
+| Avg human (Voronin, 10/11) | 3.22 |
+| Avg human (combined) | 3.49 |
+| Keep (>= 3.25) | 8 (73%) |
+| Borderline (2.5-3.24) | 2 (18%) |
+| Reject (< 2.5) | 1 (9%) |
+
+### Key findings
+
+#### New patterns (not seen in S1-S4)
+
+1. **Repetition fatigue** — Voronin explicitly flagged "product-market fit" as overused. Punchline pattern dedup needed.
+2. **Broken metaphor = dead roast** — #7 TRON "cargo > ship" doesn't work because cargo being more valuable than the ship isn't a problem. Metaphor must ATTACK, not describe.
+3. **QUOTE_FLIP with target's own absurd words = top performer** — #6 founder's "old donkey with gas problem" → "horoscope, not roadmap" = 4.35 avg.
+4. **CT clichés fail without reframe** — "ghost chain" (#9, 2.25) is too generic; needs specific data or unexpected twist to land.
+5. **User-Voronin divergence on abstract imagery** — #10 Siren "monsters that sing you into the ocean" = Δ 1.7. User loves conceptual/literary humor; Voronin wants concrete specifics.
+
+#### Cross-session trend (S2→S4→S5)
+
+| Metric | S2 | S4 | S5 |
+|--------|-----|-----|-----|
+| Avg human | 2.82 | 3.37 | **3.49** |
+| Keep rate | 35% | 68% | **73%** |
+| Reject rate | 39% | 13% | **9%** |
+| User avg | 2.87 | 3.16 | **3.69** |
+| Voronin avg | 2.76 | 3.58 | **3.22** |
+
+Quality continues upward trend. User satisfaction improved most (+0.53 from S4). Voronin stricter in S5 (-0.36 from S4), possibly due to higher expectations as baseline quality improves.

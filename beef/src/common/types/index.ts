@@ -191,6 +191,8 @@ export interface CreativeMemory {
   roastMeMode?: boolean;
   /** Target type hint — 'person' vs 'project' changes prompt framing */
   targetType?: 'person' | 'project' | 'token' | 'trend';
+  /** Recent punchline closers from stockpile — used to prevent repetition */
+  recentClosers?: string[];
 }
 
 // --- External examples ---

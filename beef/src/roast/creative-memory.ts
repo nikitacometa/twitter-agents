@@ -8,6 +8,19 @@ import type { FarmAttemptRepository } from '@storage/repositories/farm-attempt.r
 import type { AngleWeight, CreativeMemory, FireExample, RejectExample } from '@common/types/index.js';
 import { DEFAULT_ANGLE_WEIGHTS } from './prompt-builder.js';
 
+/**
+ * Extract the punchline closer from a roast tweet.
+ * Looks for text after the last em-dash, period-space, or comma-space.
+ * Returns the closing phrase (3-10 words) or null if too short.
+ */
+function extractCloser(tweetText: string): string | null {
+  // Split on common punchline separators: em-dash, period+space, comma+space
+  const parts = tweetText.split(/\s*[—–]\s*|(?<=\.)\s+|,\s+/);
+  const last = parts[parts.length - 1]?.trim();
+  if (!last || last.length < 5 || last.length > 80) return null;
+  return last.replace(/[."']+$/, '').toLowerCase();
+}
+
 export interface CreativeMemorySourcesOptions {
   targetName: string;
   logger: Logger;
@@ -41,6 +54,7 @@ export function buildCreativeMemory(opts: CreativeMemorySourcesOptions): Creativ
     const fireExamples: FireExample[] = [];
     const rejectExamples: RejectExample[] = [];
     let angleWeights: AngleWeight[] | undefined;
+    let recentClosers: string[] | undefined;
 
     // --- Feedback repo: human-rated examples, target history, angle performance ---
     if (feedbackRepo) {
@@ -87,6 +101,15 @@ export function buildCreativeMemory(opts: CreativeMemorySourcesOptions): Creativ
       if (!angleWeights) {
         const angleDist = stockpileRepo.getAngleDistribution();
         angleWeights = computeAngleWeights(angleDist);
+      }
+
+      // Extract recent punchline closers to prevent repetition
+      const recentTexts = stockpileRepo.getRecentTexts(20);
+      const closers = recentTexts
+        .map(extractCloser)
+        .filter((c): c is string => c !== null);
+      if (closers.length > 0) {
+        recentClosers = [...new Set(closers)].slice(0, 10);
       }
     }
 
@@ -149,7 +172,8 @@ export function buildCreativeMemory(opts: CreativeMemorySourcesOptions): Creativ
       !angleWeights &&
       !styleSupplement &&
       !externalExamples &&
-      !learnedTechniques
+      !learnedTechniques &&
+      !recentClosers
     ) {
       return undefined;
     }
@@ -162,6 +186,7 @@ export function buildCreativeMemory(opts: CreativeMemorySourcesOptions): Creativ
       styleSupplement,
       externalExamples,
       learnedTechniques,
+      recentClosers,
     };
   } catch (err) {
     logger.warn({ err }, 'Failed to build creative memory');

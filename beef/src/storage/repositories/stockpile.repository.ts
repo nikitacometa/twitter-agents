@@ -44,6 +44,7 @@ export class StockpileRepository {
   private readonly getUnratedStmt: Database.Statement;
   private readonly setHumanScoreStmt: Database.Statement;
   private readonly deleteByIdStmt: Database.Statement;
+  private readonly recentTextsStmt: Database.Statement;
 
   constructor(db: Database.Database) {
     this.insertStmt = db.prepare(`
@@ -163,6 +164,13 @@ export class StockpileRepository {
     this.deleteByIdStmt = db.prepare(`
       DELETE FROM roast_stockpile WHERE id = ?
     `);
+
+    this.recentTextsStmt = db.prepare(`
+      SELECT tweet_text FROM roast_stockpile
+      WHERE status IN ('available', 'served_bot', 'served_landing')
+      ORDER BY created_at DESC
+      LIMIT ?
+    `);
   }
 
   insert(roast: InsertStockpileRoast): number {
@@ -268,6 +276,11 @@ export class StockpileRepository {
 
   deleteById(id: number): boolean {
     return this.deleteByIdStmt.run(id).changes > 0;
+  }
+
+  getRecentTexts(limit: number): string[] {
+    return (this.recentTextsStmt.all(limit) as Array<{ tweet_text: string }>)
+      .map((r) => r.tweet_text);
   }
 
   getTopScored(minScore: number, limit: number): StockpiledRoast[] {

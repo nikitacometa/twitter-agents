@@ -83,6 +83,9 @@ const GENERIC_PATTERNS = [
   /few understand/i,
   /most .+ could never/i,
   /that's not .+, that's .+/i,
+  /\bghost chain\b/i,
+  /\bdead (?:project|chain|protocol)\b/i,
+  /\bwen (?:product|utility|lambo)\b/i,
 ];
 
 const TELEGRAPHED_PATTERNS = [

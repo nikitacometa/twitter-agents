@@ -3,8 +3,8 @@ import { MUTATIONS, pickMutations, formatMutationSection } from './mutations.js'
 import type { MutationType } from './types.js';
 
 describe('MUTATIONS registry', () => {
-  it('has at least 18 mutations', () => {
-    expect(MUTATIONS.length).toBeGreaterThanOrEqual(18);
+  it('has at least 15 mutations', () => {
+    expect(MUTATIONS.length).toBeGreaterThanOrEqual(15);
   });
 
   it('covers all 4 mutation types', () => {

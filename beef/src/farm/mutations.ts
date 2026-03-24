@@ -3,7 +3,6 @@ import type { Mutation, MutationType } from './types.js';
 export const MUTATIONS: Mutation[] = [
   // --- Constraint mutations ---
   { id: 'short', type: 'constraint', text: 'CONSTRAINT: Must be under 140 characters. Half-tweet challenge — every word must earn its place.' },
-  { id: 'max-length', type: 'constraint', text: 'CONSTRAINT: Use exactly 270-280 characters. Fill the space — density is a weapon.' },
   { id: 'question', type: 'constraint', text: 'CONSTRAINT: Must end with a question, not a statement. Let them answer it in their head.' },
   { id: 'single-sent', type: 'constraint', text: 'CONSTRAINT: Single sentence only. No periods except the last one.' },
   { id: 'no-data', type: 'constraint', text: 'CONSTRAINT: No numbers, percentages, or dollar amounts. Pure narrative roast.' },
@@ -18,10 +17,8 @@ export const MUTATIONS: Mutation[] = [
 
   // --- Perspective mutations ---
   { id: 'investors', type: 'perspective', text: "PERSPECTIVE: Roast from their own investors' internal group chat." },
-  { id: 'obituary', type: 'perspective', text: "PERSPECTIVE: You are writing this project's obituary, dated 2027. What did it die of?" },
   { id: 'non-crypto', type: 'perspective', text: 'PERSPECTIVE: Compare this to a non-crypto thing — a restaurant, movie, or historical event. The comparison IS the roast.' },
   { id: 'competitor', type: 'perspective', text: "PERSPECTIVE: You are this project's biggest competitor. What would YOU tweet about them?" },
-  { id: 'future', type: 'perspective', text: "PERSPECTIVE: It's 2028. This project was a footnote. What do you remember about it? Probably nothing — that's the roast." },
 
   // --- Wildcard mutations ---
   { id: 'ignore-angle', type: 'wildcard', text: 'WILDCARD: Ignore the assigned angle. Find the angle that HURTS most. Trust your instinct.' },
