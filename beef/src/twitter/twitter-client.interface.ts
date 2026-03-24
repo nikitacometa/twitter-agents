@@ -27,6 +27,14 @@ export interface MentionData {
   parentMediaUrls?: string[];
 }
 
+export interface FollowUserResult {
+  username: string;
+  success: boolean;
+  following?: boolean;
+  pending?: boolean;
+  error?: string;
+}
+
 export interface ITwitterClient {
   get isConfigured(): boolean;
   postTweet(text: string): Promise<PostResult | null>;
@@ -34,6 +42,7 @@ export interface ITwitterClient {
   getMentions(sinceId?: string): Promise<MentionData[]>;
   getTweetMetrics(tweetIds: string[]): Promise<Map<string, TweetMetrics>>;
   getTweet?(tweetId: string): Promise<TweetData | null>;
+  followUser?(username: string): Promise<FollowUserResult>;
   shutdown?(): Promise<void>;
 }
 

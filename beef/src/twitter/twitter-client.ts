@@ -1,8 +1,8 @@
 import { TwitterApi, ApiResponseError } from 'twitter-api-v2';
 import type { Logger } from 'pino';
 import type { TweetMetrics } from '@common/types/index.js';
-import type { ITwitterClient, IProfileFetcher, TwitterProfile, PostResult, MentionData, TweetData } from './twitter-client.interface.js';
-import { retryWithBackoff, NonRetryableError } from '@common/utils/error.util.js';
+import type { ITwitterClient, IProfileFetcher, TwitterProfile, PostResult, MentionData, TweetData, FollowUserResult } from './twitter-client.interface.js';
+import { retryWithBackoff, NonRetryableError, getErrorMessage } from '@common/utils/error.util.js';
 
 export interface TwitterCredentials {
   apiKey: string;
@@ -366,6 +366,45 @@ export class TwitterClient implements ITwitterClient, IProfileFetcher {
     } catch (error) {
       this.logger.error({ err: error, username }, 'Failed to fetch profile');
       return null;
+    }
+  }
+
+  async followUser(username: string): Promise<FollowUserResult> {
+    if (!this.client) {
+      return { username, success: false, error: 'Twitter client not configured' };
+    }
+
+    try {
+      // Resolve own user ID
+      if (!this.cachedUserId) {
+        const me = await this.client.v2.me();
+        this.cachedUserId = me.data.id;
+      }
+
+      // Resolve target username → ID
+      const target = await this.client.v2.userByUsername(username);
+      if (!target.data) {
+        return { username, success: false, error: 'User not found' };
+      }
+
+      const result = await this.client.v2.follow(this.cachedUserId, target.data.id);
+      this.logger.info(
+        { username, targetId: target.data.id, following: result.data.following, pending: result.data.pending_follow },
+        'Followed user',
+      );
+
+      return {
+        username,
+        success: true,
+        following: result.data.following,
+        pending: result.data.pending_follow,
+      };
+    } catch (error) {
+      if (error instanceof ApiResponseError && error.code === 429) {
+        return { username, success: false, error: 'Rate limited (429) — try again later' };
+      }
+      this.logger.error({ err: error, username }, 'Failed to follow user');
+      return { username, success: false, error: getErrorMessage(error) };
     }
   }
 }

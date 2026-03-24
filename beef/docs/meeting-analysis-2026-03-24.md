@@ -111,7 +111,7 @@ API Basic ($200/mo) не даёт reply. Cookie auth даёт error 226 на н�
 Рекомендация: **начать с template memes** (быстрый MVP), параллельно экспериментировать с AI-gen.
 
 **4. GIF-ки — ROI ниже, чем у мемов.**
-**Tenor умирает** (shutdown август 2026) — использовать только Giphy API (free tier 100 req/час). GIF в reply = generic reaction, не уникальный контент. Для роаст-бота, чья ценность в уникальности, GIF-ки — supplementary, не primary. Важно: GIF нужно загружать как медиафайл (fetch → Buffer → upload), URL в тексте твита не работает.
+**Tenor умирает** (shutdown **30 июня 2026**, не август — проверено) — использовать только Giphy API (free tier 100 req/час). GIF в reply = generic reaction, не уникальный контент. Для роаст-бота, чья ценность в уникальности, GIF-ки — supplementary, не primary. Важно: GIF нужно загружать как медиафайл (fetch → Buffer → upload), URL в тексте твита не работает.
 
 **5. On-chain анализ — правильно отложили.**
 Bankr wallet lookup → Etherscan/Basescan analysis — мощная фича, но:
@@ -169,19 +169,19 @@ Premium-аккаунты: ~600 impressions/пост vs ~60 у бесплатны
 3. Ghost ban — ответы скрыты от всех кроме подписчиков
 4. Reply deboosting — ответы задвигаются вниз тредов
 
-Детекция: `shadowban.yuzurisa.com`. Recovery: 24ч пауза (ghost ban — 72ч).
+Детекция: `shadowban.yuzurisa.com`. Recovery: **24ч–2 недели** (зависит от severity и истории аккаунта; анекдотические данные, X не публикует официальные сроки).
 
 **Триггеры бана:** follow/unfollow тактика, идентичный текст в replies, машинный ритм постинга, высокий объём на свежем аккаунте, спам-репорты. Max 1 reply на аккаунт в 24ч.
 
-**Прецедент — RoastHimJim ($JIM):** 250K+ подписчиков, сотни миллионов просмотров. Рос через **mention-based** модель (люди тегали @RoastHimJim), а не unsolicited replies. "Roast to Earn" — пользователи получали $JIM за использование.
+**Прецедент — RoastHimJim ($JIM):** 350K+ подписчиков на пике (не 250K+ как ранее указано), сотни миллионов просмотров. Рос через **mention-based** модель (люди тегали @RoastHimJim), а не unsolicited replies. "Roast to Earn" — пользователи получали $JIM за использование.
 
-**Целевые аккаунты:** mid-tier (50K–300K) эффективнее mega-KOLs. Micro-KOLs конвертируют ~7% engaged audience vs 3% у macro. Меньше конкуренция в ответах, reply заметнее.
+**Целевые аккаунты:** mid-tier (50K–300K) эффективнее mega-KOLs. **Nano-инфлюенсеры** (<10K) конвертируют ~7% engaged audience vs 3% у macro (часто ошибочно приписывается mid-tier). Меньше конкуренция в ответах, reply заметнее.
 
 **Тайминг:** ответить в течение **15-30 минут** от публикации. Reach decay: 50% каждые 6 часов.
 
 **Что работает в bear market:**
 - "Doomerism with data" — конкретные цифры за тем, что все чувствуют
-- 85% negative упоминаний Bitcoin в соцсетях (Santiment, W3 March 2026)
+- 85% negative упоминаний Bitcoin в соцсетях (Santiment, **февраль 2026** при ~$91K — не март, ошибочная атрибуция)
 - Attacks on powerful actors (VCs, founders extracting) — populist angle
 - Bear market **идеален для роаст-бота**: люди злые, хотят accountability и юмор
 - Аккаунты, которые остаются active когда большинство молчит — получают непропорционально больше видимости
@@ -192,7 +192,7 @@ Premium-аккаунты: ~600 impressions/пост vs ~60 у бесплатны
 
 | | Satori + resvg-js | Puppeteer screenshot |
 |---|---|---|
-| **Время генерации** | ~80–150 ms | ~300–800 ms (warm) |
+| **Время генерации** | ~80–150 ms (Vercel edge, кэш) / **~3200 ms cold** | ~300–800 ms (warm) |
 | **RAM** | ~30–60 MB | ~150–250 MB Chromium |
 | **CSS** | Subset (flex, box model) | Полный браузерный |
 | **Zombie-процессы** | Нет | Реальная проблема на VPS |
@@ -228,7 +228,7 @@ LLM pipeline: roast context + список шаблонов → LLM выбира
 - **Важно:** Giphy URL нельзя вставить в твит как ссылку — нужно fetch GIF → Buffer → upload как `image/gif`
 - Стратегия: LLM генерит 3 поисковых запроса → Giphy search → первый результат из топ-5
 
-**Twitter media upload (v2 — v1.1 deprecated с марта 2025):**
+**Twitter media upload (v2 — v1.1 deprecated с **июня 2025**, не марта):**
 
 | Endpoint | Free tier лимит |
 |----------|----------------|
@@ -423,7 +423,7 @@ src/visual/
 
 Pipeline: `RoastEngine` → generates roast + data → `CardRenderer.render(roast, data)` → PNG buffer → `TwitterClient.postTweet(text, [mediaId])`
 
-Satori вместо Playwright: 80-150ms vs 300-800ms, 30MB RAM vs 150MB, нет zombie-процессов. Подробный research: `beef/docs/visual-cards-research.md`.
+Satori вместо Playwright: меньше RAM (~30MB vs ~150MB), нет zombie-процессов. **Важно:** часто цитируемые 80-150ms — для edge/cached, cold render ~3200ms по независимым бенчмаркам. Подробный research: `beef/docs/visual-cards-research.md`.
 
 #### F4. Template Memes
 **Сложность:** Medium | **Impact:** High | **Время:** 3-4 дня (после F2)
@@ -445,7 +445,7 @@ Pipeline:
 
 Pipeline:
 1. LLM генерит 2-3 search keywords из roast context
-2. **Giphy API** search → top 5 results (Tenor умирает август 2026 — не использовать)
+2. **Giphy API** search → top 5 results (Tenor закрывается 30 июня 2026 — не использовать)
 3. LLM picks best match OR random из топ-5
 4. Fetch GIF → Buffer → upload как `image/gif` (URL нельзя вставить напрямую)
 
@@ -535,7 +535,7 @@ Pipeline:
 - **Рекомендация**: cards first (день 3-5), memes second (день 5-7)
 
 **2. Media upload: Official API или Scraper?**
-- Official API v2: `POST /2/media/upload` — 85 req/24ч на free tier (достаточно). v1.1 deprecated с марта 2025
+- Official API v2: `POST /2/media/upload` — 85 req/24ч на free tier (достаточно). v1.1 deprecated с июня 2025
 - Scraper (`agent-twitter-client`): бесплатно, `sendTweet()` поддерживает `mediaData` нативно
 - **Рекомендация**: реализовать обе ветки. Scraper для media + Playwright для replies. API для оригинальных постов + mention-based replies
 
@@ -581,10 +581,36 @@ Pipeline:
 5. **Не каждый пост с картинкой:** autonomous = всегда, replies = 50%, casual = редко
 6. **Warming up скорректирован:** аккаунту 2 недели, можно начинать с 10 replies/день
 7. **Токен: milestone-based** (200 followers ИЛИ viral moment), не date-based
-8. **Tenor мёртв** → только Giphy для GIF
+8. **Tenor закрывается 30 июня 2026** → только Giphy для GIF
 9. **X API reply ограничения (~февраль 2026):** unsolicited replies лучше постить вручную или через Playwright
 
 ### Ключевые цифры из self-review
 - "+178% engagement" — **непроверенная**, скорее всего устаревшие данные 2014 года. Визуал важен, но точная цифра спорна
 - "150x author-reply weight" — это для _диалога_, не для одиночного reply. Одиночный reply ~13.5x лайка
 - Warming up "дни 1-3 без replies" — для **новых** аккаунтов, наш уже ~2 недели active
+
+---
+
+## Верификация фактов (результаты автоматического fact-check)
+
+15 claims из документа проверены по независимым источникам.
+
+| # | Claim | Вердикт | Коррекция |
+|---|-------|---------|-----------|
+| 1 | +178% engagement для изображений | **НЕВЕРНО** | Реальное: +150% retweets (Buffer 2013, устаревшее). Исправлено в тексте |
+| 2 | Reply 13.5x vs like, 27x score | **ВЕРНО** | 27x — производная (13.5/0.5), корректная |
+| 3 | Author reply 75x, диалог 150x | **ВЕРНО** | Подтверждено кодом twitter/the-algorithm |
+| 4 | Premium ~600 vs free ~60 impressions | **ВЕРНО** | Buffer, 18.8M постов, 71K аккаунтов |
+| 5 | 23.02.2026 API replies заблокированы | **ВЕРНО** | Подтверждено X Dev Community |
+| 6 | Tenor shutdown август 2026 | **НЕВЕРНО** | **30 июня 2026**. Исправлено |
+| 7 | RoastHimJim 250K+ followers | **НЕТОЧНО** | Пик **350K+** (99bitcoins.com). Исправлено |
+| 8 | 85% negative Bitcoin, Santiment W3 March | **НЕТОЧНО** | Цифра из **февраля 2026** (~$91K), не марта. Исправлено |
+| 9 | memegen.link 200+ templates, no limits | **ЧАСТИЧНО** | Free, но soft-throttle при abuse |
+| 10 | v1.1 media/upload deprecated март 2025 | **НЕВЕРНО** | **Июнь 2025**. Исправлено |
+| 11 | Free tier 85 req/24h media upload | **ВЕРНО** | Подтверждено X Developer Community |
+| 12 | Satori 80-150ms vs Puppeteer 300-800ms | **НЕ ПОДТВЕРЖДЕНО** | Бенчмарк: **~3200ms cold** для satori. 80-150ms — edge/cached. Исправлено |
+| 13 | Mid-tier 50K-300K конвертирует 7% | **НЕТОЧНО** | 7% относится к **nano** (<10K), не mid-tier. Исправлено |
+| 14 | Shadowban recovery: 24h / ghost 72h | **АНЕКДОТИЧНО** | Реально 24h–2 недели, зависит от severity. Исправлено |
+| 15 | imgflip caption_image free и unlimited | **ЧАСТИЧНО** | Free, но не unlimited — soft throttle. Примечание добавлено |
+
+**Критические ошибки исправлены:** 6 фактических коррекций внесены в текст выше. Остальные — уточнения и оговорки.
