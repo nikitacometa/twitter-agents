@@ -11,7 +11,8 @@ export type TaskProfile =
   | 'example-parse'
   | 'farm-evaluate'
   | 'farm-generate'
-  | 'farm-discover';
+  | 'farm-discover'
+  | 'meme-generate';
 
 export interface AgentTask {
   prompt: string;

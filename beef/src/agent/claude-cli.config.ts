@@ -132,6 +132,14 @@ const DEFAULT_PRESETS: Record<TaskProfile, TaskPreset> = {
     timeoutMs: 120_000,
     fallbackModel: 'haiku',
   },
+  'meme-generate': {
+    model: 'sonnet',
+    effort: 'medium',
+    tools: [],
+    maxTurns: 1,
+    timeoutMs: 45_000,
+    fallbackModel: 'haiku',
+  },
 };
 
 // --- Environment for all CLI subprocesses ---

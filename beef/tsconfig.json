@@ -34,7 +34,8 @@
       "@admin/*": ["./src/admin/*"],
       "@learning/*": ["./src/learning/*"],
       "@farm/*": ["./src/farm/*"],
-      "@evaluation/*": ["./src/evaluation/*"]
+      "@evaluation/*": ["./src/evaluation/*"],
+      "@meme/*": ["./src/meme/*"]
     },
     "baseUrl": "."
   },

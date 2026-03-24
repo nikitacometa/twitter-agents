@@ -75,6 +75,10 @@ const envSchema = z
       .default('false')
       .transform((v) => v === 'true'),
 
+    // Imgflip (meme generation)
+    IMGFLIP_USERNAME: z.string().optional(),
+    IMGFLIP_PASSWORD: z.string().optional(),
+
     // Activity feed
     ACTIVITY_FEED_PATH: z.string().default('./data/activity-feed.json'),
     ACTIVITY_FEED_ENABLED: z
