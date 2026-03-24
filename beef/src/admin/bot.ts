@@ -136,6 +136,9 @@ export function createBot(opts: {
         '/roasttweet &lt;tweet_url&gt; — Opus roast of a specific tweet (full enrichment + eval)',
         '/farm &lt;target&gt; — 6 variants + mutations + serious eval',
         '',
+        '<b>Twitter:</b>',
+        '/follow @handle1 @handle2 — follow accounts (safe delays)',
+        '',
         '<b>Management:</b>',
         '/stats · /status · /help',
       ].join('\n'),
@@ -165,6 +168,10 @@ export function createBot(opts: {
         '  <code>--mutations N</code> creative mutations <i>(default: 2)</i>',
         '  <code>--threshold N</code> stockpile min score <i>(default: 3.5)</i>',
         '  <code>--quick</code>       1-judge eval instead of 5-judge',
+        '',
+        '━━━━━━━━━━━━━━━━━━━━━━',
+        '<b>🐦 Twitter</b>',
+        '<code>/follow @h1 @h2 ...</code> — follow accounts (2-4min delay, anti-detection jitter)',
         '',
         '━━━━━━━━━━━━━━━━━━━━━━',
         '<b>📋 Queue &amp; Posting</b>',
@@ -606,6 +613,150 @@ export function createBot(opts: {
           )
           .catch(() => {});
       }
+    })();
+  });
+
+  // ---------------------------------------------------------------------------
+  // /follow @handle1 @handle2 ... — follow Twitter users with safe delays
+  // ---------------------------------------------------------------------------
+  bot.command('follow', async (ctx) => {
+    const raw = ctx.match?.trim();
+    if (!raw) {
+      await ctx.reply(
+        'Usage: /follow @handle1 @handle2 ...\nAlso accepts comma-separated: /follow handle1, handle2',
+        { parse_mode: 'HTML' },
+      );
+      return;
+    }
+
+    const followFn = opts.twitterClient?.followUser?.bind(opts.twitterClient);
+    if (!followFn) {
+      await ctx.reply('❌ Twitter API client not configured or does not support follows.');
+      return;
+    }
+
+    // Parse handles: strip @, split by whitespace or comma
+    const handles = raw
+      .split(/[\s,]+/)
+      .map((h) => h.replace(/^@/, '').trim())
+      .filter((h) => h.length > 0 && /^[a-zA-Z0-9_]{1,15}$/.test(h));
+
+    if (handles.length === 0) {
+      await ctx.reply('❌ No valid Twitter handles found. Handles must be 1-15 alphanumeric/underscore characters.');
+      return;
+    }
+
+    const chatId = ctx.chat?.id;
+    if (!chatId) return;
+    const api = ctx.api;
+
+    // Deduplicate (case-insensitive)
+    const seen = new Set<string>();
+    const uniqueHandles: string[] = [];
+    for (const h of handles) {
+      const lower = h.toLowerCase();
+      if (!seen.has(lower)) {
+        seen.add(lower);
+        uniqueHandles.push(h);
+      }
+    }
+
+    const statusMsg = await api.sendMessage(
+      chatId,
+      `🔄 Following <b>${String(uniqueHandles.length)}</b> accounts...\n<i>Delay between follows: ~2-4 min (anti-detection)</i>`,
+      { parse_mode: 'HTML' },
+    );
+
+    // Fire-and-forget: don't block grammY's update loop
+    void (async () => {
+      const results: { username: string; ok: boolean; detail: string }[] = [];
+      let rateLimited = false;
+
+      for (let i = 0; i < uniqueHandles.length; i++) {
+        const handle = uniqueHandles[i]!;
+
+        // Delay before each follow (except the first)
+        if (i > 0) {
+          // 120-240s with jitter (fits within 5 req/15min API rate limit)
+          const baseDelay = 120_000;
+          const jitter = Math.random() * 120_000; // 0-120s jitter
+          const delay = baseDelay + jitter;
+          const delaySec = Math.round(delay / 1000);
+
+          await api.editMessageText(
+            chatId,
+            statusMsg.message_id,
+            [
+              `🔄 Following <b>${String(uniqueHandles.length)}</b> accounts...`,
+              `✅ Done: ${String(i)}/${String(uniqueHandles.length)}`,
+              `⏳ Next: @${escapeHtml(handle)} in ~${String(delaySec)}s`,
+            ].join('\n'),
+            { parse_mode: 'HTML' },
+          ).catch(() => {});
+
+          await new Promise((resolve) => setTimeout(resolve, delay));
+        }
+
+        // Update status: currently following
+        await api.editMessageText(
+          chatId,
+          statusMsg.message_id,
+          [
+            `🔄 Following <b>${String(uniqueHandles.length)}</b> accounts...`,
+            `👉 Now: @${escapeHtml(handle)} (${String(i + 1)}/${String(uniqueHandles.length)})`,
+          ].join('\n'),
+          { parse_mode: 'HTML' },
+        ).catch(() => {});
+
+        const result = await followFn(handle);
+
+        if (result.success) {
+          const detail = result.pending ? 'pending (private account)' : 'followed';
+          results.push({ username: handle, ok: true, detail });
+        } else {
+          results.push({ username: handle, ok: false, detail: result.error ?? 'unknown error' });
+          if (result.error?.includes('429')) {
+            rateLimited = true;
+            // Add remaining handles as skipped
+            for (let j = i + 1; j < uniqueHandles.length; j++) {
+              results.push({ username: uniqueHandles[j]!, ok: false, detail: 'skipped (rate limited)' });
+            }
+            break;
+          }
+        }
+      }
+
+      // Build report
+      const succeeded = results.filter((r) => r.ok);
+      const failed = results.filter((r) => !r.ok);
+
+      const reportLines: string[] = [
+        `<b>📋 Follow Report</b>`,
+        `✅ Followed: <b>${String(succeeded.length)}</b> / ${String(uniqueHandles.length)}`,
+      ];
+
+      if (succeeded.length > 0) {
+        reportLines.push('');
+        for (const r of succeeded) {
+          reportLines.push(`  ✅ @${escapeHtml(r.username)} — ${r.detail}`);
+        }
+      }
+
+      if (failed.length > 0) {
+        reportLines.push('');
+        for (const r of failed) {
+          reportLines.push(`  ❌ @${escapeHtml(r.username)} — ${escapeHtml(r.detail)}`);
+        }
+      }
+
+      if (rateLimited) {
+        reportLines.push('');
+        reportLines.push('⚠️ <i>Rate limited — retry remaining handles in 15 minutes.</i>');
+      }
+
+      await api.editMessageText(chatId, statusMsg.message_id, reportLines.join('\n'), {
+        parse_mode: 'HTML',
+      }).catch(() => {});
     })();
   });
 
