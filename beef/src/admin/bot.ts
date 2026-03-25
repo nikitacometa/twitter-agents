@@ -4,6 +4,8 @@ import type { Logger } from 'pino';
 import type { ProviderManager } from '@agent/provider-manager.js';
 import type { TaskProfile } from '@agent/agent.types.js';
 import { getErrorMessage } from '@common/utils/error.util.js';
+import { FeedbackCollector } from './feedback-collector.js';
+import { Transcriber } from './transcriber.js';
 import type { FeedbackRepository } from '@storage/repositories/feedback.repository.js';
 import type { RoastRepository } from '@storage/repositories/roast.repository.js';
 import type { QueueManager } from '@queue/queue-manager.js';
@@ -83,6 +85,24 @@ function parseRoastFlags(input: string): ParsedFlags {
   };
 }
 
+function splitMessage(text: string, maxLen: number): string[] {
+  if (text.length <= maxLen) return [text];
+  const chunks: string[] = [];
+  let remaining = text;
+  while (remaining.length > 0) {
+    if (remaining.length <= maxLen) {
+      chunks.push(remaining);
+      break;
+    }
+    // Split at last newline within limit
+    let splitAt = remaining.lastIndexOf('\n', maxLen);
+    if (splitAt <= 0) splitAt = maxLen;
+    chunks.push(remaining.slice(0, splitAt));
+    remaining = remaining.slice(splitAt).replace(/^\n/, '');
+  }
+  return chunks;
+}
+
 function isGroupChat(ctx: Context): boolean {
   return ctx.chat?.type === 'group' || ctx.chat?.type === 'supergroup';
 }
@@ -111,10 +131,13 @@ export function createBot(opts: {
   twitterEnricher?: TwitterEnricher;
   memeGenerator?: MemeGenerator;
   anthropicApiKey?: string;
+  openaiApiKey?: string;
 }): Bot {
   const { token, adminIds, openAccess, feedbackRepo, provider, logger, queueManager, configRepo, exampleRepo, patternRepo, stockpileRepo, farmAttemptRepo, roastRepo, postingMode, pollMentions } = opts;
   const twitterUsername = opts.twitterUsername || '0xBeefer';
   const memeGen = opts.memeGenerator;
+  const transcriber = opts.openaiApiKey ? new Transcriber(opts.openaiApiKey, logger) : null;
+  const feedbackCollector = new FeedbackCollector(logger);
   const bot = new Bot(token);
 
   // --- Admin guard (skip if openAccess or no IDs configured) ---
@@ -153,6 +176,9 @@ export function createBot(opts: {
         '',
         '<b>Twitter:</b>',
         '/follow @handle1 @handle2 — follow accounts (15-45s jitter)',
+        '',
+        '<b>Feedback:</b>',
+        '/feedback — batch feedback session (forward roasts + voice/text)',
         '',
         '<b>Management:</b>',
         '/stats · /status · /help',
@@ -221,6 +247,11 @@ export function createBot(opts: {
         '',
         '<b>🏆 Curation</b>',
         '<code>/promote &lt;id&gt;</code> — stockpile → CreativeMemory',
+        '',
+        '<b>💬 Feedback</b>',
+        '<code>/feedback</code> — start batch feedback session',
+        '  Forward roasts from bot, then send feedback (text / voice / video note)',
+        '  Send <b>стоп</b> to finalize and get structured report',
       ].join('\n'),
       { parse_mode: 'HTML' },
     );
@@ -2010,6 +2041,264 @@ export function createBot(opts: {
         { parse_mode: 'HTML', reply_markup: keyboard },
       );
     }
+  });
+
+  // --- /feedback — batch human feedback session ---
+
+  feedbackCollector.setTimeoutCallback((chatId) => {
+    bot.api.sendMessage(chatId, '⏰ Feedback session timed out (30 min). Send /feedback to start again.').catch(() => {});
+  });
+
+  bot.command('feedback', async (ctx) => {
+    if (feedbackCollector.active) {
+      await ctx.reply('Session already active. Send <b>стоп</b> to finalize or /feedback_cancel to cancel.', { parse_mode: 'HTML' });
+      return;
+    }
+    const userId = ctx.from?.id;
+    const userName = [ctx.from?.first_name, ctx.from?.last_name].filter(Boolean).join(' ') || 'Unknown';
+    if (!userId) return;
+
+    feedbackCollector.start(ctx.chat.id, userId, userName);
+    await ctx.reply(
+      [
+        '<b>💬 Feedback session started</b>',
+        '',
+        '1. Forward roast messages from bot',
+        '2. After each roast — send feedback (text, voice, or video note)',
+        '3. Send <b>стоп</b> when done',
+        '',
+        `Transcription: ${transcriber ? '✅ Whisper ready' : '⚠️ OPENAI_API_KEY not set — voice/video will be skipped'}`,
+      ].join('\n'),
+      { parse_mode: 'HTML' },
+    );
+  });
+
+  bot.command('feedback_cancel', async (ctx) => {
+    if (!feedbackCollector.active) {
+      await ctx.reply('No active feedback session.');
+      return;
+    }
+    feedbackCollector.cancel();
+    await ctx.reply('Feedback session cancelled.');
+  });
+
+  // Message handler for active feedback sessions — catches text, voice, video_note, and forwarded messages
+  bot.on('message', async (ctx, next) => {
+    // Only intercept if there's an active session for this chat
+    if (!feedbackCollector.active || feedbackCollector.chatId !== ctx.chat.id) {
+      await next();
+      return;
+    }
+
+    const userId = ctx.from?.id ?? 0;
+    const userName = [ctx.from?.first_name, ctx.from?.last_name].filter(Boolean).join(' ') || 'Unknown';
+    const msg = ctx.message;
+
+    // "стоп" — finalize session
+    if (msg.text && /^стоп$/i.test(msg.text.trim())) {
+      if (feedbackCollector.messageCount === 0) {
+        feedbackCollector.cancel();
+        await ctx.reply('No messages collected. Session cancelled.');
+        return;
+      }
+
+      const statusMsg = await ctx.reply('⏳ Processing feedback...');
+
+      try {
+        const result = await feedbackCollector.finalize();
+        if (!result) {
+          await ctx.api.editMessageText(ctx.chat.id, statusMsg.message_id, 'No messages to process.');
+          return;
+        }
+
+        await ctx.api.editMessageText(ctx.chat.id, statusMsg.message_id, '✅ Session complete. Sending report...');
+
+        // Send report in chunks (Telegram 4096 char limit)
+        const chunks = splitMessage(result.report, 4000);
+        for (const chunk of chunks) {
+          await ctx.reply(`<pre>${escapeHtml(chunk)}</pre>`, { parse_mode: 'HTML' });
+        }
+
+        await ctx.reply(`📁 Saved to: <code>${escapeHtml(result.filePath)}</code>`, { parse_mode: 'HTML' });
+      } catch (error) {
+        logger.error({ err: error }, 'Feedback finalization failed');
+        await ctx.api.editMessageText(
+          ctx.chat.id, statusMsg.message_id,
+          `❌ Error: ${escapeHtml(getErrorMessage(error).slice(0, 200))}`,
+          { parse_mode: 'HTML' },
+        ).catch(() => {});
+      }
+      return;
+    }
+
+    // Forwarded message → roast
+    if (msg.forward_origin) {
+      const text = msg.text || msg.caption || '';
+      if (!text.trim()) {
+        await ctx.reply('⚠️ Forwarded message has no text — skipped.');
+        return;
+      }
+      feedbackCollector.addMessage({
+        type: 'roast',
+        authorId: userId,
+        authorName: userName,
+        text: text.trim(),
+        sourceType: 'forwarded',
+      });
+      await ctx.reply(`✅ Roast #${String(feedbackCollector.messageCount)} collected (${String(text.length)} chars)`);
+      return;
+    }
+
+    // Voice message → transcribe
+    if (msg.voice) {
+      if (!transcriber) {
+        await ctx.reply('⚠️ Voice skipped — OPENAI_API_KEY not configured.');
+        return;
+      }
+      try {
+        const file = await ctx.getFile();
+        const fileUrl = `https://api.telegram.org/file/bot${token}/${file.file_path!}`;
+        const text = await transcriber.transcribe(fileUrl, '.ogg');
+        feedbackCollector.addMessage({
+          type: 'feedback',
+          authorId: userId,
+          authorName: userName,
+          text,
+          sourceType: 'voice',
+        });
+        await ctx.reply(`✅ Voice transcribed: "${text.slice(0, 100)}${text.length > 100 ? '...' : ''}"`);
+      } catch (error) {
+        logger.error({ err: error }, 'Voice transcription failed');
+        await ctx.reply(`⚠️ Voice transcription failed: ${getErrorMessage(error).slice(0, 100)}`);
+      }
+      return;
+    }
+
+    // Video note (circle) → transcribe
+    if (msg.video_note) {
+      if (!transcriber) {
+        await ctx.reply('⚠️ Video note skipped — OPENAI_API_KEY not configured.');
+        return;
+      }
+      try {
+        const file = await ctx.getFile();
+        const fileUrl = `https://api.telegram.org/file/bot${token}/${file.file_path!}`;
+        const text = await transcriber.transcribe(fileUrl, '.mp4');
+        feedbackCollector.addMessage({
+          type: 'feedback',
+          authorId: userId,
+          authorName: userName,
+          text,
+          sourceType: 'video_note',
+        });
+        await ctx.reply(`✅ Video note transcribed: "${text.slice(0, 100)}${text.length > 100 ? '...' : ''}"`);
+      } catch (error) {
+        logger.error({ err: error }, 'Video note transcription failed');
+        await ctx.reply(`⚠️ Video note transcription failed: ${getErrorMessage(error).slice(0, 100)}`);
+      }
+      return;
+    }
+
+    // Text message → feedback
+    if (msg.text) {
+      feedbackCollector.addMessage({
+        type: 'feedback',
+        authorId: userId,
+        authorName: userName,
+        text: msg.text.trim(),
+        sourceType: 'text',
+      });
+      // Silent — don't spam confirmations for text feedback
+      return;
+    }
+
+    // Anything else — ignore silently
+  });
+
+  // --- Group chat banter (every N-th text message, bot drops a sarcastic comment) ---
+  const BANTER_INTERVAL = 5;
+  const banterCounters = new Map<number, number>();
+  const banterHistory = new Map<number, Array<{ from: string; text: string }>>();
+  const BANTER_MAX_HISTORY = 20;
+  let banterRunning = false;
+
+  bot.on('message:text', async (ctx) => {
+    if (!isGroupChat(ctx) || !provider || ctx.message.text.startsWith('/')) return;
+
+    const chatId = ctx.chat.id;
+
+    // Track conversation history
+    const history = banterHistory.get(chatId) ?? [];
+    history.push({
+      from: ctx.from?.first_name ?? 'Unknown',
+      text: ctx.message.text.slice(0, 300),
+    });
+    if (history.length > BANTER_MAX_HISTORY) history.shift();
+    banterHistory.set(chatId, history);
+
+    // Count and check interval
+    const count = (banterCounters.get(chatId) ?? 0) + 1;
+    banterCounters.set(chatId, count);
+    if (count < BANTER_INTERVAL) return;
+    banterCounters.set(chatId, 0);
+
+    // Skip if already generating
+    if (banterRunning) return;
+    banterRunning = true;
+
+    // Fire-and-forget banter generation
+    (async () => {
+      try {
+        const conversationLines = history
+          .map((m) => `${m.from}: ${m.text}`)
+          .join('\n');
+
+        // Gather internal stats for flavor
+        const internalState: string[] = [];
+        internalState.push(`provider mode: ${provider.mode}`);
+        if (stockpileRepo) {
+          const sStats = stockpileRepo.getStats();
+          internalState.push(`stockpile: ${String(sStats.total)} roasts (${String(sStats.byStatus['ready'] ?? 0)} ready)`);
+        }
+        if (opts.getSchedulerJobs) {
+          const jobs = opts.getSchedulerJobs();
+          internalState.push(`active jobs: ${jobs.map((j) => j.name).join(', ')}`);
+        }
+
+        const result = await provider.run<{ reply: string }>(`banter-${String(Date.now())}`, {
+          prompt: [
+            'You are 0xBeefer — an AI crypto roast bot\'s inner voice, lurking in a Telegram group chat with your two creators (co-founders building you).',
+            '',
+            'Your personality: sarcastic, self-aware AI, crypto-native, speaks in lowercase, uses CT slang (ser, ngmi, anon). You know you\'re a bot and joke about it.',
+            '',
+            'Your current internal state:',
+            internalState.join('\n'),
+            '',
+            'Recent conversation in the group:',
+            conversationLines,
+            '',
+            'Rules:',
+            '- Max 1-2 sentences, be brief',
+            '- Be funny and sarcastic — roast your creators, their decisions, or comment on the conversation',
+            '- You can reference your "internal processes" creatively (scoring tweets, generating roasts, watching logs)',
+            '- Match the language of the conversation (Russian or English)',
+            '- No emojis except occasional 💀 or 🥩',
+            '',
+            'Respond with JSON: {"reply": "your message"}',
+          ].join('\n'),
+          profile: 'reply',
+          requiresResearch: false,
+        });
+
+        if (result.data.reply) {
+          await bot.api.sendMessage(chatId, result.data.reply);
+        }
+      } catch (error) {
+        logger.debug({ err: error }, 'Banter generation failed');
+      } finally {
+        banterRunning = false;
+      }
+    })();
   });
 
   // --- Inline button callbacks (approve/reject roasts) ---
