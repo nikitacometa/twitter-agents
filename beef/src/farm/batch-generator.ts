@@ -7,7 +7,6 @@ import { loadCharacter } from '@roast/character.loader.js';
 import type { CharacterConfig } from '@roast/character.loader.js';
 import {
   buildRoastPrompt,
-  buildPersonaPrompt,
   buildAdversarialPrompt,
   PROMPT_STRATEGIES,
 } from '@roast/prompt-builder.js';
@@ -124,7 +123,7 @@ export class BatchGenerator {
   }
 
   /**
-   * Run all 3 strategies for a single target, each with its own mutations.
+   * Run all strategies for a single target, each with its own mutations.
    * For Twitter handles (@username), enriches with profile data first.
    * Merges results into one GenerationResult.
    */
@@ -284,8 +283,6 @@ export class BatchGenerator {
     switch (strategy) {
       case 'rubric':
         return buildRoastPrompt(targetName, this.character, this.variantsPerTarget, memory);
-      case 'persona':
-        return buildPersonaPrompt(targetName, this.character, this.variantsPerTarget, memory);
       case 'adversarial':
         return buildAdversarialPrompt(targetName, this.character, this.variantsPerTarget, memory);
     }

@@ -67,7 +67,7 @@ const characterSchema = z.object({
     .object({
       _note: z.string().optional(),
       rubric: z.string(),
-      persona: z.string(),
+      persona: z.string().optional(),
       adversarial: z.string(),
       recommendedSplit: z.string(),
     })

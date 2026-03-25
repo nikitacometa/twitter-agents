@@ -9,8 +9,6 @@ import type { CharacterConfig } from './character.loader.js';
 import {
   buildRoastPrompt,
   buildNoResearchPrompt,
-  buildPersonaPrompt,
-  buildNoResearchPersonaPrompt,
   buildAdversarialPrompt,
   buildNoResearchAdversarialPrompt,
   buildCasualReplyPrompt,
@@ -108,7 +106,7 @@ export class RoastEngine {
       'Starting roast generation',
     );
 
-    // 3×3 Multi-strategy: rubric, persona, adversarial — each generates N variants
+    // 2×N Multi-strategy: rubric + adversarial — each generates N variants
     const strategyResults = await this.runMultiStrategy(
       taskId, targetName, effectiveProfile, effectiveVariantCount, memory, imagePaths, mutationCount,
     );
@@ -345,13 +343,11 @@ export class RoastEngine {
     if (research) {
       switch (strategy) {
         case 'rubric': return buildRoastPrompt(targetName, this.character, variantCount, memory, imagePaths);
-        case 'persona': return buildPersonaPrompt(targetName, this.character, variantCount, memory, imagePaths);
         case 'adversarial': return buildAdversarialPrompt(targetName, this.character, variantCount, memory, imagePaths);
       }
     }
     switch (strategy) {
       case 'rubric': return buildNoResearchPrompt(targetName, this.character, variantCount, memory, imagePaths);
-      case 'persona': return buildNoResearchPersonaPrompt(targetName, this.character, variantCount, memory, imagePaths);
       case 'adversarial': return buildNoResearchAdversarialPrompt(targetName, this.character, variantCount, memory, imagePaths);
     }
   }

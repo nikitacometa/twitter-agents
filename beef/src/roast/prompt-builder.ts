@@ -483,9 +483,9 @@ Be honest. A 3 is "passable." A 5 is "this gets screenshotted."
 // Multi-strategy prompt types
 // ---------------------------------------------------------------------------
 
-export type PromptStrategy = 'rubric' | 'persona' | 'adversarial';
+export type PromptStrategy = 'rubric' | 'adversarial';
 
-export const PROMPT_STRATEGIES: readonly PromptStrategy[] = ['rubric', 'persona', 'adversarial'] as const;
+export const PROMPT_STRATEGIES: readonly PromptStrategy[] = ['rubric', 'adversarial'] as const;
 
 // ---------------------------------------------------------------------------
 // Variant B: Persona — character immersion over explicit rules
