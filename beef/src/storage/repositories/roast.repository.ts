@@ -13,6 +13,7 @@ export interface InsertRoast {
   factChecked?: boolean;
   contextData?: string;
   agentOutput?: string;
+  angle?: string;
 }
 
 interface RoastRow {
@@ -28,6 +29,7 @@ interface RoastRow {
   fact_checked: number;
   context_data: string | null;
   agent_output: string | null;
+  angle: string | null;
   created_at: string;
   likes: number;
   retweets: number;
@@ -53,8 +55,8 @@ export class RoastRepository {
 
   constructor(db: Database.Database) {
     this.insertStmt = db.prepare(`
-      INSERT INTO roasts (target_name, target_type, tweet_text, tweet_id, reply_to_id, conversation_id, source, status, fact_checked, context_data, agent_output)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO roasts (target_name, target_type, tweet_text, tweet_id, reply_to_id, conversation_id, source, status, fact_checked, context_data, agent_output, angle)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
     this.getByIdStmt = db.prepare('SELECT * FROM roasts WHERE id = ?');
@@ -140,6 +142,7 @@ export class RoastRepository {
       roast.factChecked ? 1 : 0,
       roast.contextData ?? null,
       roast.agentOutput ?? null,
+      roast.angle ?? null,
     );
     return Number(result.lastInsertRowid);
   }
@@ -239,6 +242,7 @@ function mapRow(row: RoastRow): PostedRoast {
     factChecked: row.fact_checked === 1,
     contextData: row.context_data,
     agentOutput: row.agent_output,
+    angle: row.angle,
     createdAt: row.created_at,
     likes: row.likes,
     retweets: row.retweets,

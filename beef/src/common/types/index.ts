@@ -41,6 +41,7 @@ export interface PostedRoast {
   factChecked: boolean;
   contextData: string | null;
   agentOutput: string | null;
+  angle: string | null;
   createdAt: string;
   likes: number;
   retweets: number;
