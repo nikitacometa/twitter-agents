@@ -12,18 +12,47 @@ function formatFollowers(k: number): string {
   return `${String(k)}K`;
 }
 
-export function formatMonitorAlert(tweet: ScoredTweet): string {
-  const lines: string[] = [];
+const TELEGRAM_MAX_LENGTH = 4096;
+const DIGEST_TEXT_LIMIT = 100;
 
-  const tierEmoji = tweet.tier === 'S' ? '🔥' : '🎯';
-  lines.push(`${tierEmoji} <b>[${tweet.tier}]</b> @${escapeHtml(tweet.authorHandle)} (${formatFollowers(tweet.followersK)})`);
-  lines.push(`Score: <b>${String(tweet.score)}</b> | ${String(tweet.ageMinutes)}m ago`);
-  lines.push('');
-  lines.push(`"${escapeHtml(tweet.text.slice(0, 500))}"`);
-  lines.push('');
-  lines.push(tweet.tweetUrl);
+function formatDigestEntry(idx: number, tweet: ScoredTweet): string {
+  const tierEmoji = tweet.tier === 'S' ? '🔥' : tweet.tier === 'A' ? '🎯' : '▫️';
+  const truncText =
+    tweet.text.length > DIGEST_TEXT_LIMIT ? tweet.text.slice(0, DIGEST_TEXT_LIMIT) + '…' : tweet.text;
 
-  return lines.join('\n');
+  return (
+    `<b>${String(idx)}.</b> ${tierEmoji}[${tweet.tier}] @${escapeHtml(tweet.authorHandle)} (${formatFollowers(tweet.followersK)}) · <b>${String(tweet.score)}</b>pts · ${String(tweet.ageMinutes)}m\n` +
+    `"${escapeHtml(truncText)}"\n` +
+    tweet.tweetUrl
+  );
+}
+
+export function formatMonitorDigest(tweets: ScoredTweet[]): string[] {
+  if (tweets.length === 0) return [];
+
+  const header = `📊 <b>Monitor Digest</b> — ${String(tweets.length)} tweet${tweets.length > 1 ? 's' : ''}\n`;
+  const messages: string[] = [];
+  let current = header;
+  let globalIdx = 1;
+
+  for (const tweet of tweets) {
+    const entry = formatDigestEntry(globalIdx, tweet);
+    const candidate = current + '\n' + entry;
+
+    if (candidate.length > TELEGRAM_MAX_LENGTH - 100 && current !== header) {
+      messages.push(current);
+      current = entry;
+    } else {
+      current = candidate;
+    }
+    globalIdx++;
+  }
+
+  if (current.length > 0) {
+    messages.push(current);
+  }
+
+  return messages;
 }
 
 interface TelegramApiResponse {
@@ -31,29 +60,31 @@ interface TelegramApiResponse {
   description?: string;
 }
 
-export async function sendMonitorAlert(
+export async function sendMonitorDigest(
   token: string,
   adminIds: number[],
-  tweet: ScoredTweet,
+  tweets: ScoredTweet[],
 ): Promise<void> {
-  const text = formatMonitorAlert(tweet);
+  const messages = formatMonitorDigest(tweets);
   const url = `https://api.telegram.org/bot${token}/sendMessage`;
 
-  for (const adminId of adminIds) {
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        chat_id: adminId,
-        text,
-        parse_mode: 'HTML',
-        disable_web_page_preview: true,
-      }),
-    });
+  for (const text of messages) {
+    for (const adminId of adminIds) {
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          chat_id: adminId,
+          text,
+          parse_mode: 'HTML',
+          disable_web_page_preview: true,
+        }),
+      });
 
-    const body = (await response.json()) as TelegramApiResponse;
-    if (!response.ok || !body.ok) {
-      throw new Error(`Telegram API error (${String(response.status)}): ${body.description ?? 'unknown'}`);
+      const body = (await response.json()) as TelegramApiResponse;
+      if (!response.ok || !body.ok) {
+        throw new Error(`Telegram API error (${String(response.status)}): ${body.description ?? 'unknown'}`);
+      }
     }
   }
 }
