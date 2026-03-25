@@ -1,6 +1,6 @@
 {
   "type": "object",
-  "required": ["variants", "bestIndex", "factCheckPassed"],
+  "required": ["variants", "bestIndex", "factCheckPassed", "researchNotes", "diaryThought"],
   "additionalProperties": false,
   "properties": {
     "variants": {
@@ -19,6 +19,6 @@
     "bestIndex": { "type": "integer" },
     "researchNotes": { "type": ["string", "null"] },
     "factCheckPassed": { "type": "boolean" },
-    "diaryThought": { "type": "string" }
+    "diaryThought": { "type": ["string", "null"] }
   }
 }

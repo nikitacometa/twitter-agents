@@ -32,6 +32,8 @@ export interface RoastEngineOptions {
   variantCount?: number;
   evaluationMode?: EvaluationMode;
   evaluationThreshold?: number;
+  /** Separate provider for evaluation (judge panel). Falls back to main provider if unset. */
+  evaluationProvider?: ProviderManager;
 }
 
 export interface RoastResult {
@@ -68,7 +70,7 @@ export class RoastEngine {
 
     if (this.evaluationMode !== 'none') {
       this.evaluator = new RoastEvaluator({
-        provider: opts.provider,
+        provider: opts.evaluationProvider ?? opts.provider,
         logger: opts.logger,
         threshold: opts.evaluationThreshold,
         mode: this.evaluationMode,
@@ -370,7 +372,7 @@ export class RoastEngine {
     strategiesSucceeded: PromptStrategy[];
     error?: unknown;
   }> {
-    const useResearch = this.provider.capabilities.hasPerplexity;
+    const useResearch = this.provider.capabilities.hasPerplexity || this.provider.capabilities.hasWebSearch;
     const effectiveProfile = useResearch ? profile : 'roast-quick';
 
     const strategyPrompts = PROMPT_STRATEGIES.map((strategy) => {
