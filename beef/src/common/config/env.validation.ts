@@ -65,6 +65,7 @@ const envSchema = z
     SENTRY_DSN: z.string().optional(),
     TELEGRAM_BOT_TOKEN: z.string().optional(),
     TELEGRAM_CHAT_ID: z.string().optional(),
+    TELEGRAM_MONITOR_CHAT_ID: z.string().optional(),
     TELEGRAM_ADMIN_IDS: z
       .string()
       .optional()
@@ -80,6 +81,9 @@ const envSchema = z
       .enum(['true', 'false'])
       .default('false')
       .transform((v) => v === 'true'),
+
+    // OpenAI (Whisper transcription for feedback)
+    OPENAI_API_KEY: z.string().optional(),
 
     // Imgflip (meme generation)
     IMGFLIP_USERNAME: z.string().optional(),

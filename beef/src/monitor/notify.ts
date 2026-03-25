@@ -62,29 +62,27 @@ interface TelegramApiResponse {
 
 export async function sendMonitorDigest(
   token: string,
-  adminIds: number[],
+  chatId: number | string,
   tweets: ScoredTweet[],
 ): Promise<void> {
   const messages = formatMonitorDigest(tweets);
   const url = `https://api.telegram.org/bot${token}/sendMessage`;
 
   for (const text of messages) {
-    for (const adminId of adminIds) {
-      const response = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          chat_id: adminId,
-          text,
-          parse_mode: 'HTML',
-          disable_web_page_preview: true,
-        }),
-      });
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        chat_id: chatId,
+        text,
+        parse_mode: 'HTML',
+        disable_web_page_preview: true,
+      }),
+    });
 
-      const body = (await response.json()) as TelegramApiResponse;
-      if (!response.ok || !body.ok) {
-        throw new Error(`Telegram API error (${String(response.status)}): ${body.description ?? 'unknown'}`);
-      }
+    const body = (await response.json()) as TelegramApiResponse;
+    if (!response.ok || !body.ok) {
+      throw new Error(`Telegram API error (${String(response.status)}): ${body.description ?? 'unknown'}`);
     }
   }
 }

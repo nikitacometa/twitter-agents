@@ -21,7 +21,7 @@ export class TimelineMonitor {
   private readonly configRepo: ConfigRepository;
   private readonly monitorRepo: MonitorRepository;
   private readonly telegramToken: string;
-  private readonly adminIds: number[];
+  private readonly monitorChatId: number | string;
   private readonly logger: Logger;
   private readonly budgetCeiling: number;
   private readonly batches: string[][];
@@ -33,7 +33,7 @@ export class TimelineMonitor {
     configRepo: ConfigRepository;
     monitorRepo: MonitorRepository;
     telegramToken: string;
-    adminIds: number[];
+    monitorChatId: number | string;
     logger: Logger;
     budgetCeiling?: number;
   }) {
@@ -41,7 +41,7 @@ export class TimelineMonitor {
     this.configRepo = opts.configRepo;
     this.monitorRepo = opts.monitorRepo;
     this.telegramToken = opts.telegramToken;
-    this.adminIds = opts.adminIds;
+    this.monitorChatId = opts.monitorChatId;
     this.logger = opts.logger;
     this.budgetCeiling = opts.budgetCeiling ?? DEFAULT_BUDGET_CEILING;
     this.batches = buildSearchBatches(MONITOR_TARGETS);
@@ -146,7 +146,7 @@ export class TimelineMonitor {
     let totalNotified = 0;
     if (digest.length > 0) {
       try {
-        await sendMonitorDigest(this.telegramToken, this.adminIds, digest);
+        await sendMonitorDigest(this.telegramToken, this.monitorChatId, digest);
         totalNotified = digest.length;
         this.logger.info(
           { digestSize: digest.length, topScore: digest[0]?.score, totalScored: allScored.length },

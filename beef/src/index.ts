@@ -539,7 +539,8 @@ if (activityLogger) {
 }
 
 // --- Timeline Monitor ---
-if (twitter && 'searchRecentTweets' in twitter && config.TELEGRAM_BOT_TOKEN && config.TELEGRAM_ADMIN_IDS.length > 0) {
+const monitorChatId = config.TELEGRAM_MONITOR_CHAT_ID ?? config.TELEGRAM_CHAT_ID;
+if (twitter && 'searchRecentTweets' in twitter && config.TELEGRAM_BOT_TOKEN && monitorChatId) {
   const { TimelineMonitor } = await import('./monitor/timeline-monitor.js');
   const { MonitorRepository } = await import('./monitor/monitor.repository.js');
   const monitorRepo = new MonitorRepository(db);
@@ -548,7 +549,7 @@ if (twitter && 'searchRecentTweets' in twitter && config.TELEGRAM_BOT_TOKEN && c
     configRepo,
     monitorRepo,
     telegramToken: config.TELEGRAM_BOT_TOKEN,
-    adminIds: config.TELEGRAM_ADMIN_IDS,
+    monitorChatId,
     logger,
   });
 
@@ -596,6 +597,7 @@ if (config.TELEGRAM_BOT_TOKEN) {
     twitterEnricher,
     memeGenerator,
     anthropicApiKey: config.ANTHROPIC_API_KEY,
+    openaiApiKey: config.OPENAI_API_KEY,
   });
 
   void bot.start({
