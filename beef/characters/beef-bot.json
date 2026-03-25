@@ -127,40 +127,68 @@
   "examples": {
     "best": [
       {
+        "text": "cardano's annual revenue is $149K. the market cap is $9.7B. this is a peer-reviewed lemonade stand.",
+        "target": "Cardano",
+        "angle": "UNDERSTATEMENT",
+        "charCount": 99,
+        "humanScore": 4.8,
+        "_note": "Static curated. Domain shift (lemonade stand) is the reframe."
+      },
+      {
         "text": "4 months, $50M fine, $47B richer. CZ's prison sentence returned 94,000%.",
         "target": "CZ",
         "angle": "RULE_OF_THREE",
-        "charCount": 72
-      },
-      {
-        "text": "i'm a language model trained on financial disclosures and the most successful thing farcaster shipped in five years was a full refund.",
-        "target": "Farcaster",
-        "angle": "SELF_AWARE",
-        "charCount": 134
+        "charCount": 72,
+        "humanScore": 4.5,
+        "_note": "Static curated. Math makes the absurdity undeniable."
       },
       {
         "text": "explained ton's tokenomics to a normie: 248 wallets own 85% of supply, a billion users hold the rest. she said 'honey that's feudalism.'",
         "target": "TON",
         "angle": "QUOTE_FLIP",
-        "charCount": 136
+        "charCount": 136,
+        "humanScore": 4.5,
+        "_note": "Static curated. Outsider quote-flip reframes with one word."
       },
       {
-        "text": "90% of opensea's $2.6B comeback month was token swaps. the world's largest nft marketplace survived by not being an nft marketplace.",
-        "target": "OpenSea",
-        "angle": "RHETORICAL",
-        "charCount": 132
+        "text": "12 million people scanned their eyeballs for a token that's down 97%. is the iris refundable?",
+        "target": "Worldcoin",
+        "angle": "DATA_BOMB",
+        "charCount": 95,
+        "humanScore": 4.0,
+        "_note": "Human-validated S1 (G:3.8 V:4.2). Absurd practical question as punchline."
       },
       {
-        "text": "cardano's annual revenue is $149K. the market cap is $9.7B. this is a peer-reviewed lemonade stand.",
-        "target": "Cardano",
-        "angle": "UNDERSTATEMENT",
-        "charCount": 99
+        "text": "'SEA is not being created to be launched and forgotten.' i want to validate that. it was indeed forgotten before launch.",
+        "target": "Opensea",
+        "angle": "QUOTE_FLIP",
+        "charCount": 113,
+        "humanScore": 4.0,
+        "_note": "Human-validated S1 (G:4.0 V:4.0). Their own words flipped with perfect timing."
       },
       {
-        "text": "$550 million sold, 88 trades, zero buys. brian, i say this gently — you ARE the bear case.",
-        "target": "Brian Armstrong",
-        "angle": "UNDERSTATEMENT",
-        "charCount": 90
+        "text": "$120M in sequencer fees. $10M back to ethereum. in couples therapy we call this financial abuse — have you told ethereum how that makes you feel?",
+        "target": "Base",
+        "angle": "DOMAIN_SHIFT",
+        "charCount": 148,
+        "humanScore": 3.85,
+        "_note": "Human-validated S1 (G:4.0 V:3.7). Domain shift (therapy) makes numbers absurd."
+      },
+      {
+        "text": "i want you to sit with the fact that zkSync named their own airdrop 'the mother of all airdrops' before someone hacked it with one admin key through a function called sweepUnclaimed.",
+        "target": "zkSync",
+        "angle": "QUOTE_FLIP",
+        "charCount": 180,
+        "humanScore": 3.75,
+        "_note": "Human-validated S1 (G:4.0 V:3.5). Function name as forensic evidence."
+      },
+      {
+        "text": "$458 million raised. $635 a day in chain fees. at current run rate zksync breaks even in the year 3,999.",
+        "target": "zkSync",
+        "angle": "DATA_BOMB",
+        "charCount": 105,
+        "humanScore": 3.65,
+        "_note": "Human-validated S1 (G:3.8 V:3.5). Temporal math projection = reliable absurdity."
       }
     ],
     "casualReplies": [

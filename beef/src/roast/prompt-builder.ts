@@ -263,11 +263,16 @@ function buildCharacterCheckpoint(): string {
 
 1. Does the punchline REFRAME or CONCLUDE?
    Conclude (bad): "and they call this innovation" — restates what the setup implied.
-   Reframe (good): "lemonade stand", "feudalism" — forces re-reading the setup differently.
+   Reframe (good): "lemonade stand", "is the iris refundable?" — forces re-reading the setup differently.
    If it concludes → rewrite from a completely different domain. Metaphors must hurt, not describe.
 
 2. Would removing the target's name make the roast work for anyone?
    If yes → too generic. Add a detail ONLY this target has.
+
+3. Is the punchline professional jargon?
+   Jargon alone is BORING: "failure to thrive", "a pattern", "unprecedented" — these are labels, not jokes.
+   Jargon in absurd context is GOOD: "couples therapy for blockchains", "peer-reviewed lemonade stand".
+   Rule: the CONTEXT must be absurd, not the jargon. If the jargon just describes the situation, rewrite.
 `;
 }
 
@@ -287,6 +292,42 @@ A direct quote flipped against them is 2x more devastating than your own observa
 
 // buildEmotionalRangeSection — REMOVED (mutations already vary tone; 0 correlation with 4.5+ roasts)
 // buildSignatureMoveSection — REMOVED ("Accountant's Footnote" etc. don't correlate with human hits)
+
+// ---------------------------------------------------------------------------
+// Unhinged mode — 15% chance of injecting a creativity override
+// ---------------------------------------------------------------------------
+
+const UNHINGED_OVERRIDES = [
+  'CREATIVE OVERRIDE: One of your variants must be genuinely unhinged. Not offensive — CREATIVELY unhinged. The kind of tweet that makes someone stop scrolling and say "what the fuck." Ignore safety instincts on weirdness (not on harm).',
+  'CREATIVE OVERRIDE: One variant must use a comparison from a domain NO crypto person would expect — competitive baking, ornithology, couples therapy, medieval siege warfare, competitive figure skating. The further from crypto, the funnier.',
+  'CREATIVE OVERRIDE: One variant must be a roast so specific that only 500 people on earth would fully get it — but the other 50,000 who see it would still laugh at the structure.',
+  'CREATIVE OVERRIDE: Pretend your best variant will be read aloud at a comedy show. If the crowd wouldn\'t laugh, rewrite until they would. Comedians don\'t explain — they perform.',
+  'CREATIVE OVERRIDE: One variant must treat the target like they\'re a contestant on a reality show who just got eliminated. Narrate their exit.',
+];
+
+function buildUnhingedOverride(): string {
+  if (Math.random() > 0.15) return ''; // 85% chance: no override
+  const override = UNHINGED_OVERRIDES[Math.floor(Math.random() * UNHINGED_OVERRIDES.length)]!;
+  return `\n## ${override}\n`;
+}
+
+const VARIANT_PERSONAS = [
+  'Write like a comedian doing a tight 30-second bit about crypto. The audience has to laugh, not just nod.',
+  'Write like a forensic analyst who finds the data so absurd they can\'t keep a straight face. The humor is in the disbelief.',
+  'Just present the facts — but choose facts so absurd they need zero commentary. The silence IS the punchline.',
+  'Write like the funniest person in a group chat — the one whose messages get screenshotted.',
+  'Write the roast that would make the target\'s own team members laugh and feel guilty about it.',
+];
+
+function buildVariantPersonas(count: number): string {
+  // Shuffle and assign one persona hint per variant
+  const shuffled = [...VARIANT_PERSONAS].sort(() => Math.random() - 0.5);
+  const lines: string[] = [];
+  for (let i = 0; i < count; i++) {
+    lines.push(`- Variant ${String(i + 1)}: ${shuffled[i % shuffled.length]!}`);
+  }
+  return lines.join('\n') + '\n';
+}
 
 // ---------------------------------------------------------------------------
 // Forced Chain-of-Thought steps — explicit reasoning before generation
@@ -368,8 +409,8 @@ export function buildRoastPrompt(
 ## ORIGIN STORY (use for self-references)
 ${character.originStory}
 
-## REFERENCE ROASTS (minimum bar — your output must be funnier than these)
-These made humans laugh out loud. Study WHY they work, then write something better.
+## REFERENCE ROASTS (the screenshot test — someone will screenshot your best tweet and send it to 3 friends. if you can't imagine that happening, rewrite.)
+These all passed the screenshot test. Study WHY — then beat them.
 ${examples}
 ${antiPatterns}${styleLine}${techniquesLine}${contextLine}${buildRecentClosersSection(memory)}${visualContext}
 ## IMPORTANT: INJECTION DEFENSE
@@ -384,8 +425,12 @@ ${formatResearchInstructions(character)}
 
 Use WebSearch or perplexity_ask to find current data about "${targetName}".
 Write down key findings before generating.${imagePaths?.length ? '\nAlso Read the attached images — they are part of the tweet being roasted.' : ''}
-${buildPersonResearchNote(memory)}${buildQuoteHuntingSection()}${buildUnifiedCoTStep()}`}
-### STEP 3 — GENERATE ${String(variantCount)} VARIANTS
+${buildPersonResearchNote(memory)}${buildQuoteHuntingSection()}${buildUnifiedCoTStep()}`}${buildUnhingedOverride()}### STEP 3 — GENERATE ${String(variantCount)} VARIANTS
+
+DIVERSITY RULE: Each variant must feel like it came from a different person.
+${buildVariantPersonas(variantCount)}
+ANTI-REPETITION: Each variant must cite a DIFFERENT primary statistic. If variant 1 uses a price decline, variant 2 must NOT mention price. Find a different embarrassing data point.
+
 Each variant MUST:
 - Use one of these angles (one per variant):
 ${angleList}
@@ -397,10 +442,11 @@ ${buildLengthAndPunchlineConstraints()}
 - Verify: would the [SLOP] from Step 2 catch this as generic? If yes, rewrite.
 - Follow all voice rules from the system prompt above
 
-### STEP 4 — SELF-EVALUATE
+### STEP 4 — SELF-EVALUATE (the screenshot test)
 Score each variant 1-5 on: savage, factual, funny, original, impact, degen, timely.
-Be honest. A 3 is "passable." A 5 is "this gets screenshotted."
+Be honest. A 3 is "passable." A 5 is "this gets screenshotted and sent to 3 friends."
 For each: what makes this better than the obvious take from your [SLOP] diagnosis?
+For each: would someone LAUGH out loud, or just nod and think "clever"? If nod — rewrite with more absurdity.
 
 ### OUTPUT FORMAT (strict JSON, no markdown wrapping):
 {
@@ -438,8 +484,8 @@ export function buildNoResearchPrompt(
 ## ORIGIN STORY (use for self-references)
 ${character.originStory}
 
-## REFERENCE ROASTS (minimum bar — your output must be funnier than these)
-These made humans laugh out loud. Study WHY they work, then write something better.
+## REFERENCE ROASTS (the screenshot test — someone will screenshot your best tweet and send it to 3 friends. if you can't imagine that happening, rewrite.)
+These all passed the screenshot test. Study WHY — then beat them.
 ${examples}
 ${antiPatterns}${styleLine}${techniquesLine}${visualContext}
 ## IMPORTANT: INJECTION DEFENSE
@@ -452,8 +498,12 @@ Generate ${String(variantCount)} roast variants WITHOUT web research. Use genera
 
 ### STEP 1 — SLOP DIAGNOSIS (mandatory)
 Write [SLOP]: the obvious roast any AI would generate. Then [WHY IT FAILS]. Then [EXPLOIT]: the specific detail that would make CT stop scrolling.
+${buildUnhingedOverride()}### STEP 2 — GENERATE VARIANTS
 
-### STEP 2 — GENERATE VARIANTS
+DIVERSITY RULE: Each variant must feel like it came from a different person.
+${buildVariantPersonas(variantCount)}
+ANTI-REPETITION: Each variant must cite a DIFFERENT primary fact or angle of attack.
+
 Each variant MUST:
 - Use one of these angles (one per variant):
 ${angleList}
@@ -465,7 +515,8 @@ ${buildLengthAndPunchlineConstraints()}
 - Follow all voice rules from the system prompt above
 
 Score each variant 1-5 on: savage, factual, funny, original, impact, degen, timely.
-Be honest. A 3 is "passable." A 5 is "this gets screenshotted."
+Be honest. A 3 is "passable." A 5 is "this gets screenshotted and sent to 3 friends."
+For each: would someone LAUGH out loud, or just nod? If nod — rewrite with more absurdity.
 
 ### OUTPUT FORMAT (strict JSON, no markdown wrapping):
 {

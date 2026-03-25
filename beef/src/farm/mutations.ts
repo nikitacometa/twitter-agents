@@ -3,10 +3,11 @@ import type { Mutation, MutationType } from './types.js';
 export const MUTATIONS: Mutation[] = [
   // --- Constraint mutations ---
   { id: 'short', type: 'constraint', text: 'CONSTRAINT: Must be under 140 characters. Half-tweet challenge — every word must earn its place.' },
-  { id: 'question', type: 'constraint', text: 'CONSTRAINT: Must end with a question, not a statement. Let them answer it in their head.' },
+  { id: 'absurd-question', type: 'constraint', text: 'CONSTRAINT: Punchline MUST be a question that sounds practical but is absurd in context. Think "is the iris refundable?" — NOT analytical questions like "how is this possible?" The question should make the reader physically laugh.' },
   { id: 'single-sent', type: 'constraint', text: 'CONSTRAINT: Single sentence only. No periods except the last one.' },
   { id: 'no-data', type: 'constraint', text: 'CONSTRAINT: No numbers, percentages, or dollar amounts. Pure narrative roast.' },
   { id: 'number-lead', type: 'constraint', text: 'CONSTRAINT: Must open with a specific number (dollar amount, percentage, date, or count).' },
+  { id: 'math-projection', type: 'constraint', text: 'CONSTRAINT: Must include an "at current rate" or "at this pace" projection into an absurdly distant year. Example: "breaks even in the year 3,999." The temporal absurdity IS the punchline.' },
 
   // --- Voice mutations ---
   { id: 'ice-cold', type: 'voice', text: 'VOICE OVERRIDE: Maximum restraint. Ice cold. No exclamation energy. Whisper the kill shot.' },
@@ -24,6 +25,7 @@ export const MUTATIONS: Mutation[] = [
   { id: 'ignore-angle', type: 'wildcard', text: 'WILDCARD: Ignore the assigned angle. Find the angle that HURTS most. Trust your instinct.' },
   { id: 'no-name', type: 'wildcard', text: 'WILDCARD: The roast must work even if you remove the project name. It should be recognizable from the description alone.' },
   { id: 'one-word', type: 'wildcard', text: 'WILDCARD: The punchline must be a single word. Build to it.' },
+  { id: 'yelp-review', type: 'wildcard', text: 'WILDCARD: Write as a deadpan 1-star Yelp review of this protocol/project/person. Treat the blockchain product like a restaurant or service. Rate the experience.' },
 ];
 
 const TYPE_WEIGHTS: Record<MutationType, number> = {
