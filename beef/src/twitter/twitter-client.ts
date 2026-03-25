@@ -295,8 +295,8 @@ export class TwitterClient implements ITwitterClient, IProfileFetcher {
 
     try {
       const response = await this.client.v2.singleTweet(tweetId, {
-        expansions: ['author_id', 'attachments.media_keys'],
-        'tweet.fields': ['text', 'author_id'],
+        expansions: ['author_id', 'attachments.media_keys', 'referenced_tweets.id'],
+        'tweet.fields': ['text', 'author_id', 'public_metrics', 'created_at', 'referenced_tweets'],
         'user.fields': ['username'],
         'media.fields': ['url', 'type', 'preview_image_url'],
       });
@@ -308,6 +308,11 @@ export class TwitterClient implements ITwitterClient, IProfileFetcher {
         .map((m) => m.url ?? m.preview_image_url)
         .filter((u): u is string => !!u);
 
+      const metrics = tweet.public_metrics;
+      const refs = tweet.referenced_tweets;
+      const replyRef = refs?.find((r) => r.type === 'replied_to');
+      const quoteRef = refs?.find((r) => r.type === 'quoted');
+
       this.trackRead();
       this.logger.info({ tweetId, author: author?.username }, 'Tweet fetched via API');
 
@@ -317,6 +322,12 @@ export class TwitterClient implements ITwitterClient, IProfileFetcher {
         authorName: author?.username ?? 'unknown',
         text: tweet.text,
         mediaUrls: mediaUrls.length > 0 ? mediaUrls : undefined,
+        likes: metrics?.like_count,
+        retweets: metrics?.retweet_count,
+        replies: metrics?.reply_count,
+        createdAt: tweet.created_at,
+        inReplyToTweetId: replyRef?.id,
+        quotedTweetId: quoteRef?.id,
       };
     } catch (error) {
       this.logger.error({ err: error, tweetId }, 'Failed to fetch tweet');

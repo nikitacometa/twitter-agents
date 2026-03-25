@@ -722,6 +722,13 @@ export class ScraperTwitterClient implements ITwitterClient, IProfileFetcher {
         authorName: tweet.username ?? 'unknown',
         text: tweet.text ?? '',
         mediaUrls: mediaUrls && mediaUrls.length > 0 ? mediaUrls : undefined,
+        likes: tweet.likes ?? undefined,
+        retweets: tweet.retweets ?? undefined,
+        replies: tweet.replies ?? undefined,
+        views: tweet.views ?? undefined,
+        createdAt: tweet.timeParsed ? tweet.timeParsed.toISOString() : undefined,
+        inReplyToTweetId: tweet.inReplyToStatusId ?? undefined,
+        quotedTweetId: tweet.quotedStatusId ?? undefined,
       };
     } catch (error) {
       this.logger.error({ err: error, tweetId }, 'Failed to fetch tweet via scraper');

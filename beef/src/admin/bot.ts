@@ -26,7 +26,6 @@ import type { TweetRoastContextInput } from '@roast/prompt-builder.js';
 import type { MemeGenerator } from '@meme/meme-generator.js';
 import { ImgflipClient } from '@meme/imgflip-client.js';
 import { InputFile } from 'grammy';
-import { pickMutations, formatMutationSection } from '@farm/mutations.js';
 import {
   escapeHtml,
   formatStatsMessage,
@@ -535,21 +534,46 @@ export function createBot(opts: {
           }
         }
 
+        // --- Step 3b: Fetch parent/quoted tweet for richer context (graceful) ---
+        let parentTweet: { text: string; author: string } | undefined;
+        let quotedTweet: { text: string; author: string } | undefined;
+        const refTweetId = tweet.inReplyToTweetId ?? tweet.quotedTweetId;
+        if (refTweetId && twitterClient.getTweet) {
+          try {
+            updateStatus('🔗 Fetching referenced tweet...');
+            const refTweet = await twitterClient.getTweet(refTweetId);
+            if (refTweet) {
+              const ref = { text: refTweet.text, author: refTweet.authorName };
+              if (tweet.inReplyToTweetId) parentTweet = ref;
+              else quotedTweet = ref;
+            }
+          } catch (err) {
+            logger.warn({ err, refTweetId }, 'Referenced tweet fetch failed — continuing without');
+          }
+        }
+
         // --- Step 4: Build context ---
+        const tweetAgeDays = tweet.createdAt
+          ? Math.floor((Date.now() - new Date(tweet.createdAt).getTime()) / 86_400_000)
+          : undefined;
+
         const contextInput: TweetRoastContextInput = {
           tweetText: tweet.text,
           tweetAuthor: targetName,
           enrichmentContext,
           imagePaths: imagePaths.length > 0 ? imagePaths : undefined,
+          metrics: tweet.likes != null ? {
+            likes: tweet.likes ?? 0,
+            retweets: tweet.retweets ?? 0,
+            replies: tweet.replies ?? 0,
+            views: tweet.views,
+          } : undefined,
+          tweetAgeDays,
+          parentTweet,
+          quotedTweet,
         };
 
-        let profileContext = buildTweetRoastContext(contextInput);
-
-        // Inject 1 mutation as creative direction
-        const mutations = pickMutations(1);
-        if (mutations.length > 0) {
-          profileContext += '\n' + formatMutationSection(mutations);
-        }
+        const profileContext = buildTweetRoastContext(contextInput);
 
         // Store context for regen
         const ctxKey = `rt-${Date.now()}-${tweetId}`;
@@ -565,11 +589,11 @@ export function createBot(opts: {
         updateStatus(`⚡ Generating roasts for <b>${escapeHtml(targetName)}</b>...`);
 
         const output = await generateRoasts(
-          targetName, provider, logger, feedbackRepo, 'farm-generate', 2,
+          targetName, provider, logger, feedbackRepo, 'farm-generate', 3,
           configRepo, exampleRepo, patternRepo,
           imagePaths.length > 0 ? imagePaths : undefined,
           profileContext,
-          'quick', stockpileRepo, 0,
+          'quick', stockpileRepo, 1,
           farmAttemptRepo, undefined,
           false, 'person', true,
         );
@@ -2162,19 +2186,12 @@ export function createBot(opts: {
       // Fire-and-forget regen
       void (async () => {
         try {
-          // Fresh mutation for variety
-          const newMutations = pickMutations(1);
-          let regenContext = storedCtx.profileContext.replace(/\n## FARM MUTATION[\s\S]*$/, '');
-          if (newMutations.length > 0) {
-            regenContext += '\n' + formatMutationSection(newMutations);
-          }
-
           const output = await generateRoasts(
-            storedCtx.targetName, provider, logger, feedbackRepo, 'farm-generate', 2,
+            storedCtx.targetName, provider, logger, feedbackRepo, 'farm-generate', 3,
             configRepo, exampleRepo, patternRepo,
             storedCtx.imagePaths.length > 0 ? storedCtx.imagePaths : undefined,
-            regenContext,
-            'quick', stockpileRepo, 0,
+            storedCtx.profileContext,
+            'quick', stockpileRepo, 1,
             farmAttemptRepo, undefined,
             false, 'person', true,
           );

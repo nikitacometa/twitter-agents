@@ -43,7 +43,7 @@ export type RoastAngle = (typeof ANGLES)[number];
  * Each item gets key = random() ^ (1/weight), take top-N by key descending.
  * Falls back to pure random when no weights provided.
  */
-function pickAngles(count: number, weights?: AngleWeight[]): RoastAngle[] {
+function pickAngles(count: number, weights?: AngleWeight[], pinFirst?: RoastAngle): RoastAngle[] {
   const weightMap = new Map<string, number>();
   if (weights) {
     for (const w of weights) {
@@ -51,14 +51,25 @@ function pickAngles(count: number, weights?: AngleWeight[]): RoastAngle[] {
     }
   }
 
-  const keyed = ANGLES.map((angle) => {
-    const weight = weightMap.get(angle) ?? (DEFAULT_ANGLE_WEIGHTS[angle] ?? 1.0);
-    const key = Math.random() ** (1 / weight);
-    return { angle, key };
-  });
+  // Pin a specific angle as first (e.g. QUOTE_FLIP for tweet mode)
+  const pinned: RoastAngle[] = [];
+  const excludeFromRandom = new Set<string>();
+  if (pinFirst && count > 0) {
+    pinned.push(pinFirst);
+    excludeFromRandom.add(pinFirst);
+  }
+
+  const remaining = count - pinned.length;
+  const keyed = ANGLES
+    .filter((angle) => !excludeFromRandom.has(angle))
+    .map((angle) => {
+      const weight = weightMap.get(angle) ?? (DEFAULT_ANGLE_WEIGHTS[angle] ?? 1.0);
+      const key = Math.random() ** (1 / weight);
+      return { angle, key };
+    });
 
   keyed.sort((a, b) => b.key - a.key);
-  return keyed.slice(0, count).map((k) => k.angle);
+  return [...pinned, ...keyed.slice(0, remaining).map((k) => k.angle)];
 }
 
 function buildAntiPatternSection(rejects: RejectExample[]): string {
@@ -370,14 +381,18 @@ Read the target tweet. Write down:
 1. The single most quotable phrase (would hurt most if flipped)
 2. Any specific number they cited
 3. Any claim or flex
+4. If the tweet has engagement metrics — are they embarrassingly low? ("127 likes on an announcement tweet ser")
 
 Your FIRST variant MUST use one of these as setup, with reality as punchline.
 If nothing quotable found → note "no quote-flip material" and proceed to research.
 
+TWEET-SPECIFIC SLOP WARNING: The obvious reply to any tweet is "lol ratio" or restating what they said but meaner. Your roast must be specific to WHAT they said — if your roast works as a reply to ANY tweet, it's slop. Quote their exact words and flip them.
+
 ### STEP 1 — RESEARCH
 1. Use WebSearch to fact-check the claims from Step 0 — find counter-evidence or ironic context.
 2. Search "@${targetName} [key claim]" to find contradictions or past takes.
-3. Author profile (## AUTHOR PROFILE above) is supplementary color — not the main target.${imagePaths?.length ? '\n4. Also Read the attached images — they are part of the tweet being roasted.' : ''}`;
+3. If engagement metrics are available — compare to their follower count or prior tweets. Low engagement on a big claim = roast material.
+4. Author profile (## AUTHOR PROFILE above) is supplementary color — not the main target.${imagePaths?.length ? '\n5. Also Read the attached images — they are part of the tweet being roasted.' : ''}`;
 }
 
 // ---------------------------------------------------------------------------
@@ -394,7 +409,7 @@ export function buildRoastPrompt(
   targetName = sanitizeInput(targetName).sanitized;
   const examples = buildExamples(character, memory);
   const contextLine = buildContextLine(targetName, memory);
-  const angles = pickAngles(variantCount, memory?.angleWeights);
+  const angles = pickAngles(variantCount, memory?.angleWeights, memory?.tweetMode ? 'QUOTE_FLIP' : undefined);
   const angleList = angles.map((a) => `  - ${a}`).join('\n');
   const antiPatterns = buildAntiPatternSection(memory?.rejectExamples ?? []);
   const styleLine = memory?.styleSupplement

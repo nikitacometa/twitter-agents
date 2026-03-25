@@ -10,6 +10,17 @@ export interface TweetData {
   authorName: string;
   text: string;
   mediaUrls?: string[];
+  /** Public metrics (likes, retweets, replies, views). */
+  likes?: number;
+  retweets?: number;
+  replies?: number;
+  views?: number;
+  /** ISO timestamp when the tweet was created. */
+  createdAt?: string;
+  /** Tweet ID this is replying to (if it's a reply). */
+  inReplyToTweetId?: string;
+  /** Tweet ID this is quoting (if it's a quote tweet). */
+  quotedTweetId?: string;
 }
 
 export interface MentionData {
