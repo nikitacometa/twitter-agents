@@ -25,7 +25,8 @@
     "sync:pull": "bash scripts/sync.sh pull",
     "sync:pull-feedback": "bash scripts/sync.sh pull-feedback",
     "setup:vps": "bash scripts/setup-vps.sh",
-    "farm": "tsx src/farm/index.ts"
+    "farm": "tsx src/farm/index.ts",
+    "metrics": "tsx scripts/metrics.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.39.0",
