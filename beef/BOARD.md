@@ -60,3 +60,11 @@ Status: `[ ]` pending, `[~]` in progress, `[x]` done, `[!]` blocked
 [ ] #B-25 — Stockpile low alert (available < 5 → Telegram notification)
 [ ] #B-26 — Farcaster cross-posting backup channel
 [ ] #B-27 — Claude Code skills: /pre-launch-checklist, /deploy-verify, /roast-quality-check
+
+## Backlog: Visuals (high priority)
+
+[ ] #B-28 — Integrate card system into posting pipeline: generate roast card for every posted roast, attach as media. Requires `postTweetWithMedia(text, imagePath)` in ITwitterClient + both implementations (Official API: v1.uploadMedia → v2.tweet with media_ids; Scraper: GraphQL media upload). Card generator lives in `beef-web/src/cards/generator.ts`, integration guide: `beef-web/docs/card-integration-guide.md`
+[ ] #B-29 — Periodic stats cards: weekly cron posts stats-overview card (totalRoasts, avgQuality, projectsAudited, topTargets from roasts table) and leaderboard card (top 10 most roasted). Standalone tweets, not replies
+[ ] #B-30 — Milestone detection: after successful post, check if totalPosted hits round numbers (100, 250, 500, 1000...) → generate number-card and post celebration tweet
+[ ] #B-31 — Data cards in farm pipeline: when enricher returns numeric data points about a target, generate stat-duo (2 numbers) or stat-quad (4 numbers) alongside the roast text, save card buffer to stockpile for later posting
+[ ] #B-32 — Telegram card preview: in admin bot approval flow, render roast card and send as photo alongside the text preview, so admins see exactly what will be posted
