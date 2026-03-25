@@ -30,7 +30,7 @@ function makeEvalJson(scoreOverrides?: Partial<EvaluationScores>): string {
     reasoning: 'Test evaluation',
     scores: {
       savage: 4, factual: 4, funny: 4, original: 4,
-      shareable: 4, crypto_native: 4, degen: 4, timely: 4,
+      impact: 4, crypto_native: 4, degen: 4, timely: 4,
       ...scoreOverrides,
     },
     one_line_why: 'Test reason',
@@ -123,7 +123,7 @@ describe('SelfEvaluator', () => {
     });
 
     it('uses custom threshold', async () => {
-      const allThrees = { savage: 3, factual: 3, funny: 3, original: 3, shareable: 3, crypto_native: 3, degen: 3, timely: 3 } as const;
+      const allThrees = { savage: 3, factual: 3, funny: 3, original: 3, impact: 3, crypto_native: 3, degen: 3, timely: 3 } as const;
       const provider = createMockProvider([
         { text: makeEvalJson(allThrees) },
         { text: makeEvalJson(allThrees) },
@@ -321,7 +321,7 @@ describe('SelfEvaluator', () => {
 
     it('triggers consensus veto when majority scores < 3.0', async () => {
       // 3 out of 5 judges give low scores → consensus veto
-      const lowScores = { savage: 2, factual: 2, funny: 2, original: 2, shareable: 2, crypto_native: 2, degen: 2, timely: 2 };
+      const lowScores = { savage: 2, factual: 2, funny: 2, original: 2, impact: 2, crypto_native: 2, degen: 2, timely: 2 };
       const provider = createMockProvider([
         { text: makeEvalJson(lowScores) },
         { text: makeEvalJson(lowScores) },
@@ -340,7 +340,7 @@ describe('SelfEvaluator', () => {
 
     it('does not trigger consensus veto when minority scores low', async () => {
       // Only 2 out of 5 give low scores — not majority
-      const lowScores = { savage: 2, factual: 2, funny: 2, original: 2, shareable: 2, crypto_native: 2, degen: 2, timely: 2 };
+      const lowScores = { savage: 2, factual: 2, funny: 2, original: 2, impact: 2, crypto_native: 2, degen: 2, timely: 2 };
       const provider = createMockProvider([
         { text: makeEvalJson(lowScores) },
         { text: makeEvalJson(lowScores) },
@@ -358,7 +358,7 @@ describe('SelfEvaluator', () => {
 
     it('calculates inter-judge variance', async () => {
       // Mix of high and low scoring judges → non-zero variance
-      const lowScores = { savage: 2, factual: 2, funny: 2, original: 2, shareable: 2, crypto_native: 2, degen: 2, timely: 2 };
+      const lowScores = { savage: 2, factual: 2, funny: 2, original: 2, impact: 2, crypto_native: 2, degen: 2, timely: 2 };
       const provider = createMockProvider([
         { text: makeEvalJson() },           // weighted ~4.0
         { text: makeEvalJson(lowScores) },   // weighted ~2.0
@@ -686,20 +686,20 @@ describe('calculateWeightedComposite', () => {
   it('returns uniform score when all dimensions equal', () => {
     const scores: EvaluationScores = {
       savage: 4, factual: 4, funny: 4, original: 4,
-      shareable: 4, crypto_native: 4, degen: 4, timely: 4,
+      impact: 4, crypto_native: 4, degen: 4, timely: 4,
     };
-    expect(calculateWeightedComposite(scores)).toBe(4.0);
+    expect(calculateWeightedComposite(scores)).toBeCloseTo(4.0, 10);
   });
 
   it('weights funny highest', () => {
     const base: EvaluationScores = {
       savage: 3, factual: 3, funny: 3, original: 3,
-      shareable: 3, crypto_native: 3, degen: 3, timely: 3,
+      impact: 3, crypto_native: 3, degen: 3, timely: 3,
     };
     const withHighFunny = { ...base, funny: 5 };
     const withHighTimely = { ...base, timely: 5 };
 
-    // funny weight 0.30 vs timely weight 0.05
+    // funny weight 0.40 vs timely weight 0.00
     expect(calculateWeightedComposite(withHighFunny)).toBeGreaterThan(
       calculateWeightedComposite(withHighTimely),
     );
@@ -707,16 +707,16 @@ describe('calculateWeightedComposite', () => {
 
   it('returns correct weighted value for mixed scores', () => {
     const scores: EvaluationScores = {
-      funny: 5,         // 0.30 * 5 = 1.50
-      savage: 4,        // 0.15 * 4 = 0.60
-      shareable: 4,     // 0.20 * 4 = 0.80
-      original: 3,      // 0.10 * 3 = 0.30
-      degen: 4,         // 0.10 * 4 = 0.40
+      funny: 5,         // 0.40 * 5 = 2.00
+      savage: 4,        // 0.10 * 4 = 0.40
+      impact: 4,        // 0.20 * 4 = 0.80
+      original: 3,      // 0.15 * 3 = 0.45
+      degen: 4,         // 0.05 * 4 = 0.20
       factual: 3,       // 0.05 * 3 = 0.15
       crypto_native: 3, // 0.05 * 3 = 0.15
-      timely: 1,        // 0.05 * 1 = 0.05
+      timely: 1,        // 0.00 * 1 = 0.00
     };
-    // Total = 3.95
-    expect(calculateWeightedComposite(scores)).toBeCloseTo(3.95, 5);
+    // Total = 4.15
+    expect(calculateWeightedComposite(scores)).toBeCloseTo(4.15, 5);
   });
 });

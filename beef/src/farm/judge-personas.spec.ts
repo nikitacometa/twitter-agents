@@ -38,7 +38,7 @@ describe('getPersona', () => {
     const p = getPersona('deflation_hawk');
     expect(p.id).toBe('deflation_hawk');
     expect(p.name).toBe('Deflation Hawk');
-    expect(p.systemPrompt).toContain('harshest judge');
+    expect(p.systemPrompt).toContain('quality control');
   });
 });
 
@@ -87,11 +87,11 @@ describe('pickJudges', () => {
     expect(guardian!.systemPrompt).toContain('brand manager');
   });
 
-  it('includes deflation_hawk for score inflation control', () => {
+  it('includes deflation_hawk for quality control', () => {
     const judges = pickJudges();
     const hawk = judges.find((j) => j.id === 'deflation_hawk');
     expect(hawk).toBeDefined();
-    expect(hawk!.systemPrompt).toContain('harshest judge');
+    expect(hawk!.systemPrompt).toContain('quality control');
   });
 });
 
@@ -125,7 +125,7 @@ describe('buildEvaluationPrompt', () => {
     expect(prompt).toContain('FACTUAL');
     expect(prompt).toContain('FUNNY');
     expect(prompt).toContain('ORIGINAL');
-    expect(prompt).toContain('SHAREABLE');
+    expect(prompt).toContain('IMPACT');
     expect(prompt).toContain('CRYPTO_NATIVE');
     expect(prompt).toContain('DEGEN');
     expect(prompt).toContain('TIMELY');
@@ -143,7 +143,7 @@ describe('buildEvaluationPrompt', () => {
 describe('parseEvaluationOutput', () => {
   const validJson = JSON.stringify({
     reasoning: 'Solid roast with real data',
-    scores: { savage: 4, factual: 5, funny: 3, original: 4, shareable: 4, crypto_native: 5 },
+    scores: { savage: 4, factual: 5, funny: 3, original: 4, impact: 4, crypto_native: 5 },
     composite: 4.2,
     verdict: 'stockpile',
     one_line_why: 'Data-backed and brutal',
@@ -156,11 +156,23 @@ describe('parseEvaluationOutput', () => {
     expect(result.scores.factual).toBe(5);
     expect(result.scores.funny).toBe(3);
     expect(result.scores.original).toBe(4);
-    expect(result.scores.shareable).toBe(4);
+    expect(result.scores.impact).toBe(4);
     expect(result.scores.crypto_native).toBe(5);
     expect(result.composite).toBe(4.2);
     expect(result.verdict).toBe('stockpile');
     expect(result.one_line_why).toBe('Data-backed and brutal');
+  });
+
+  it('accepts shareable as backward-compat alias for impact', () => {
+    const oldFormat = JSON.stringify({
+      reasoning: 'ok',
+      scores: { savage: 3, factual: 3, funny: 3, original: 3, shareable: 4, crypto_native: 3 },
+      composite: 3.2,
+      verdict: 'discard',
+      one_line_why: 'mid',
+    });
+    const result = parseEvaluationOutput(oldFormat);
+    expect(result.scores.impact).toBe(4);
   });
 
   it('strips markdown code fences', () => {
@@ -184,7 +196,7 @@ describe('parseEvaluationOutput', () => {
   it('recalculates composite when missing', () => {
     const noComposite = JSON.stringify({
       reasoning: 'ok',
-      scores: { savage: 3, factual: 3, funny: 3, original: 3, shareable: 3, crypto_native: 3 },
+      scores: { savage: 3, factual: 3, funny: 3, original: 3, impact: 3, crypto_native: 3 },
       verdict: 'discard',
       one_line_why: 'mid',
     });
@@ -195,7 +207,7 @@ describe('parseEvaluationOutput', () => {
   it('rounds composite to 1 decimal', () => {
     const oddComposite = JSON.stringify({
       reasoning: 'ok',
-      scores: { savage: 4, factual: 5, funny: 3, original: 4, shareable: 3, crypto_native: 4 },
+      scores: { savage: 4, factual: 5, funny: 3, original: 4, impact: 3, crypto_native: 4 },
       composite: 3.8333333,
       verdict: 'discard',
       one_line_why: 'close',
@@ -207,7 +219,7 @@ describe('parseEvaluationOutput', () => {
   it('normalizes non-stockpile verdict to discard', () => {
     const badVerdict = JSON.stringify({
       reasoning: 'ok',
-      scores: { savage: 2, factual: 2, funny: 2, original: 2, shareable: 2, crypto_native: 2 },
+      scores: { savage: 2, factual: 2, funny: 2, original: 2, impact: 2, crypto_native: 2 },
       composite: 2.0,
       verdict: 'reject',
       one_line_why: 'bad',

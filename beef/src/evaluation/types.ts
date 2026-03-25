@@ -7,7 +7,7 @@ export interface EvaluationScores {
   factual: number;
   funny: number;
   original: number;
-  shareable: number;
+  impact: number;
   crypto_native: number;
   degen: number;
   timely: number;

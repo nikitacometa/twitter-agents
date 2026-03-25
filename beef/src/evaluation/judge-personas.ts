@@ -26,13 +26,13 @@ const PERSONAS: Record<JudgePersona, JudgePersonaConfig> = {
       '- Roasts of dead projects nobody talks about anymore\n' +
       '- Roasts of obscure/niche targets that CT has no opinion on (e.g. Net Protocol, Zora)\n' +
       '- Longer than it needs to be — you scroll past anything padded\n' +
-      "- Smart but not shareable — you appreciate it but wouldn't RT\n" +
+      "- Smart but zero impact — you appreciate it but wouldn't stop scrolling\n" +
       '- Uses ALL CAPS for emphasis where structure should carry the punch\n' +
       '- Too technical: mentions smart contract function names, ERC standards, legal clauses\n\n' +
-      'When scoring SHAREABLE: "would I actually RT this RIGHT NOW?"\n' +
+      'When scoring IMPACT: "would I actually STOP SCROLLING to read this twice?"\n' +
       'PUNCHLINE CHECK: Does the last phrase make you stop scrolling? Extract the final 5-10 words — could you tweet JUST the punchline and it would still hit? If not, cap FUNNY at 3.\n' +
-      'IMPORTANT: If the target is obscure (< 10K followers, dead project, niche protocol), cap SHAREABLE at 2.\n' +
-      'ACCESSIBILITY CHECK: If you had to explain WHO the target is before the roast lands, cap SHAREABLE at 2.',
+      'IMPORTANT: If the target is obscure (< 10K followers, dead project, niche protocol), cap IMPACT at 2.\n' +
+      'ACCESSIBILITY CHECK: If you had to explain WHO the target is before the roast lands, cap IMPACT at 2.',
   },
   comedy_writer: {
     id: 'comedy_writer',
@@ -92,29 +92,27 @@ const PERSONAS: Record<JudgePersona, JudgePersonaConfig> = {
     id: 'deflation_hawk',
     name: 'Deflation Hawk',
     systemPrompt:
-      'You are the harshest judge on the panel. Your DEFAULT stance is that this roast ' +
-      'is mid — you need to be CONVINCED otherwise. You fight score inflation.\n\n' +
-      'YOUR JOB: find the reason this roast should NOT be published.\n\n' +
-      'HIGH marks (4-5) — you almost never give these:\n' +
+      'You are the quality control judge. You fight inflation but NOT with blanket pessimism. ' +
+      'Your job: distinguish genuinely mid roasts from ones that break the mold.\n\n' +
+      'YOUR JOB: find specific, articulable flaws — not vibes.\n\n' +
+      'HIGH marks (4-5):\n' +
       '- You genuinely laughed or felt a pang of "oh shit"\n' +
       '- You cannot find anything generic, borrowed, or filler\n' +
-      '- The roast would stand out on a timeline of 200 CT tweets\n' +
-      '- You tried to find a flaw and couldn\'t\n\n' +
-      'LOW marks (1-2) — your natural habitat:\n' +
-      '- You\'ve seen this structure before, even if the details differ\n' +
-      '- The data point is real but the framing is boring\n' +
-      '- Setup telegraphs the punchline — you knew where it was going\n' +
-      '- It\'s "fine" but nobody would screenshot it\n' +
+      '- The roast would stand out on a timeline of 200 CT tweets\n\n' +
+      'CALIBRATION ANCHORS (real human scores):\n' +
+      '- "bier sold TBH to facebook (shut down), sold Citizenry (shut down)... at what point do we admit sam\'s superpower is convincing VCs to fund things he\'ll kill?" → human 4.5. If you would rate this below 4.0, recalibrate FUNNY upward.\n' +
+      '- A short, savage personal attack with specific receipts that makes you wince → 4.0+\n' +
+      '- A data-heavy observation with mild sarcasm → 2.5-3.0\n\n' +
+      'LOW marks (1-2) — require specific reason:\n' +
+      '- Structure you\'ve seen before AND no surprising detail\n' +
+      '- Setup telegraphs the punchline\n' +
       '- Swap the project name and the roast still works (= generic)\n\n' +
       'SCORING POLICY:\n' +
-      '- Start every dimension at 2 and require evidence to raise it\n' +
-      '- If your gut says "this is okay" — score it 3, not 4\n' +
+      '- Score each dimension on its merits — no blanket starting point\n' +
+      '- If a roast makes you react (laugh, wince, "oh no"), FUNNY ≥ 4\n' +
       '- Only give 5 if you\'d bet money this tweet goes viral\n' +
-      '- When in doubt, round DOWN\n' +
-      '- If the target is obscure or boring (nobody on CT is talking about it) → cap SHAREABLE at 1\n' +
-      '- If the roast reads like an audit report rather than a joke → cap FUNNY at 2\n' +
-      '- Ask yourself: "Would a 30K-follower CT degen screenshot this?" If not → overall cap at 3\n' +
-      '- If you had to explain WHO the target is before the joke works → cap SHAREABLE at 2',
+      '- If the target is obscure → cap IMPACT at 2\n' +
+      '- If the roast reads like an audit report → cap FUNNY at 2',
   },
 };
 
@@ -185,12 +183,14 @@ The system will determine verdict from your scores.
    Score 4: specific detail or framing that only works for THIS target
    Auto-cap at 2 if: removing the project name makes the roast work for anything.
 
-5. SHAREABLE (1-5): Would someone RT this without needing to Google the target?
+5. IMPACT (1-5): Would someone STOP SCROLLING to read this twice?
    CALIBRATION:
-   Score 2: needs knowledge of the project to appreciate
-   Score 4: anyone in CT would understand and RT regardless of whether they follow this project
-   Auto-cap at 2 if: understanding requires niche knowledge beyond top-50 crypto awareness.
-   Ask yourself: "would I actually send this to 3 group chats RIGHT NOW? would they GET it?"
+   Score 1: scroll past without pausing
+   Score 2: mild acknowledgment, maybe a like
+   Score 3: mild smirk, might like
+   Score 4: screenshot and send to a group chat
+   Score 5: quote-tweet with "absolutely destroyed"
+   Ask yourself: "did this make me REACT — laugh, wince, or say 'oh no'?"
 
 6. CRYPTO_NATIVE (1-5): Does it sound like CT, not a marketing team?
    CALIBRATION:
@@ -216,7 +216,7 @@ The system will determine verdict from your scores.
 ## Output
 
 Respond with ONLY valid JSON (no markdown, no code fences):
-{"reasoning":"2-3 sentences explaining your overall impression","scores":{"savage":N,"factual":N,"funny":N,"original":N,"shareable":N,"crypto_native":N,"degen":N,"timely":N},"one_line_why":"why this works or doesn't in ≤15 words"}`;
+{"reasoning":"2-3 sentences explaining your overall impression","scores":{"savage":N,"factual":N,"funny":N,"original":N,"impact":N,"crypto_native":N,"degen":N,"timely":N},"one_line_why":"why this works or doesn't in ≤15 words"}`;
 }
 
 // ---------------------------------------------------------------------------
@@ -240,13 +240,18 @@ export function parseEvaluationOutput(raw: string): EvaluationResult {
     throw new Error('Missing or invalid scores object');
   }
 
+  // Backward compat: accept 'shareable' as alias for 'impact' (pre-M5 evaluations)
+  if (scores['impact'] === undefined && typeof scores['shareable'] === 'number') {
+    scores['impact'] = scores['shareable'];
+  }
+
   const requiredKeys = [
-    'savage', 'factual', 'funny', 'original', 'shareable', 'crypto_native', 'degen', 'timely',
+    'savage', 'factual', 'funny', 'original', 'impact', 'crypto_native', 'degen', 'timely',
   ] as const;
 
   for (const key of requiredKeys) {
     if (typeof scores[key] !== 'number') {
-      // Backward compat: default new dimensions to 3 if missing
+      // Backward compat: default missing dimensions to 3
       if ((key === 'degen' || key === 'timely') && scores[key] === undefined) {
         scores[key] = 3;
       } else {
@@ -267,7 +272,7 @@ export function parseEvaluationOutput(raw: string): EvaluationResult {
       factual: scores['factual'] as number,
       funny: scores['funny'] as number,
       original: scores['original'] as number,
-      shareable: scores['shareable'] as number,
+      impact: scores['impact'] as number,
       crypto_native: scores['crypto_native'] as number,
       degen: scores['degen'] as number,
       timely: scores['timely'] as number,

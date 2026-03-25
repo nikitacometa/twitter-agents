@@ -14,17 +14,17 @@ import { getErrorMessage } from '@common/utils/error.util.js';
 // ---------------------------------------------------------------------------
 
 // Weights recalibrated from human review (March 2026, 33 rated roasts).
-// Key finding: humans rate primarily on humor impact and shareability.
-// AI was overweighting factual/analytical quality vs. comedy.
+// M5 update: FUNNY dominance confirmed, SHAREABLE→IMPACT for directness,
+// TIMELY zeroed (evergreen stockpile bias), DEGEN/SAVAGE deprioritized.
 export const DIMENSION_WEIGHTS: Record<keyof EvaluationScores, number> = {
-  funny: 0.30,
-  shareable: 0.20,
-  savage: 0.15,
-  original: 0.10,
-  degen: 0.10,
-  timely: 0.05,
+  funny: 0.40,
+  impact: 0.20,
+  original: 0.15,
+  savage: 0.10,
+  degen: 0.05,
   factual: 0.05,
   crypto_native: 0.05,
+  timely: 0.00,
 };
 
 export function calculateWeightedComposite(scores: EvaluationScores): number {
@@ -275,10 +275,13 @@ export class RoastEvaluator {
       };
     }
 
-    // Mode: 'quick' uses only deflation_hawk; 'serious' uses all 5 judges
+    // Mode: 'quick' uses comedy_writer (closest to human humor judgment);
+    // 'serious' uses all 5 judges. Switched from deflation_hawk in M5 —
+    // deflation_hawk's "start at 2, round DOWN" bias caused false negatives
+    // on roasts humans rated 4.5+ (nikitabier B6, PoodleFi_ C1).
     const allJudges = pickJudges();
     const judges = this.mode === 'quick'
-      ? allJudges.filter((j) => j.id === 'deflation_hawk')
+      ? allJudges.filter((j) => j.id === 'comedy_writer')
       : allJudges;
 
     this.logger.info(

@@ -405,7 +405,7 @@ ${buildLengthAndPunchlineConstraints()}
 - Follow all voice rules from the system prompt above
 
 ### STEP 4 — SELF-EVALUATE
-Score each variant 1-5 on: savage, factual, funny, original, shareable, degen, timely.
+Score each variant 1-5 on: savage, factual, funny, original, impact, degen, timely.
 Be honest. A 3 is "passable." A 5 is "this gets screenshotted."
 
 ### OUTPUT FORMAT (strict JSON, no markdown wrapping):
@@ -465,7 +465,7 @@ ${buildLengthAndPunchlineConstraints()}
 - Pass the CHARACTER CHECKPOINT above
 - Follow all voice rules from the system prompt above
 
-Score each variant 1-5 on: savage, factual, funny, original, shareable, degen, timely.
+Score each variant 1-5 on: savage, factual, funny, original, impact, degen, timely.
 Be honest. A 3 is "passable." A 5 is "this gets screenshotted."
 
 ### OUTPUT FORMAT (strict JSON, no markdown wrapping):
@@ -552,7 +552,7 @@ Don't think about techniques or rubrics. Just BE $BEEF reacting to what you foun
 The roast should feel like it CAME from a character, not like it was ASSEMBLED from rules.
 
 ### STEP 4 — SELF-EVALUATE
-Score each variant 1-5 on: savage, factual, funny, original, shareable, degen, timely.
+Score each variant 1-5 on: savage, factual, funny, original, impact, degen, timely.
 Be honest. A 3 is "passable." A 5 is "this gets screenshotted."
 
 ### OUTPUT FORMAT (strict JSON, no markdown wrapping):
@@ -615,7 +615,7 @@ ${angleList}
 
 Don't think about techniques. Just BE $BEEF reacting to what you know about this target.
 
-Score each variant 1-5 on: savage, factual, funny, original, shareable, degen, timely.
+Score each variant 1-5 on: savage, factual, funny, original, impact, degen, timely.
 Be honest. A 3 is "passable." A 5 is "this gets screenshotted."
 
 ### OUTPUT FORMAT (strict JSON, no markdown wrapping):
@@ -710,7 +710,7 @@ ${angleList}
 For each variant, verify: would the [SLOP] diagnosis catch this as generic? If yes, rewrite.
 
 ### STEP 4 — SELF-EVALUATE
-Score each variant 1-5 on: savage, factual, funny, original, shareable, degen, timely.
+Score each variant 1-5 on: savage, factual, funny, original, impact, degen, timely.
 For each: what makes this better than the obvious take?
 
 ### OUTPUT FORMAT (strict JSON, no markdown wrapping):
@@ -775,7 +775,7 @@ ${angleList}
 - Pass the CHARACTER CHECKPOINT above
 - Verify each variant would NOT be caught by your own [SLOP] diagnosis
 
-Score each variant 1-5 on: savage, factual, funny, original, shareable, degen, timely.
+Score each variant 1-5 on: savage, factual, funny, original, impact, degen, timely.
 
 ### OUTPUT FORMAT (strict JSON, no markdown wrapping):
 {
