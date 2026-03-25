@@ -105,6 +105,15 @@ const TOO_TECHY_PATTERNS = [
   /\bterms of service say\b.*\bcontractual IOU\b/i,
 ];
 
+// Concluding punchlines — restate what setup already implies, never score 4.0+.
+// NOT included: /ngmi$/ (valid CT closer), /that's not X, that's Y/ (in GENERIC_PATTERNS).
+const CONCLUDING_PATTERNS = [
+  /and they call this .+$/i,           // "and they call this innovation"
+  /that's .+ for you$/i,              // "that's DeFi for you"
+  /welcome to .+$/i,                  // "welcome to crypto"
+  /and that's .+ in a nutshell$/i,    // "and that's web3 in a nutshell"
+];
+
 // Self-deprecating AI openers that never land — human score consistently < 2.5
 const SELF_DEPRECATING_FLOPS = [
   /\bi run on (?:€|\$|£)\d/i,
@@ -188,7 +197,14 @@ export function preFilter(tweetText: string, targetName?: string): PreFilterResu
     }
   }
 
-  // 7. Truncation detection — catch sentences cut off mid-thought
+  // 7. Concluding punchline — restates the setup, never lands with humans
+  for (const p of CONCLUDING_PATTERNS) {
+    if (p.test(tweetText)) {
+      return { pass: false, reason: `concluding punchline: ${p.source}` };
+    }
+  }
+
+  // 8. Truncation detection — catch sentences cut off mid-thought
   // Only flag obvious mid-sentence breaks, not missing final punctuation (CT style)
   const trimmed = tweetText.trim();
   if (/\b(the|a|an|of|in|for|to|and|but|or|with|that|is|was|are|were)\s*$/i.test(trimmed)) {

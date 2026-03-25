@@ -3,26 +3,37 @@ import { getRandomExamples, getExamplesBySection } from './character.loader.js';
 import type { AngleWeight, CreativeMemory, RejectExample } from '@common/types/index.js';
 import { sanitizeInput } from '@content/content-filter.js';
 
-const ANGLES = [
-  'DATA_BOMB', 'TIMELINE', 'COMPARISON', 'FAKE_COMPLIMENT',
-  'RHETORICAL', 'SELF_AWARE', 'QUOTE_FLIP', 'UNDERSTATEMENT', 'RULE_OF_THREE',
+export const ANGLES = [
+  // Proven by human review data (n≥4 each):
+  'DATA_BOMB', 'COMPARISON', 'FAKE_COMPLIMENT',
+  'SELF_AWARE', 'QUOTE_FLIP', 'UNDERSTATEMENT', 'RULE_OF_THREE',
+  // Promoted from technique block (structurally strong, previously unassignable):
+  'MISDIRECTION', 'BATHOS', 'DOMAIN_SHIFT', 'IRONIC_REVERSAL',
+  // Hybrid mode — LLM combines any techniques freely:
+  'FREESTYLE',
 ] as const;
 
-// Quality-based angle weights from human review (82 rated roasts, 4 sessions, March 2026).
-// UNDERSTATEMENT: 7 samples → 3.73 avg, only angle AI doesn't overestimate.
-// RULE_OF_THREE: 5 samples → 3.42 avg, triplet escalation + killer landing.
-// FAKE_COMPLIMENT: 8 samples → 2.52 avg, AI overestimates by +1.16. Telegraphs punchline.
-// TIMELINE: 3 samples → 2.67 avg, chronological lists lack punch.
+// Quality-based angle weights from human review (37 rated roasts, 7 batches, March 2026).
+// Data-backed weights have n≥4 samples. New angles are starting hypotheses — revisit after farm run.
+//
+// Removed: RHETORICAL (human 2.80 avg but 27.5% stockpile = AI passes it, humans hate it),
+//          TIMELINE (human 2.67, 5.6% stockpile — worst by both metrics).
 export const DEFAULT_ANGLE_WEIGHTS: Record<string, number> = {
-  UNDERSTATEMENT: 2.0,
-  RULE_OF_THREE: 1.5,
-  DATA_BOMB: 1.3,
-  COMPARISON: 1.0,
-  RHETORICAL: 0.9,
-  QUOTE_FLIP: 0.8,
-  SELF_AWARE: 0.6,
-  FAKE_COMPLIMENT: 0.4,
-  TIMELINE: 0.3,
+  // Data-backed (n≥4 human samples):
+  UNDERSTATEMENT:  2.0,  // n=7, 3.73 avg — stable performer
+  QUOTE_FLIP:      1.8,  // n=4, 3.63 avg but ceiling 5.0 — ALL 4.5+ roasts use this
+  RULE_OF_THREE:   1.5,  // n=5, 4.00 avg — escalation + killer landing
+  DATA_BOMB:       1.0,  // n=6, 3.42 avg — solid supporting angle
+  COMPARISON:      0.8,  // n=5, 3.20 avg — below average
+  SELF_AWARE:      0.6,  // n=3, 3.17 avg — risky, sometimes lands
+  FAKE_COMPLIMENT: 0.4,  // n=8, 2.52 avg — confirmed weak, telegraphs punchline
+
+  // Starting hypotheses (no human data yet — revisit after farm run):
+  FREESTYLE:       1.5,  // hybrid mode, 1 slot out of 3-4. Best roasts are multi-angle
+  MISDIRECTION:    1.5,  // n=1 (5.0) — structurally strong (surprise reversal)
+  BATHOS:          1.3,  // grandiose → trivial deflation. Untested as assigned angle
+  DOMAIN_SHIFT:    1.3,  // max cognitive distance. Untested as assigned angle
+  IRONIC_REVERSAL: 1.0,  // frame bad as good, let reader do math. Default until data
 };
 
 export type RoastAngle = (typeof ANGLES)[number];
@@ -190,7 +201,8 @@ function buildLengthAndPunchlineConstraints(): string {
 - Best punchlines are 1-5 words that reframe the entire setup: "unprecedented.", "decentralized.", "evolution."
 - ONE core idea per roast — max 2 data points. Three facts = confusion, not punch.
 - Do NOT open with "i'm a language model", "i'm a forensic AI", "as an AI" — it wastes characters and kills the punchline.
-- Punchline must land without specialized knowledge — if it relies on a niche cultural reference, rewrite with a universal one.`;
+- Punchline must land without specialized knowledge — if it relies on a niche cultural reference, rewrite with a universal one.
+- PUNCH WORD TEST: if removing the last 3 words kills the joke, the structure is correct. If the roast can end anywhere, restructure so the punch lands last.`;
 }
 
 // ---------------------------------------------------------------------------
@@ -199,30 +211,35 @@ function buildLengthAndPunchlineConstraints(): string {
 
 function buildTechniqueBlock(): string {
   return `
-## ROAST STRUCTURE (pick one technique per variant)
+## ANGLE GUIDE (use when assigned one of these angles)
 
-A. BATHOS: Build grandiose → deflate with trivially small detail
-   "3 audits, 47 partnerships, Forbes cover. daily volume: $2,400."
+BATHOS: Build grandiose → deflate with trivially small detail.
+  "3 audits, 47 partnerships, Forbes cover. daily volume: $2,400."
 
-B. MISDIRECTION: False positive setup → data reversal
-   "DOGE shipped a new product. $15B market cap. the product is called 'Such.'"
+MISDIRECTION: False positive setup → data reversal.
+  "DOGE shipped a new product. $15B market cap. the product is called 'Such.'"
 
-C. SILENT SCREENSHOT: Quote their claim + quote reality. Zero commentary.
-   "whitepaper: 'most secure in DeFi.' certik: 7 critical. team: silence."
+IRONIC_REVERSAL: Frame bad news as good, let reader do the math.
+  "good news: token up 300%. bad news: from $0.0001 to $0.0003."
 
-D. IRONIC REVERSAL: Frame bad news as good, let reader do the math.
-   "good news: token up 300%. bad news: from $0.0001 to $0.0003."
+DOMAIN_SHIFT: Punchline from an unexpected non-crypto domain. Maximum cognitive distance.
+  "248 wallets own 85% of supply. she said 'honey that's feudalism.'"
+  "$149K revenue. $9.7B market cap. peer-reviewed lemonade stand."
+  Find YOUR OWN non-crypto domain (therapy, sports, cooking, history, law, medicine...). Don't reuse "feudalism" or "lemonade stand".
 
-E. SER ADDRESS: Condescending patience, explain obvious thing to a child.
-   "ser, 'organic growth' doesn't mean you bought followers from 5 agencies."
+FREESTYLE: Combine ANY angles above. The best roasts mix angles: quote-flip + domain shift, misdirection + bathos.
+  Find the combination that hits hardest. The ONLY constraint: the punchline must make someone stop scrolling.
 
-F. DELAYED OBVIOUS: Present facts neutrally. Do NOT explain the implication.
-   "$SAFU token. liquidity locked 30 days. dev wallet: 40%."
+## ADDITIONAL TECHNIQUES (use as inspiration with any angle)
 
-G. DOMAIN SHIFT: Punchline from an unexpected non-crypto domain. Maximum cognitive distance.
-   "248 wallets own 85% of supply. she said 'honey that's feudalism.'"
-   "$149K revenue. $9.7B market cap. peer-reviewed lemonade stand."
-   These examples show the technique — find YOUR OWN non-crypto domain (therapy, sports, cooking, history, law, medicine...). Don't reuse "feudalism" or "lemonade stand".
+SILENT SCREENSHOT: Quote their claim + quote reality. Zero commentary.
+  "whitepaper: 'most secure in DeFi.' certik: 7 critical. team: silence."
+
+SER ADDRESS: Condescending patience, explain obvious thing to a child.
+  "ser, 'organic growth' doesn't mean you bought followers from 5 agencies."
+
+DELAYED OBVIOUS: Present facts neutrally. Do NOT explain the implication.
+  "$SAFU token. liquidity locked 30 days. dev wallet: 40%."
 `;
 }
 
@@ -351,13 +368,20 @@ function buildTweetTaskSection(targetName: string, imagePaths?: string[]): strin
 The tweet text is in ## TARGET TWEET above — that is your primary ammunition.
 Your job: roast what they SAID in this tweet, not @${targetName} in general.
 
-### STEP 1 — ANALYZE & RESEARCH
-1. Read the tweet in ## TARGET TWEET. Identify the exact claim, flex, or take.
-2. Use WebSearch to fact-check the specific claims — find counter-evidence or ironic context.
-3. Search "@${targetName} [key claim]" to find contradictions or past takes.
-4. Author profile (## AUTHOR PROFILE above) is supplementary color — not the main target.${imagePaths?.length ? '\n5. Also Read the attached images — they are part of the tweet being roasted.' : ''}
+### STEP 0 — QUOTE EXTRACTION (mandatory, before research)
 
-Your weapon: quote-flip their exact words. If they cite numbers → find the real numbers. If they flex → find the receipts.`;
+Read the target tweet. Write down:
+1. The single most quotable phrase (would hurt most if flipped)
+2. Any specific number they cited
+3. Any claim or flex
+
+Your FIRST variant MUST use one of these as setup, with reality as punchline.
+If nothing quotable found → note "no quote-flip material" and proceed to research.
+
+### STEP 1 — RESEARCH
+1. Use WebSearch to fact-check the claims from Step 0 — find counter-evidence or ironic context.
+2. Search "@${targetName} [key claim]" to find contradictions or past takes.
+3. Author profile (## AUTHOR PROFILE above) is supplementary color — not the main target.${imagePaths?.length ? '\n4. Also Read the attached images — they are part of the tweet being roasted.' : ''}`;
 }
 
 // ---------------------------------------------------------------------------

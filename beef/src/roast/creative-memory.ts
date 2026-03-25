@@ -6,7 +6,7 @@ import type { RoastPatternRepository } from '@storage/repositories/roast-pattern
 import type { StockpileRepository } from '@storage/repositories/stockpile.repository.js';
 import type { FarmAttemptRepository } from '@storage/repositories/farm-attempt.repository.js';
 import type { AngleWeight, CreativeMemory, FireExample, RejectExample } from '@common/types/index.js';
-import { DEFAULT_ANGLE_WEIGHTS } from './prompt-builder.js';
+import { DEFAULT_ANGLE_WEIGHTS, ANGLES } from './prompt-builder.js';
 
 /**
  * Extract the punchline closer from a roast tweet.
@@ -206,10 +206,7 @@ function computeAngleWeights(
   const maxCount = Math.max(...angleDist.map((a) => a.count));
   const usedAngles = new Set(angleDist.map((a) => a.angle));
 
-  const allAngles = [
-    'DATA_BOMB', 'TIMELINE', 'COMPARISON', 'FAKE_COMPLIMENT',
-    'RHETORICAL', 'SELF_AWARE', 'QUOTE_FLIP', 'UNDERSTATEMENT', 'RULE_OF_THREE',
-  ];
+  const allAngles = [...ANGLES];
 
   return allAngles.map((angle) => {
     const qualityWeight = DEFAULT_ANGLE_WEIGHTS[angle] ?? 1.0;

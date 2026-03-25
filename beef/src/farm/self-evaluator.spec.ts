@@ -632,6 +632,22 @@ describe('preFilter', () => {
     const result = preFilter('i audited their repo and found 47 critical vulnerabilities');
     expect(result.pass).toBe(true);
   });
+
+  it.each([
+    'TVL dropped 97% and they call this innovation',
+    "that's DeFi for you",
+    'welcome to crypto where nothing makes sense',
+    "and that's web3 in a nutshell",
+  ])('rejects concluding punchline: %s', (text) => {
+    const result = preFilter(text);
+    expect(result.pass).toBe(false);
+    expect(result.reason).toContain('concluding punchline');
+  });
+
+  it('passes reframing punchlines that are not concluding', () => {
+    const result = preFilter('three audits and a Forbes cover. daily volume: $2,400');
+    expect(result.pass).toBe(true);
+  });
 });
 
 describe('countSentences', () => {
