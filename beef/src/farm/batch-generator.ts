@@ -7,7 +7,6 @@ import { loadCharacter } from '@roast/character.loader.js';
 import type { CharacterConfig } from '@roast/character.loader.js';
 import {
   buildRoastPrompt,
-  buildAdversarialPrompt,
   PROMPT_STRATEGIES,
 } from '@roast/prompt-builder.js';
 import type { PromptStrategy } from '@roast/prompt-builder.js';
@@ -252,7 +251,7 @@ export class BatchGenerator {
   }
 
   private buildStrategyPrompt(
-    strategy: PromptStrategy,
+    _strategy: PromptStrategy,
     targetName: string,
     profileContext?: string,
     targetType?: string,
@@ -280,12 +279,8 @@ export class BatchGenerator {
       memory = { ...memory, targetType: memoryType };
     }
 
-    switch (strategy) {
-      case 'rubric':
-        return buildRoastPrompt(targetName, this.character, this.variantsPerTarget, memory);
-      case 'adversarial':
-        return buildAdversarialPrompt(targetName, this.character, this.variantsPerTarget, memory);
-    }
+    // Unified strategy — all prompt variants use the same builder with integrated SLOP + CoT
+    return buildRoastPrompt(targetName, this.character, this.variantsPerTarget, memory);
   }
 
   /**

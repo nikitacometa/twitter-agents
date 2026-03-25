@@ -63,14 +63,14 @@ describe('BatchGenerator', () => {
 
     expect(results).toHaveLength(1);
     expect(results[0]!.targetName).toBe('TestProject');
-    // 2 strategies × 3 variants = 6 stored
-    expect(results[0]!.attempts).toBe(6);
+    // 1 unified strategy × 3 variants = 3 stored
+    expect(results[0]!.attempts).toBe(3);
     expect(results[0]!.filtered).toBe(0);
     expect(results[0]!.errors).toHaveLength(0);
-    expect(results[0]!.strategies).toHaveLength(2);
+    expect(results[0]!.strategies).toHaveLength(1);
 
     const stats = farmAttempt.getStats();
-    expect(stats.total).toBe(6);
+    expect(stats.total).toBe(3);
   });
 
   it('runs all strategies per target', async () => {
@@ -88,14 +88,14 @@ describe('BatchGenerator', () => {
     ]);
 
     expect(results[0]!.strategies).toEqual(
-      expect.arrayContaining(['rubric', 'adversarial']),
+      expect.arrayContaining(['unified']),
     );
-    expect(results[0]!.strategies).toHaveLength(2);
+    expect(results[0]!.strategies).toHaveLength(1);
 
-    // Provider called 2 times (once per strategy)
+    // Provider called 1 time (unified strategy = single call)
     // eslint-disable-next-line @typescript-eslint/unbound-method
     const runMock = vi.mocked(provider.run);
-    expect(runMock).toHaveBeenCalledTimes(2);
+    expect(runMock).toHaveBeenCalledTimes(1);
   });
 
   it('applies mutations to each target', async () => {
@@ -112,8 +112,8 @@ describe('BatchGenerator', () => {
       { name: 'Mutated', type: 'token' },
     ]);
 
-    // 2 strategies × 2 mutations each = 4 total
-    expect(results[0]!.mutations).toHaveLength(4);
+    // 1 unified strategy × 2 mutations = 2 total
+    expect(results[0]!.mutations).toHaveLength(2);
 
     // Check the prompt included mutation text
     // eslint-disable-next-line @typescript-eslint/unbound-method
@@ -141,9 +141,9 @@ describe('BatchGenerator', () => {
       { name: 'Filtered', type: 'project' },
     ]);
 
-    // 2 strategies × (2 passed + 1 filtered) = 4 stored, 2 filtered
-    expect(results[0]!.attempts).toBe(4);
-    expect(results[0]!.filtered).toBe(2);
+    // 1 unified strategy × (2 passed + 1 filtered) = 2 stored, 1 filtered
+    expect(results[0]!.attempts).toBe(2);
+    expect(results[0]!.filtered).toBe(1);
   });
 
   it('stores mutation seed in attempt', async () => {
@@ -159,8 +159,8 @@ describe('BatchGenerator', () => {
     await generator.generateBatch([{ name: 'Seeded', type: 'token' }]);
 
     const attempts = farmAttempt.getUnevaluated(10);
-    // 2 strategies × 1 variant = 2 attempts
-    expect(attempts).toHaveLength(2);
+    // 1 unified strategy × 1 variant = 1 attempt
+    expect(attempts).toHaveLength(1);
     expect(attempts[0]!.mutationSeed).toBeTruthy();
     expect(attempts[0]!.mutationSeed!.split(',').length).toBe(2);
   });
@@ -178,7 +178,7 @@ describe('BatchGenerator', () => {
     await generator.generateBatch([{ name: 'DataRoast', type: 'project' }]);
 
     const attempts = farmAttempt.getUnevaluated(10);
-    // 2 strategies × 1 variant
+    // 1 unified strategy × 1 variant
     expect(attempts.length).toBeGreaterThanOrEqual(1);
     expect(attempts[0]!.agentOutput).toBeTruthy();
     const meta = JSON.parse(attempts[0]!.agentOutput!) as { freshness: string };
@@ -203,8 +203,8 @@ describe('BatchGenerator', () => {
     ]);
 
     expect(results).toHaveLength(1);
-    // All 2 strategies fail → 2 error messages
-    expect(results[0]!.errors).toHaveLength(2);
+    // 1 unified strategy fails → 1 error message
+    expect(results[0]!.errors).toHaveLength(1);
     expect(results[0]!.attempts).toBe(0);
   });
 
@@ -241,13 +241,13 @@ describe('BatchGenerator', () => {
     ], 1);
 
     expect(results).toHaveLength(2);
-    // First target: 1 strategy fails, 1 succeeds → 1 attempt, 1 error
+    // First target: single unified strategy fails → 0 attempts, 1 error
     expect(results[0]!.errors.length).toBeGreaterThanOrEqual(1);
-    expect(results[0]!.attempts).toBe(1);
-    expect(results[0]!.strategies).toHaveLength(1);
-    // Second target: all 2 strategies succeed → 2 attempts
-    expect(results[1]!.attempts).toBe(2);
-    expect(results[1]!.strategies).toHaveLength(2);
+    expect(results[0]!.attempts).toBe(0);
+    expect(results[0]!.strategies).toHaveLength(0);
+    // Second target: unified strategy succeeds → 1 attempt
+    expect(results[1]!.attempts).toBe(1);
+    expect(results[1]!.strategies).toHaveLength(1);
   });
 
   it('uses farm-generate profile', async () => {
@@ -291,8 +291,8 @@ describe('BatchGenerator', () => {
     });
 
     const results = await generator.generateBatch([{ name: 'StringParse', type: 'project' }]);
-    // 2 strategies × 1 variant
-    expect(results[0]!.attempts).toBe(2);
+    // 1 unified strategy × 1 variant
+    expect(results[0]!.attempts).toBe(1);
   });
 
   it('passes creative memory to prompts when stockpile has data', async () => {
@@ -351,7 +351,7 @@ describe('BatchGenerator', () => {
 
     const results = await generator.generateBatch([{ name: 'NoMem', type: 'project' }]);
     // Should still work, just no creative memory in prompt
-    expect(results[0]!.attempts).toBe(2);
+    expect(results[0]!.attempts).toBe(1);
     expect(results[0]!.errors).toHaveLength(0);
   });
 });

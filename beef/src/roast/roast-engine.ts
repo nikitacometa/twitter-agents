@@ -9,8 +9,6 @@ import type { CharacterConfig } from './character.loader.js';
 import {
   buildRoastPrompt,
   buildNoResearchPrompt,
-  buildAdversarialPrompt,
-  buildNoResearchAdversarialPrompt,
   buildCasualReplyPrompt,
   PROMPT_STRATEGIES,
 } from './prompt-builder.js';
@@ -108,7 +106,7 @@ export class RoastEngine {
       'Starting roast generation',
     );
 
-    // 2×N Multi-strategy: rubric + adversarial — each generates N variants
+    // Unified strategy: single prompt with integrated SLOP diagnosis + analytical CoT
     const strategyResults = await this.runMultiStrategy(
       taskId, targetName, effectiveProfile, effectiveVariantCount, memory, imagePaths, mutationCount,
     );
@@ -335,23 +333,18 @@ export class RoastEngine {
   }
 
   private buildStrategyPrompt(
-    strategy: PromptStrategy,
+    _strategy: PromptStrategy,
     targetName: string,
     variantCount: number,
     research: boolean,
     memory?: CreativeMemory,
     imagePaths?: string[],
   ): string {
+    // Unified strategy uses the same prompt builder (SLOP diagnosis is integrated)
     if (research) {
-      switch (strategy) {
-        case 'rubric': return buildRoastPrompt(targetName, this.character, variantCount, memory, imagePaths);
-        case 'adversarial': return buildAdversarialPrompt(targetName, this.character, variantCount, memory, imagePaths);
-      }
+      return buildRoastPrompt(targetName, this.character, variantCount, memory, imagePaths);
     }
-    switch (strategy) {
-      case 'rubric': return buildNoResearchPrompt(targetName, this.character, variantCount, memory, imagePaths);
-      case 'adversarial': return buildNoResearchAdversarialPrompt(targetName, this.character, variantCount, memory, imagePaths);
-    }
+    return buildNoResearchPrompt(targetName, this.character, variantCount, memory, imagePaths);
   }
 
   private async runMultiStrategy(
