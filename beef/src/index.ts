@@ -538,6 +538,34 @@ if (activityLogger) {
   });
 }
 
+// --- Timeline Monitor ---
+if (twitter && 'searchRecentTweets' in twitter && config.TELEGRAM_BOT_TOKEN && config.TELEGRAM_ADMIN_IDS.length > 0) {
+  const { TimelineMonitor } = await import('./monitor/timeline-monitor.js');
+  const { MonitorRepository } = await import('./monitor/monitor.repository.js');
+  const monitorRepo = new MonitorRepository(db);
+  const monitor = new TimelineMonitor({
+    twitter: twitter as TwitterClient,
+    configRepo,
+    monitorRepo,
+    telegramToken: config.TELEGRAM_BOT_TOKEN,
+    adminIds: config.TELEGRAM_ADMIN_IDS,
+    logger,
+  });
+
+  scheduler.register({
+    name: 'timeline-monitor',
+    cronTime: '*/10 * * * *',
+    jitterMs: 2 * 60 * 1000,
+    handler: async () => {
+      const result = await monitor.poll();
+      if (result.budgetExceeded) {
+        logger.warn('Timeline monitor: API budget ceiling reached — pausing until next month');
+      }
+    },
+  });
+  logger.info('Timeline monitor registered (every 10 min + jitter)');
+}
+
 // --- Telegram Bot ---
 let bot: ReturnType<typeof createBot> | null = null;
 if (config.TELEGRAM_BOT_TOKEN) {

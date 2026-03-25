@@ -1,7 +1,7 @@
 import { TwitterApi, ApiResponseError } from 'twitter-api-v2';
 import type { Logger } from 'pino';
 import type { TweetMetrics } from '@common/types/index.js';
-import type { ITwitterClient, IProfileFetcher, TwitterProfile, PostResult, MentionData, TweetData, FollowUserResult } from './twitter-client.interface.js';
+import type { ITwitterClient, IProfileFetcher, TwitterProfile, PostResult, MentionData, TweetData, FollowUserResult, SearchTweetResult } from './twitter-client.interface.js';
 import { retryWithBackoff, NonRetryableError, getErrorMessage } from '@common/utils/error.util.js';
 
 export interface TwitterCredentials {
@@ -379,6 +379,58 @@ export class TwitterClient implements ITwitterClient, IProfileFetcher {
       this.logger.error({ err: error, username }, 'Failed to fetch profile');
       return null;
     }
+  }
+
+  async searchRecentTweets(query: string, sinceId?: string): Promise<SearchTweetResult[]> {
+    if (!this.client) {
+      this.logger.debug('searchRecentTweets skipped — no client');
+      return [];
+    }
+
+    return retryWithBackoff(
+      async () => {
+        try {
+          const params: Record<string, string | number> = {
+            'tweet.fields': 'author_id,created_at',
+            expansions: 'author_id',
+            'user.fields': 'username',
+            max_results: 100,
+          };
+          if (sinceId) params['since_id'] = sinceId;
+
+          const paginator = await this.client!.v2.search(query, params);
+
+          // Build author map from includes
+          const users = new Map<string, string>();
+          if (paginator.includes?.users) {
+            for (const u of paginator.includes.users) {
+              users.set(u.id, u.username);
+            }
+          }
+
+          const results: SearchTweetResult[] = [];
+          for (const tweet of paginator.data?.data ?? []) {
+            results.push({
+              tweetId: tweet.id,
+              authorId: tweet.author_id ?? 'unknown',
+              authorUsername: users.get(tweet.author_id ?? '') ?? 'unknown',
+              text: tweet.text,
+              createdAt: tweet.created_at ?? new Date().toISOString(),
+            });
+          }
+
+          this.trackRead();
+          this.logger.info(
+            { query: query.slice(0, 80), sinceId, count: results.length, dailyReads: this._usage.reads },
+            'Search tweets fetched',
+          );
+          return results;
+        } catch (error) {
+          this.handleRateLimitError(error);
+        }
+      },
+      { maxRetries: 1, baseDelayMs: 3000, label: 'searchRecentTweets' },
+    );
   }
 
   async followUser(username: string): Promise<FollowUserResult> {

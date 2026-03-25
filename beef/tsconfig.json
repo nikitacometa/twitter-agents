@@ -36,7 +36,8 @@
       "@farm/*": ["./src/farm/*"],
       "@evaluation/*": ["./src/evaluation/*"],
       "@meme/*": ["./src/meme/*"],
-      "@metrics/*": ["./src/metrics/*"]
+      "@metrics/*": ["./src/metrics/*"],
+      "@monitor/*": ["./src/monitor/*"]
     },
     "baseUrl": "."
   },

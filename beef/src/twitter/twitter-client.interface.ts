@@ -48,6 +48,14 @@ export interface FollowUserResult {
   error?: string;
 }
 
+export interface SearchTweetResult {
+  tweetId: string;
+  authorId: string;
+  authorUsername: string;
+  text: string;
+  createdAt: string;
+}
+
 export interface ITwitterClient {
   get isConfigured(): boolean;
   postTweet(text: string): Promise<PostResult | null>;
@@ -56,6 +64,7 @@ export interface ITwitterClient {
   getTweetMetrics(tweetIds: string[]): Promise<Map<string, TweetMetrics>>;
   getTweet?(tweetId: string): Promise<TweetData | null>;
   followUser?(username: string): Promise<FollowUserResult>;
+  searchRecentTweets?(query: string, sinceId?: string): Promise<SearchTweetResult[]>;
   shutdown?(): Promise<void>;
 }
 
