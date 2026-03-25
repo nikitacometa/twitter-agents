@@ -102,6 +102,8 @@ export class MetricsRepository {
   private readonly linkRoastIdStmt: Database.Statement;
   private readonly configGetStmt: Database.Statement;
   private readonly configSetStmt: Database.Statement;
+  private readonly deleteAllDailyStmt: Database.Statement;
+  private readonly insertAnalysisStmt: Database.Statement;
   private readonly db: Database.Database;
 
   constructor(db: Database.Database) {
@@ -184,6 +186,13 @@ export class MetricsRepository {
     this.configSetStmt = db.prepare(`
       INSERT INTO config (key, value) VALUES (?, ?)
       ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = datetime('now')
+    `);
+
+    this.deleteAllDailyStmt = db.prepare('DELETE FROM daily_metrics');
+
+    this.insertAnalysisStmt = db.prepare(`
+      INSERT INTO metrics_analysis (analysis_type, period_start, period_end, summary, recommendations, raw_data)
+      VALUES (?, ?, ?, ?, ?, ?)
     `);
   }
 
@@ -320,49 +329,51 @@ export class MetricsRepository {
   // --- Daily metrics (full recompute) ---
 
   recomputeDailyMetrics(): void {
-    const latestFollowers = this.db
-      .prepare('SELECT followers FROM bot_account_snapshots ORDER BY captured_at DESC LIMIT 1')
-      .get() as { followers: number } | undefined;
+    this.db.transaction(() => {
+      const latestFollowers = this.db
+        .prepare('SELECT followers FROM bot_account_snapshots ORDER BY captured_at DESC LIMIT 1')
+        .get() as { followers: number } | undefined;
 
-    this.db.exec("DELETE FROM daily_metrics");
+      this.deleteAllDailyStmt.run();
 
-    this.db.prepare(`
-      INSERT INTO daily_metrics (
-        date, tweets_posted, replies_posted,
-        total_likes, total_retweets, total_replies_recv,
-        total_impressions, total_quotes, total_bookmarks,
-        avg_engagement_rate, best_tweet_id, worst_tweet_id, tweets_deleted
-      )
-      SELECT
-        date(created_at) as date,
-        COUNT(*) as tweets_posted,
-        SUM(is_reply) as replies_posted,
-        SUM(likes) as total_likes,
-        SUM(retweets) as total_retweets,
-        SUM(replies) as total_replies_recv,
-        SUM(impressions) as total_impressions,
-        SUM(quotes) as total_quotes,
-        SUM(bookmarks) as total_bookmarks,
-        AVG(CASE WHEN engagement_rate IS NOT NULL THEN engagement_rate END) as avg_engagement_rate,
-        (SELECT bt2.tweet_id FROM bot_tweets bt2
-         WHERE date(bt2.created_at) = date(bot_tweets.created_at)
-         AND bt2.impressions > 0
-         ORDER BY bt2.engagement_rate DESC LIMIT 1) as best_tweet_id,
-        (SELECT bt3.tweet_id FROM bot_tweets bt3
-         WHERE date(bt3.created_at) = date(bot_tweets.created_at)
-         AND bt3.impressions > 0
-         ORDER BY bt3.engagement_rate ASC LIMIT 1) as worst_tweet_id,
-        SUM(CASE WHEN twitter_status = 'deleted' THEN 1 ELSE 0 END) as tweets_deleted
-      FROM bot_tweets
-      GROUP BY date(created_at)
-      ORDER BY date
-    `).run();
+      this.db.prepare(`
+        INSERT INTO daily_metrics (
+          date, tweets_posted, replies_posted,
+          total_likes, total_retweets, total_replies_recv,
+          total_impressions, total_quotes, total_bookmarks,
+          avg_engagement_rate, best_tweet_id, worst_tweet_id, tweets_deleted
+        )
+        SELECT
+          date(created_at) as date,
+          COUNT(*) as tweets_posted,
+          SUM(is_reply) as replies_posted,
+          SUM(likes) as total_likes,
+          SUM(retweets) as total_retweets,
+          SUM(replies) as total_replies_recv,
+          SUM(impressions) as total_impressions,
+          SUM(quotes) as total_quotes,
+          SUM(bookmarks) as total_bookmarks,
+          AVG(CASE WHEN engagement_rate IS NOT NULL THEN engagement_rate END) as avg_engagement_rate,
+          (SELECT bt2.tweet_id FROM bot_tweets bt2
+           WHERE date(bt2.created_at) = date(bot_tweets.created_at)
+           AND bt2.impressions > 0
+           ORDER BY bt2.engagement_rate DESC LIMIT 1) as best_tweet_id,
+          (SELECT bt3.tweet_id FROM bot_tweets bt3
+           WHERE date(bt3.created_at) = date(bot_tweets.created_at)
+           AND bt3.impressions > 0
+           ORDER BY bt3.engagement_rate ASC LIMIT 1) as worst_tweet_id,
+          SUM(CASE WHEN twitter_status = 'deleted' THEN 1 ELSE 0 END) as tweets_deleted
+        FROM bot_tweets
+        GROUP BY date(created_at)
+        ORDER BY date
+      `).run();
 
-    if (latestFollowers) {
-      this.db
-        .prepare("UPDATE daily_metrics SET followers = ? WHERE date = date('now')")
-        .run(latestFollowers.followers);
-    }
+      if (latestFollowers) {
+        this.db
+          .prepare("UPDATE daily_metrics SET followers = ? WHERE date = date('now')")
+          .run(latestFollowers.followers);
+      }
+    })();
   }
 
   // --- Analytics queries ---
@@ -480,5 +491,112 @@ export class MetricsRepository {
     return this.db.prepare(
       "SELECT * FROM bot_tweets WHERE twitter_status = 'deleted' ORDER BY created_at DESC",
     ).all() as BotTweetRow[];
+  }
+
+  // --- Angle-based analytics (requires migration 015) ---
+
+  getEngagementByAngle(): Array<{ angle: string; avg_er: number; avg_impressions: number; count: number }> {
+    return this.db.prepare(`
+      SELECT r.angle,
+        AVG(bt.engagement_rate) as avg_er,
+        AVG(bt.impressions) as avg_impressions,
+        COUNT(*) as count
+      FROM bot_tweets bt
+      JOIN roasts r ON bt.roast_id = r.id
+      WHERE bt.engagement_rate IS NOT NULL
+        AND bt.twitter_status = 'live'
+        AND r.angle IS NOT NULL
+      GROUP BY r.angle
+      ORDER BY avg_er DESC
+    `).all() as Array<{ angle: string; avg_er: number; avg_impressions: number; count: number }>;
+  }
+
+  // --- Week-over-week comparison ---
+
+  getWeekComparison(): {
+    thisWeekImp: number;
+    lastWeekImp: number;
+    thisWeekER: number | null;
+    lastWeekER: number | null;
+    thisWeekTweets: number;
+    lastWeekTweets: number;
+  } {
+    const row = this.db.prepare(`
+      SELECT
+        COALESCE(SUM(CASE WHEN date >= date('now', '-7 days') THEN total_impressions ELSE 0 END), 0) as this_week_imp,
+        COALESCE(SUM(CASE WHEN date < date('now', '-7 days')
+             AND date >= date('now', '-14 days') THEN total_impressions ELSE 0 END), 0) as last_week_imp,
+        AVG(CASE WHEN date >= date('now', '-7 days') THEN avg_engagement_rate END) as this_week_er,
+        AVG(CASE WHEN date < date('now', '-7 days')
+             AND date >= date('now', '-14 days') THEN avg_engagement_rate END) as last_week_er,
+        COALESCE(SUM(CASE WHEN date >= date('now', '-7 days') THEN tweets_posted ELSE 0 END), 0) as this_week_tweets,
+        COALESCE(SUM(CASE WHEN date < date('now', '-7 days')
+             AND date >= date('now', '-14 days') THEN tweets_posted ELSE 0 END), 0) as last_week_tweets
+      FROM daily_metrics
+      WHERE date >= date('now', '-14 days')
+    `).get() as {
+      this_week_imp: number;
+      last_week_imp: number;
+      this_week_er: number | null;
+      last_week_er: number | null;
+      this_week_tweets: number;
+      last_week_tweets: number;
+    };
+    return {
+      thisWeekImp: row.this_week_imp,
+      lastWeekImp: row.last_week_imp,
+      thisWeekER: row.this_week_er,
+      lastWeekER: row.last_week_er,
+      thisWeekTweets: row.this_week_tweets,
+      lastWeekTweets: row.last_week_tweets,
+    };
+  }
+
+  // --- LLM analysis storage ---
+
+  insertAnalysis(data: {
+    analysisType: string;
+    periodStart: string;
+    periodEnd: string;
+    summary: string;
+    recommendations: string;
+    rawData: string;
+  }): void {
+    this.insertAnalysisStmt.run(
+      data.analysisType, data.periodStart, data.periodEnd,
+      data.summary, data.recommendations, data.rawData,
+    );
+  }
+
+  getLatestAnalysis(type: string): { summary: string; recommendations: string; created_at: string } | undefined {
+    return this.db.prepare(
+      'SELECT summary, recommendations, created_at FROM metrics_analysis WHERE analysis_type = ? ORDER BY created_at DESC LIMIT 1',
+    ).get(type) as { summary: string; recommendations: string; created_at: string } | undefined;
+  }
+
+  // --- Snapshot retention ---
+
+  thinOldSnapshots(): { deleted7d: number; deleted30d: number } {
+    const result7d = this.db.prepare(`
+      DELETE FROM bot_tweet_snapshots
+      WHERE captured_at < datetime('now', '-7 days')
+        AND id NOT IN (
+          SELECT MIN(id) FROM bot_tweet_snapshots
+          WHERE captured_at < datetime('now', '-7 days')
+          GROUP BY tweet_id, date(captured_at)
+        )
+    `).run();
+
+    const result30d = this.db.prepare(`
+      DELETE FROM bot_tweet_snapshots
+      WHERE captured_at < datetime('now', '-30 days')
+        AND id NOT IN (
+          SELECT MIN(id) FROM bot_tweet_snapshots
+          WHERE captured_at < datetime('now', '-30 days')
+          GROUP BY tweet_id, strftime('%Y-%W', captured_at)
+        )
+    `).run();
+
+    return { deleted7d: result7d.changes, deleted30d: result30d.changes };
   }
 }

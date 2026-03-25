@@ -325,6 +325,7 @@ export class QueueManager {
             status: 'pending_approval',
             factChecked: true,
             contextData: stockpiled.researchNotes ?? undefined,
+            angle: stockpiled.angle ?? undefined,
           });
 
           const postResult = await this.postOrSkip(stockpiled.tweetText, replyToId, item.source);
@@ -490,12 +491,12 @@ export class QueueManager {
         );
         const fallback = output.variants[output.bestIndex] ?? output.variants[0]!;
         return await this.postGeneratedRoast(
-          item, fallback.text, output, replyToId, undefined, 0, stockpiledVariants,
+          item, fallback.text, output, replyToId, undefined, 0, stockpiledVariants, fallback.angle,
         );
       }
 
       return await this.postGeneratedRoast(
-        item, best.text, output, replyToId, bestScore, newStockpileCount, stockpiledVariants,
+        item, best.text, output, replyToId, bestScore, newStockpileCount, stockpiledVariants, best.angle,
       );
     } catch (error) {
       const msg = getErrorMessage(error);
@@ -674,6 +675,7 @@ export class QueueManager {
     evaluationScore: number | undefined,
     newStockpileCount: number,
     stockpiledVariants?: Array<{ text: string; score: number; angle: string }>,
+    angle?: string,
   ): Promise<QueueProcessResult> {
     const roastId = this.roastRepo.insert({
       targetName: item.targetName,
@@ -686,6 +688,7 @@ export class QueueManager {
       factChecked: output.factCheckPassed,
       contextData: output.researchNotes ?? undefined,
       agentOutput: JSON.stringify(output),
+      angle,
     });
 
     const postResult = await this.postOrSkip(tweetText, replyToId, item.source);
@@ -1133,6 +1136,7 @@ export class QueueManager {
         : (output.variants[output.bestIndex] ?? output.variants[0]!).text;
       const evalScore = best ? bestScore : undefined;
 
+      const selectedAngle = best?.angle ?? (output.variants[output.bestIndex] ?? output.variants[0])?.angle;
       const newRoastId = this.roastRepo.insert({
         targetName: oldRoast.targetName,
         targetType: oldRoast.targetType,
@@ -1144,6 +1148,7 @@ export class QueueManager {
         factChecked: output.factCheckPassed,
         contextData: output.researchNotes ?? undefined,
         agentOutput: JSON.stringify(output),
+        angle: selectedAngle,
       });
 
       this.pendingApprovals.set(newRoastId, { mentionTweetId: oldMentionTweetId });

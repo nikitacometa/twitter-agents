@@ -2,6 +2,7 @@ import type { Logger } from 'pino';
 import type { MetricsRepository, BotTweetRow } from './metrics.repository.js';
 import type { TimelineSyncResult } from './timeline-syncer.js';
 import type { RefreshResult } from './metrics-refresher.js';
+import type { MetricsAnalysisResult } from './metrics-analyzer.js';
 
 export interface ReportData {
   syncResult: TimelineSyncResult;
@@ -14,8 +15,11 @@ export interface ReportData {
   deleted: BotTweetRow[];
   byHour: Array<{ hour: number; avg_er: number; count: number }>;
   byType: Array<{ is_reply: number; avg_er: number; avg_impressions: number; count: number }>;
+  byAngle: Array<{ angle: string; avg_er: number; avg_impressions: number; count: number }>;
+  weekTrend: ReturnType<MetricsRepository['getWeekComparison']>;
   monthlyReads: number;
   totalReadsUsed: number;
+  analysisResult?: MetricsAnalysisResult;
 }
 
 export class ReportGenerator {
@@ -39,6 +43,8 @@ export class ReportGenerator {
       deleted: this.repo.getDeletedTweets(),
       byHour: this.repo.getEngagementByHour(),
       byType: this.repo.getEngagementByType(),
+      byAngle: this.repo.getEngagementByAngle(),
+      weekTrend: this.repo.getWeekComparison(),
       monthlyReads: this.repo.getMonthlyApiReads(),
       totalReadsUsed: syncResult.readsUsed + refreshResult.readsUsed,
     };
@@ -46,7 +52,7 @@ export class ReportGenerator {
 
   formatTerminalReport(data: ReportData): string {
     const lines: string[] = [];
-    const { syncResult, refreshResult, stats, account, topTweets, suppressed, deleted, byHour, byType, monthlyReads, totalReadsUsed } = data;
+    const { syncResult, refreshResult, stats, account, topTweets, suppressed, deleted, byHour, byType, byAngle, weekTrend, monthlyReads, totalReadsUsed } = data;
 
     lines.push('');
     lines.push(`Metrics Sync — ${new Date().toISOString().slice(0, 16).replace('T', ' ')} UTC`);
@@ -135,6 +141,64 @@ export class ReportGenerator {
       lines.push('');
     }
 
+    // Week-over-week
+    if (weekTrend && (weekTrend.lastWeekImp > 0 || weekTrend.thisWeekImp > 0)) {
+      lines.push('-- Week-over-Week --');
+      const impDelta = weekTrend.lastWeekImp > 0
+        ? ` (${fmtDelta((weekTrend.thisWeekImp - weekTrend.lastWeekImp) / weekTrend.lastWeekImp)})`
+        : '';
+      lines.push(`  Impressions: ${fmtNum(weekTrend.thisWeekImp)}${impDelta}`);
+      if (weekTrend.thisWeekER != null) {
+        const erDelta = weekTrend.lastWeekER != null
+          ? ` (${fmtPpDelta(weekTrend.thisWeekER, weekTrend.lastWeekER)})`
+          : '';
+        lines.push(`  Avg ER:      ${fmtPct(weekTrend.thisWeekER)}${erDelta}`);
+      }
+      const tweetDelta = weekTrend.lastWeekTweets > 0
+        ? ` (${weekTrend.thisWeekTweets >= weekTrend.lastWeekTweets ? '+' : ''}${weekTrend.thisWeekTweets - weekTrend.lastWeekTweets})`
+        : '';
+      lines.push(`  Tweets:      ${weekTrend.thisWeekTweets}${tweetDelta}`);
+      lines.push('');
+    }
+
+    // Engagement by angle
+    if (byAngle.length > 0) {
+      lines.push('-- Engagement by Angle --');
+      for (const row of byAngle) {
+        lines.push(
+          `  ${row.angle.padEnd(18)} ${fmtPct(row.avg_er)} ER, ${Math.round(row.avg_impressions)} avg imp (n=${row.count})`,
+        );
+      }
+      lines.push('');
+    }
+
+    // LLM Analysis
+    if (data.analysisResult) {
+      const a = data.analysisResult;
+      lines.push('-- LLM Analysis --');
+      lines.push(`  ${a.summary}`);
+      if (a.recommendations.length > 0) {
+        lines.push('  Recommendations:');
+        for (const rec of a.recommendations) {
+          lines.push(`    - ${rec}`);
+        }
+      }
+      if (a.angleAdjustments.length > 0) {
+        lines.push('  Angle adjustments:');
+        for (const adj of a.angleAdjustments) {
+          const arrow = adj.direction === 'increase' ? '+' : adj.direction === 'decrease' ? '-' : '=';
+          lines.push(`    [${arrow}] ${adj.angle}: ${adj.reason}`);
+        }
+      }
+      if (a.anomalies.length > 0) {
+        lines.push('  Anomalies:');
+        for (const anomaly of a.anomalies) {
+          lines.push(`    ! ${anomaly}`);
+        }
+      }
+      lines.push('');
+    }
+
     // API budget
     const budgetPct = ((monthlyReads + totalReadsUsed) / 10_000 * 100).toFixed(1);
     lines.push(`API Budget: ${fmtNum(monthlyReads + totalReadsUsed)} / 10,000 reads this month (${budgetPct}%)`);
@@ -169,6 +233,15 @@ export class ReportGenerator {
       }
     }
 
+    // LLM analysis summary
+    if (data.analysisResult) {
+      parts.push(`Analysis: ${data.analysisResult.summary}`);
+      const topRecs = data.analysisResult.recommendations.slice(0, 2);
+      if (topRecs.length > 0) {
+        parts.push(topRecs.map((r) => `→ ${r}`).join('\n'));
+      }
+    }
+
     if (parts.length === 0) return null;
 
     const header = `Metrics Sync ${new Date().toISOString().slice(0, 10)}`;
@@ -200,4 +273,15 @@ function getAgeLabel(createdAt: string): string {
   if (hours < 24) return `${hours}h ago`;
   const days = Math.floor(hours / 24);
   return `${days}d ago`;
+}
+
+function fmtDelta(ratio: number): string {
+  const pct = (ratio * 100).toFixed(0);
+  return ratio >= 0 ? `+${pct}%` : `${pct}%`;
+}
+
+function fmtPpDelta(current: number, previous: number): string {
+  const diff = (current - previous) * 100;
+  const sign = diff >= 0 ? '+' : '';
+  return `${sign}${diff.toFixed(1)}pp`;
 }

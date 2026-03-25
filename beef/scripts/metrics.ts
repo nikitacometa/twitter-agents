@@ -4,7 +4,7 @@
  *
  * Usage:
  *   pnpm metrics              # sync + basic report
- *   pnpm metrics --analyze    # + LLM strategic analysis (future)
+ *   pnpm metrics --analyze    # + LLM strategic analysis (requires ANTHROPIC_API_KEY)
  *   pnpm metrics --force      # full re-sync (ignore incremental state)
  *   pnpm metrics --quiet      # no terminal output, only DB + Telegram alerts
  */
@@ -22,6 +22,9 @@ import { MetricsRepository } from '@metrics/metrics.repository.js';
 import { TimelineSyncer } from '@metrics/timeline-syncer.js';
 import { MetricsRefresher } from '@metrics/metrics-refresher.js';
 import { ReportGenerator } from '@metrics/report-generator.js';
+import { analyzeMetrics } from '@metrics/metrics-analyzer.js';
+import type { MetricsAnalysisInput } from '@metrics/metrics-analyzer.js';
+import { sendFarmNotification } from '@farm/notify.js';
 import { getErrorMessage } from '@common/utils/error.util.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -92,6 +95,62 @@ async function main(): Promise<void> {
     // Step 5: Generate report
     const reportData = reporter.gatherData(syncResult, refreshResult);
 
+    // Step 6: LLM analysis
+    if (analyze) {
+      const anthropicKey = process.env['ANTHROPIC_API_KEY'];
+      if (!anthropicKey) {
+        logger.info('ANTHROPIC_API_KEY not set — skipping LLM analysis');
+      } else {
+        // Check if analysis was already run recently (< 24h)
+        const latest = repo.getLatestAnalysis('weekly');
+        const staleHours = latest
+          ? (Date.now() - new Date(latest.created_at).getTime()) / (1000 * 60 * 60)
+          : Infinity;
+
+        if (staleHours < 24 && !force) {
+          logger.info({ hoursAgo: Math.round(staleHours) }, 'LLM analysis already run recently — skipping (use --force to override)');
+        } else {
+          const analysisInput: MetricsAnalysisInput = {
+            periodDays: 7,
+            topTweets: reportData.topTweets.map((t) => ({
+              text: t.text, angle: null, impressions: t.impressions,
+              er: t.engagement_rate, likes: t.likes,
+            })),
+            worstTweets: reportData.worstTweets.map((t) => ({
+              text: t.text, angle: null, impressions: t.impressions, er: t.engagement_rate,
+            })),
+            byAngle: reportData.byAngle,
+            byHour: reportData.byHour,
+            byType: reportData.byType,
+            stats: {
+              total: reportData.stats.total,
+              totalImpressions: reportData.stats.totalImpressions,
+              avgEngagementRate: reportData.stats.avgEngagementRate,
+            },
+            weekTrend: reportData.weekTrend,
+            suppressed: reportData.suppressed.length,
+            deleted: reportData.deleted.length,
+          };
+
+          const analysisResult = await analyzeMetrics(analysisInput, anthropicKey, logger);
+          if (analysisResult) {
+            reportData.analysisResult = analysisResult;
+            const periodEnd = new Date().toISOString().slice(0, 10);
+            const periodStart = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+            repo.insertAnalysis({
+              analysisType: 'weekly',
+              periodStart,
+              periodEnd,
+              summary: analysisResult.summary,
+              recommendations: JSON.stringify(analysisResult.recommendations),
+              rawData: JSON.stringify(analysisResult),
+            });
+            logger.info('LLM analysis stored');
+          }
+        }
+      }
+    }
+
     // Terminal output
     if (!quiet) {
       const report = reporter.formatTerminalReport(reportData);
@@ -99,45 +158,36 @@ async function main(): Promise<void> {
     }
 
     // Telegram alerts (only on events)
+    const telegramToken = process.env['TELEGRAM_BOT_TOKEN'];
+    const telegramChatId = process.env['TELEGRAM_CHAT_ID'];
     const telegramAlert = reporter.formatTelegramAlert(reportData);
-    if (telegramAlert) {
-      await sendTelegramAlert(telegramAlert);
+    if (telegramAlert && telegramToken && telegramChatId) {
+      try {
+        await sendFarmNotification(telegramToken, telegramChatId, telegramAlert);
+      } catch (error) {
+        logger.warn({ err: error }, 'Failed to send Telegram alert');
+      }
     }
 
-    // Step 6: LLM analysis (future)
-    if (analyze) {
-      logger.info('LLM analysis not yet implemented — use report data for manual review');
+    // Step 7: Snapshot retention
+    const thinned = repo.thinOldSnapshots();
+    if (thinned.deleted7d > 0 || thinned.deleted30d > 0) {
+      logger.info(thinned, 'Thinned old snapshots');
     }
 
     logger.info('Metrics pipeline complete');
   } catch (error) {
     logger.error({ err: error }, 'Metrics pipeline failed');
-    await sendTelegramAlert(`Metrics pipeline failed: ${getErrorMessage(error)}`);
+    const errToken = process.env['TELEGRAM_BOT_TOKEN'];
+    const errChatId = process.env['TELEGRAM_CHAT_ID'];
+    if (errToken && errChatId) {
+      try {
+        await sendFarmNotification(errToken, errChatId, `Metrics pipeline failed: ${getErrorMessage(error)}`);
+      } catch { /* best-effort */ }
+    }
     process.exit(1);
   } finally {
     db.close();
-  }
-}
-
-async function sendTelegramAlert(text: string): Promise<void> {
-  const token = process.env['TELEGRAM_BOT_TOKEN'];
-  const chatId = process.env['TELEGRAM_CHAT_ID'];
-  if (!token || !chatId) return;
-
-  try {
-    const url = `https://api.telegram.org/bot${token}/sendMessage`;
-    await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        chat_id: chatId,
-        text,
-        parse_mode: 'HTML',
-        disable_web_page_preview: true,
-      }),
-    });
-  } catch (error) {
-    logger.warn({ err: error }, 'Failed to send Telegram alert');
   }
 }
 

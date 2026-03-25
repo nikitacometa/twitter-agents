@@ -156,8 +156,7 @@ export class TimelineSyncer {
         newTweets++;
       }
 
-      const readsUsed = tweets.length;
-      this.repo.logApiUsage('metrics', 'user_timeline', readsUsed);
+      this.repo.logApiUsage('metrics', 'user_timeline', 1);
 
       paginationToken = response.data?.meta?.next_token;
 
@@ -177,6 +176,6 @@ export class TimelineSyncer {
       'Timeline sync complete',
     );
 
-    return { newTweets, totalFetched, apiCallsUsed, readsUsed: totalFetched };
+    return { newTweets, totalFetched, apiCallsUsed, readsUsed: apiCallsUsed };
   }
 }

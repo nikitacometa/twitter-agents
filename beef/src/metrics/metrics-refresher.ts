@@ -80,6 +80,7 @@ export class MetricsRefresher {
     let deleted = 0;
     let apiCallsUsed = 0;
     const foundIds = new Set<string>();
+    const queriedIds = new Set<string>();
 
     for (const chunk of chunks) {
       try {
@@ -87,6 +88,9 @@ export class MetricsRefresher {
           'tweet.fields': 'public_metrics',
         });
         apiCallsUsed++;
+
+        // Mark entire chunk as successfully queried
+        for (const id of chunk) queriedIds.add(id);
 
         for (const tweet of response.data ?? []) {
           foundIds.add(tweet.id);
@@ -130,29 +134,23 @@ export class MetricsRefresher {
           }
         }
 
-        this.repo.logApiUsage('metrics', 'tweets_lookup', chunk.length);
+        this.repo.logApiUsage('metrics', 'tweets_lookup', 1);
       } catch (error) {
         this.logger.error(
           { err: error, chunkSize: chunk.length },
-          'Failed to fetch tweet metrics batch',
+          'Failed to fetch tweet metrics batch — skipping chunk for deletion detection',
         );
       }
     }
 
-    // Mark tweets not returned by API as deleted
-    for (const tweetId of toRefresh) {
-      if (!foundIds.has(tweetId) && !this.repo.getBotTweet(tweetId)?.twitter_status?.includes('deleted')) {
-        // Only mark if we actually attempted this chunk and it wasn't in an error batch
+    // Mark tweets missing from successfully queried chunks as deleted
+    for (const tweetId of queriedIds) {
+      if (!foundIds.has(tweetId)) {
         const existing = this.repo.getBotTweet(tweetId);
         if (existing && existing.twitter_status === 'live') {
-          // Could be a rate limit issue, only mark deleted if we got a successful response for this chunk
-          // For safety, we only mark deleted if the tweet was in a chunk that returned some results
-          const chunkIdx = chunks.findIndex((c) => c.includes(tweetId));
-          if (chunkIdx !== -1 && foundIds.size > 0) {
-            this.repo.markDeleted(tweetId);
-            deleted++;
-            this.logger.warn({ tweetId }, 'Tweet missing from API response — marked as deleted');
-          }
+          this.repo.markDeleted(tweetId);
+          deleted++;
+          this.logger.warn({ tweetId }, 'Tweet missing from API response — marked as deleted');
         }
       }
     }
