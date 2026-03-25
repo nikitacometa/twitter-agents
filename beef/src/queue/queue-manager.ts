@@ -265,8 +265,9 @@ export class QueueManager {
     }
 
     // Conversation-level dedup — max 1 reply per conversation thread
+    // Casual replies (direct engagement with bot) are exempt — tweet-level dedup above still prevents duplicates
     const conversationId = extractConversationId(item.context);
-    if (conversationId && this.roastRepo.hasRepliedInConversation(conversationId)) {
+    if (conversationId && item.source !== 'casual_reply' && this.roastRepo.hasRepliedInConversation(conversationId)) {
       this.logger.warn(
         { queueId: item.id, conversationId, target: item.targetName },
         'Skipping — already replied in this conversation thread',

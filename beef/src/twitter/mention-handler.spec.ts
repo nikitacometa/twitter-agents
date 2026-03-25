@@ -163,14 +163,14 @@ describe('shouldSkipThreadMention', () => {
     expect(shouldSkipThreadMention(m, 'reply', bot, true)).toBe(true);
   });
 
-  it('skips reply to bot tweet (even without conversation dedup)', () => {
+  it('allows reply to bot tweet — direct engagement (even without conversation dedup)', () => {
     const m = mention({ parentAuthorName: '0xBeefer' });
-    expect(shouldSkipThreadMention(m, 'reply', bot, false)).toBe(true);
+    expect(shouldSkipThreadMention(m, 'reply', bot, false)).toBe(false);
   });
 
-  it('skips reply to bot tweet (case-insensitive)', () => {
+  it('allows reply to bot tweet — case-insensitive', () => {
     const m = mention({ parentAuthorName: '0XBEEFER' });
-    expect(shouldSkipThreadMention(m, 'reply', bot, false)).toBe(true);
+    expect(shouldSkipThreadMention(m, 'reply', bot, false)).toBe(false);
   });
 
   it('allows explicit "roast @target" even in existing thread', () => {
@@ -198,8 +198,8 @@ describe('shouldSkipThreadMention', () => {
     expect(shouldSkipThreadMention(m, 'challenge', bot, true)).toBe(false);
   });
 
-  it('skips when both conditions true (reply to bot + conversation dedup)', () => {
+  it('allows reply to bot even when conversation dedup is true (direct engagement)', () => {
     const m = mention({ parentAuthorName: '0xBeefer' });
-    expect(shouldSkipThreadMention(m, 'reply', bot, true)).toBe(true);
+    expect(shouldSkipThreadMention(m, 'reply', bot, true)).toBe(false);
   });
 });

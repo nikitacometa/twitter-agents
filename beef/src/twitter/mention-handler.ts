@@ -438,6 +438,9 @@ export function shouldSkipThreadMention(
 
   if (!hasRepliedInConversation && !replyingToBot) return false;
 
+  // Direct replies to bot's tweets are engagement, not spam — always let through as casual replies
+  if (replyingToBot) return false;
+
   if (requestType === 'roast_request') {
     if (extractTarget(m.text)) return false;
     if (isRoastMe(m.text, botUsername)) return false;
