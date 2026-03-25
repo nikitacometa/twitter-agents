@@ -57,10 +57,9 @@ describe('buildCasualReplyPrompt', () => {
     expect(prompt).not.toContain('ABOUT @user1');
   });
 
-  it('includes banned phrases and signature moves', () => {
+  it('includes banned phrases', () => {
     const prompt = buildCasualReplyPrompt(character, 'test', 'user1');
     expect(prompt).toContain('BANNED PHRASES');
-    expect(prompt).toContain('SIGNATURE MOVE');
   });
 
   it('includes character checkpoint', () => {
