@@ -33,6 +33,7 @@ import {
   formatStockpileRoast,
   formatStockpileList,
 } from './formatters.js';
+import { buildQuotaMessage } from '@agent/quota-checker.js';
 
 function tweetLink(tweetId: string, username: string): string {
   return `<a href="https://x.com/${username}/status/${tweetId}">Tweet</a>`;
@@ -110,6 +111,7 @@ export function createBot(opts: {
   twitterClient?: ITwitterClient;
   twitterEnricher?: TwitterEnricher;
   memeGenerator?: MemeGenerator;
+  anthropicApiKey?: string;
 }): Bot {
   const { token, adminIds, openAccess, feedbackRepo, provider, logger, queueManager, configRepo, exampleRepo, patternRepo, stockpileRepo, farmAttemptRepo, roastRepo, postingMode, pollMentions } = opts;
   const twitterUsername = opts.twitterUsername || '0xBeefer';
@@ -205,6 +207,7 @@ export function createBot(opts: {
         '',
         '<b>📊 Monitoring</b>',
         '<code>/status</code> — bot health, queue, stockpile',
+        '<code>/quota</code> — LLM provider quotas &amp; limits',
         '<code>/stats</code> — feedback statistics',
         '<code>/diagnose</code> — provider health check',
         '<code>/reset</code> — force-reset provider to primary',
@@ -1040,6 +1043,34 @@ export function createBot(opts: {
       ].filter(Boolean).join('\n'),
       { parse_mode: 'HTML' },
     );
+  });
+
+  bot.command('quota', async (ctx) => {
+    if (!provider) {
+      await ctx.reply('⚠️ No LLM providers configured.');
+      return;
+    }
+    const status = ctx.message ? await ctx.reply('⏳ Checking quotas...') : null;
+    try {
+      const info = provider.getStatusInfo();
+      const msg = await buildQuotaMessage({
+        mode: info.mode,
+        fallbackNames: info.fallbackNames,
+        anthropicApiKey: opts.anthropicApiKey,
+      });
+      if (status) {
+        await ctx.api.editMessageText(ctx.chat.id, status.message_id, msg, { parse_mode: 'HTML' });
+      } else {
+        await ctx.reply(msg, { parse_mode: 'HTML' });
+      }
+    } catch (err) {
+      const errMsg = `❌ Quota check failed: ${getErrorMessage(err)}`;
+      if (status) {
+        await ctx.api.editMessageText(ctx.chat.id, status.message_id, errMsg).catch(() => {});
+      } else {
+        await ctx.reply(errMsg);
+      }
+    }
   });
 
   bot.command('queue', async (ctx) => {

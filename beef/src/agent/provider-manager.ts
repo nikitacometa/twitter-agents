@@ -111,11 +111,12 @@ export class ProviderManager implements LLMProvider {
     this.logger.info({ previousMode: prev }, 'Provider force-reset to primary mode');
   }
 
-  getStatusInfo(): { mode: ProviderMode; consecutiveFailures: number; hasRecoveryTimer: boolean } {
+  getStatusInfo(): { mode: ProviderMode; consecutiveFailures: number; hasRecoveryTimer: boolean; fallbackNames: ProviderName[] } {
     return {
       mode: this._mode,
       consecutiveFailures: this.consecutiveFailures,
       hasRecoveryTimer: this.recoveryTimer !== null,
+      fallbackNames: this.fallbacks.map((fb) => fb.name),
     };
   }
 

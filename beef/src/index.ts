@@ -567,6 +567,7 @@ if (config.TELEGRAM_BOT_TOKEN) {
     twitterClient: twitter,
     twitterEnricher,
     memeGenerator,
+    anthropicApiKey: config.ANTHROPIC_API_KEY,
   });
 
   void bot.start({
