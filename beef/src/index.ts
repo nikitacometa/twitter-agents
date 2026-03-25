@@ -146,12 +146,13 @@ try {
       if (config.TELEGRAM_BOT_TOKEN && config.TELEGRAM_CHAT_ID) {
         try {
           const url = `https://api.telegram.org/bot${config.TELEGRAM_BOT_TOKEN}/sendMessage`;
+          const escaped = msg.replace(/[<>&]/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' })[c] ?? c);
           await fetch(url, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               chat_id: config.TELEGRAM_CHAT_ID,
-              text: `🚨 <b>Provider Alert</b>\n\n${msg.replace(/[<>&]/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' })[c] ?? c)}`,
+              text: `🤖 <b>LLM Provider</b>\n\n${escaped}`,
               parse_mode: 'HTML',
             }),
           });

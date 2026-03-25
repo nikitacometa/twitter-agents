@@ -21,6 +21,11 @@ const SLOT_POLL_MS = 1_000;
 
 const SCHEMA_DIR = new URL('./schemas/', import.meta.url).pathname;
 
+function getExtendedPath(): string {
+  const home = process.env.HOME ?? '';
+  return `${home}/.local/bin:${home}/.npm-global/bin:${process.env.PATH ?? ''}`;
+}
+
 interface CodexProfile {
   model: string;
   effort: string;
@@ -139,10 +144,9 @@ export class CodexProvider implements LLMProvider {
 
   healthCheck(): Promise<boolean> {
     try {
-      const extendedPath = this.getExtendedPath();
       execFileSync('codex', ['--version'], {
         timeout: HEALTH_CHECK_TIMEOUT_MS,
-        env: { ...process.env, PATH: extendedPath },
+        env: { ...process.env, PATH: getExtendedPath() },
         stdio: 'pipe',
       });
       return Promise.resolve(true);
@@ -166,11 +170,9 @@ export class CodexProvider implements LLMProvider {
 
   private execCodex(args: string[], timeout: number): Promise<void> {
     return new Promise((resolve, reject) => {
-      const extendedPath = this.getExtendedPath();
-
       const child = spawn('codex', args, {
         stdio: ['ignore', 'pipe', 'pipe'],
-        env: { ...process.env, PATH: extendedPath },
+        env: { ...process.env, PATH: getExtendedPath() },
       });
       this.childProcesses.add(child);
 
@@ -207,11 +209,6 @@ export class CodexProvider implements LLMProvider {
     });
   }
 
-  private getExtendedPath(): string {
-    const home = process.env.HOME ?? '';
-    return `${home}/.local/bin:${home}/.npm-global/bin:${process.env.PATH ?? ''}`;
-  }
-
   private async waitForSlot(): Promise<void> {
     while (this.runningCount >= this.maxConcurrent) {
       await new Promise((resolve) => setTimeout(resolve, SLOT_POLL_MS));
@@ -236,14 +233,13 @@ export function createCodexProvider(
   logRepo: LlmLogRepository,
 ): CodexProvider | null {
   try {
-    const home = process.env.HOME ?? '';
-    const extendedPath = `${home}/.local/bin:${home}/.npm-global/bin:${process.env.PATH ?? ''}`;
-    execFileSync('codex', ['--version'], {
+    const out = execFileSync('codex', ['--version'], {
       timeout: 3_000,
-      env: { ...process.env, PATH: extendedPath },
+      env: { ...process.env, PATH: getExtendedPath() },
       stdio: 'pipe',
     });
-    logger.info('Codex CLI available — secondary fallback enabled');
+    const version = out.toString().trim();
+    logger.info({ version, model: MODEL }, 'Codex CLI available — secondary fallback enabled');
     return new CodexProvider(logger, logRepo);
   } catch {
     logger.info('Codex CLI not available — secondary fallback disabled');

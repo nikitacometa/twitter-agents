@@ -62,16 +62,21 @@ export class ProviderManager implements LLMProvider {
     // At threshold: enter degraded mode and try fallbacks in order
     if (this.fallbacks.length > 0) {
       if (this._mode !== 'degraded') {
-        await this.enterDegradedMode();
+        await this.enterDegradedMode(getErrorMessage(primaryError));
       }
 
       for (const fb of this.fallbacks) {
         try {
-          return await fb.run<T>(taskId, task);
+          const result = await fb.run<T>(taskId, task);
+          this.logger.info(
+            { taskId, provider: fb.name, durationMs: result.durationMs },
+            `Fallback ${fb.name} handled request`,
+          );
+          return result;
         } catch (fbError) {
           this.logger.warn(
             { taskId, provider: fb.name, err: fbError },
-            `Fallback provider ${fb.name} failed, trying next: ${getErrorMessage(fbError)}`,
+            `Fallback ${fb.name} failed, trying next: ${getErrorMessage(fbError)}`,
           );
         }
       }
@@ -137,7 +142,9 @@ export class ProviderManager implements LLMProvider {
       this._mode = 'primary';
       this.stopRecoveryTimer();
       this.logger.info('Primary provider recovered — full mode restored');
-      void this.alerter.send('✅ Claude Code CLI recovered. Full mode restored.');
+      void this.alerter.send(
+        '✅ Claude Code CLI restored\n\nFull mode: research + multi-turn + 5-judge eval.',
+      );
     }
   }
 
@@ -145,13 +152,16 @@ export class ProviderManager implements LLMProvider {
     this.handleRecovery();
   }
 
-  private async enterDegradedMode(): Promise<void> {
+  private async enterDegradedMode(reason: string): Promise<void> {
     this._mode = 'degraded';
     this.startRecoveryTimer();
     const fbNames = this.fallbacks.map((fb) => fb.name).join(' → ');
-    this.logger.warn(`Entering degraded mode — fallback chain: ${fbNames}`);
+    this.logger.warn({ reason, chain: fbNames }, 'Entering degraded mode');
     await this.alerter.send(
-      `⚠️ Claude Code CLI unavailable. Degraded mode: fallback chain [${fbNames}].`,
+      `⚠️ Claude Code CLI unavailable\n\n` +
+      `Reason: ${reason}\n` +
+      `Fallback: ${fbNames}\n` +
+      `Recovery: auto-check every 15 min`,
     );
   }
 

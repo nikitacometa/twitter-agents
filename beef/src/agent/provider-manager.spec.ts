@@ -100,7 +100,7 @@ describe('ProviderManager', () => {
     expect(result.provider).toBe('anthropic-sdk');
     expect(manager.mode).toBe('degraded');
     expect(alerter.send).toHaveBeenCalledWith(
-      expect.stringContaining('Degraded mode'),
+      expect.stringContaining('Claude Code CLI unavailable'),
     );
   });
 
