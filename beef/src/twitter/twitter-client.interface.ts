@@ -64,7 +64,7 @@ export interface ITwitterClient {
   getTweetMetrics(tweetIds: string[]): Promise<Map<string, TweetMetrics>>;
   getTweet?(tweetId: string): Promise<TweetData | null>;
   followUser?(username: string): Promise<FollowUserResult>;
-  searchRecentTweets?(query: string, sinceId?: string): Promise<SearchTweetResult[]>;
+  searchRecentTweets?(query: string, sinceId?: string, maxResults?: number): Promise<SearchTweetResult[]>;
   shutdown?(): Promise<void>;
 }
 

@@ -381,7 +381,7 @@ export class TwitterClient implements ITwitterClient, IProfileFetcher {
     }
   }
 
-  async searchRecentTweets(query: string, sinceId?: string): Promise<SearchTweetResult[]> {
+  async searchRecentTweets(query: string, sinceId?: string, maxResults = 100): Promise<SearchTweetResult[]> {
     if (!this.client) {
       this.logger.debug('searchRecentTweets skipped — no client');
       return [];
@@ -394,7 +394,7 @@ export class TwitterClient implements ITwitterClient, IProfileFetcher {
             'tweet.fields': 'author_id,created_at',
             expansions: 'author_id',
             'user.fields': 'username',
-            max_results: 100,
+            max_results: maxResults,
           };
           if (sinceId) params['since_id'] = sinceId;
 

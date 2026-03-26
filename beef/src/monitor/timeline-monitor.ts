@@ -13,7 +13,7 @@ export interface MonitorPollResult {
   budgetExceeded: boolean;
 }
 
-const DEFAULT_BUDGET_CEILING = 14_000;
+const DEFAULT_BUDGET_CEILING = 17_500;
 const SECTION_TOP_N = 7;
 
 export class TimelineMonitor {
@@ -84,7 +84,7 @@ export class TimelineMonitor {
       const sinceId = this.configRepo.get(sinceIdKey);
 
       try {
-        const tweets = await this.twitter.searchRecentTweets(query, sinceId);
+        const tweets = await this.twitter.searchRecentTweets(query, sinceId, 25);
 
         // Log API reads
         this.monitorRepo.logApiUsage(tweets.length);
