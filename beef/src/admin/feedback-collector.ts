@@ -5,7 +5,7 @@ import type { Logger } from 'pino';
 // --- Types ---
 
 interface CollectedMessage {
-  type: 'roast' | 'feedback';
+  type: 'roast' | 'feedback' | 'general_marker';
   authorId: number;
   authorName: string;
   text: string;
@@ -131,6 +131,7 @@ export class FeedbackCollector {
   /**
    * Group messages by sequence: each forwarded roast starts a new group,
    * all subsequent feedback messages attach to it.
+   * A `general_marker` resets the current group so subsequent feedback goes to generalFeedback.
    */
   private groupMessages(messages: CollectedMessage[]): {
     groups: RoastGroup[];
@@ -144,6 +145,8 @@ export class FeedbackCollector {
       if (msg.type === 'roast') {
         currentGroup = { roastText: msg.text, feedback: [] };
         groups.push(currentGroup);
+      } else if (msg.type === 'general_marker') {
+        currentGroup = null;
       } else {
         const entry = { authorName: msg.authorName, sourceType: msg.sourceType, text: msg.text };
         if (currentGroup) {
@@ -173,40 +176,49 @@ export class FeedbackCollector {
     generalFeedback: Array<{ authorName: string; sourceType: string; text: string }>,
     evaluators: string[],
   ): string {
-    const totalFeedback = generalFeedback.length + groups.reduce((s, g) => s + g.feedback.length, 0);
+    const roastFeedbackCount = groups.reduce((s, g) => s + g.feedback.length, 0);
+    const totalFeedback = generalFeedback.length + roastFeedbackCount;
     const lines: string[] = [];
 
     lines.push('# Human Feedback Session');
     lines.push(`Date: ${session.startedAt.toISOString().slice(0, 16).replace('T', ' ')} UTC`);
     lines.push(`Started by: ${session.startedBy.name}`);
     lines.push(`Evaluators: ${evaluators.length > 0 ? evaluators.join(', ') : session.startedBy.name}`);
-    lines.push(`Roasts reviewed: ${String(groups.length)} | Feedback items: ${String(totalFeedback)}`);
+    lines.push(`Roasts reviewed: ${String(groups.length)} | Per-roast feedback: ${String(roastFeedbackCount)} | General observations: ${String(generalFeedback.length)} | Total: ${String(totalFeedback)}`);
     lines.push('');
 
+    // --- Per-roast feedback first ---
+    if (groups.length > 0) {
+      lines.push('## Per-Roast Feedback');
+      lines.push('');
+
+      for (let i = 0; i < groups.length; i++) {
+        const g = groups[i]!;
+        lines.push(`### Roast ${String(i + 1)}/${String(groups.length)}`);
+        lines.push('```');
+        lines.push(g.roastText);
+        lines.push('```');
+        lines.push('');
+
+        if (g.feedback.length > 0) {
+          for (const fb of g.feedback) {
+            lines.push(`- [${fb.authorName}, ${fb.sourceType}]: "${fb.text}"`);
+          }
+        } else {
+          lines.push('*No feedback provided*');
+        }
+        lines.push('');
+      }
+    }
+
+    // --- General bot feedback at the end ---
     if (generalFeedback.length > 0) {
-      lines.push('## General Feedback');
+      lines.push('## General Bot Feedback');
+      lines.push('');
+      lines.push('Observations about overall bot behavior, recurring patterns, and systemic issues — not tied to any specific roast.');
       lines.push('');
       for (const fb of generalFeedback) {
         lines.push(`- [${fb.authorName}, ${fb.sourceType}]: "${fb.text}"`);
-      }
-      lines.push('');
-    }
-
-    for (let i = 0; i < groups.length; i++) {
-      const g = groups[i]!;
-      lines.push(`## Roast ${String(i + 1)}/${String(groups.length)}`);
-      lines.push('```');
-      lines.push(g.roastText);
-      lines.push('```');
-      lines.push('');
-
-      if (g.feedback.length > 0) {
-        lines.push('### Feedback');
-        for (const fb of g.feedback) {
-          lines.push(`- [${fb.authorName}, ${fb.sourceType}]: "${fb.text}"`);
-        }
-      } else {
-        lines.push('*No feedback provided*');
       }
       lines.push('');
     }

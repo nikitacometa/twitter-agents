@@ -37,7 +37,9 @@
       "@evaluation/*": ["./src/evaluation/*"],
       "@meme/*": ["./src/meme/*"],
       "@metrics/*": ["./src/metrics/*"],
-      "@monitor/*": ["./src/monitor/*"]
+      "@monitor/*": ["./src/monitor/*"],
+      "@health/*": ["./src/health/*"],
+      "@api/*": ["./src/api/*"]
     },
     "baseUrl": "."
   },

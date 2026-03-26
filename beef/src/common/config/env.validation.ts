@@ -96,6 +96,9 @@ const envSchema = z
       .default('true')
       .transform((v) => v === 'true'),
 
+    // API server (dashboard & monitoring)
+    API_PORT: z.coerce.number().int().min(1024).max(65535).default(3001),
+
     // Environment
     NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
     LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace']).default('info'),

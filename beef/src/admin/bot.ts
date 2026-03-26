@@ -2238,7 +2238,8 @@ export function createBot(opts: {
         '',
         '1. Forward roast messages from bot',
         '2. After each roast — send feedback (text, voice, or video note)',
-        '3. Send <b>стоп</b> when done',
+        '3. Send <b>общий</b> to switch to general bot feedback (patterns, recurring issues)',
+        '4. Send <b>стоп</b> when done',
         '',
         `Transcription: ${transcriber ? '✅ Whisper ready' : '⚠️ OPENAI_API_KEY not set — voice/video will be skipped'}`,
       ].join('\n'),
@@ -2266,6 +2267,19 @@ export function createBot(opts: {
     const userId = ctx.from?.id ?? 0;
     const userName = [ctx.from?.first_name, ctx.from?.last_name].filter(Boolean).join(' ') || 'Unknown';
     const msg = ctx.message;
+
+    // "общий" — switch to general feedback mode (detach from current roast)
+    if (msg.text && /^общий$/i.test(msg.text.trim())) {
+      feedbackCollector.addMessage({
+        type: 'general_marker',
+        authorId: userId,
+        authorName: userName,
+        text: '',
+        sourceType: 'text',
+      });
+      await ctx.reply('📋 Switched to general feedback mode. Messages will go to "General Bot Feedback" section until you forward another roast.');
+      return;
+    }
 
     // "стоп" — finalize session
     if (msg.text && /^стоп$/i.test(msg.text.trim())) {
@@ -2304,21 +2318,40 @@ export function createBot(opts: {
       return;
     }
 
-    // Forwarded message → roast
+    // Forwarded message → classify by sender: from bot = roast, from anyone else = feedback
     if (msg.forward_origin) {
       const text = msg.text || msg.caption || '';
       if (!text.trim()) {
         await ctx.reply('⚠️ Forwarded message has no text — skipped.');
         return;
       }
-      feedbackCollector.addMessage({
-        type: 'roast',
-        authorId: userId,
-        authorName: userName,
-        text: text.trim(),
-        sourceType: 'forwarded',
-      });
-      await ctx.reply(`✅ Roast #${String(feedbackCollector.messageCount)} collected (${String(text.length)} chars)`);
+
+      const isFromBot = msg.forward_origin.type === 'user' && msg.forward_origin.sender_user.id === ctx.me.id;
+
+      if (isFromBot) {
+        feedbackCollector.addMessage({
+          type: 'roast',
+          authorId: userId,
+          authorName: userName,
+          text: text.trim(),
+          sourceType: 'forwarded',
+        });
+        await ctx.reply(`✅ Roast collected (${String(text.length)} chars)`);
+      } else {
+        const originalAuthor = msg.forward_origin.type === 'user'
+          ? [msg.forward_origin.sender_user.first_name, msg.forward_origin.sender_user.last_name].filter(Boolean).join(' ')
+          : msg.forward_origin.type === 'hidden_user'
+            ? msg.forward_origin.sender_user_name
+            : userName;
+        feedbackCollector.addMessage({
+          type: 'feedback',
+          authorId: userId,
+          authorName: originalAuthor,
+          text: text.trim(),
+          sourceType: 'forwarded',
+        });
+        await ctx.reply(`✅ Feedback from ${originalAuthor} collected`);
+      }
       return;
     }
 
