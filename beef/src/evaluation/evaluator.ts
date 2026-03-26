@@ -105,6 +105,23 @@ const TOO_TECHY_PATTERNS = [
   /\bterms of service say\b.*\bcontractual IOU\b/i,
 ];
 
+// Temporal projection — "at current rate... year YYYY" format scores 2.47 avg in human review.
+// Abstract future years have zero emotional weight. Math as punchline ≠ comedy.
+const FUTURE_PROJECTION_PATTERNS = [
+  /(?:by|in|around|until)\s+(?:the\s+)?year\s+[\d,]+/i,      // "by the year 3,999"
+  /\d{4,}\s*AD\b/i,                                            // "2900 AD", "2400 AD"
+  /(?:at\s+(?:current|this)\s+(?:rate|pace|run\s*rate)).*\d{4}/i, // "at current rate... 3999"
+];
+
+// Engagement dunking — "X likes from Y followers" is an observation, not a joke.
+// Using engagement data to expose irony is OK (e.g., mert's "you are being farmed" at 0.3%).
+// Dunking on low engagement AS the punchline consistently scores 2.5-3.0.
+const ENGAGEMENT_DUNK_PATTERNS = [
+  /\d+\s*(?:likes?|retweets?|RTs?)\s+(?:from|out of|on)\s+\d/i, // "57 likes from 43K"
+  /posted\s+to\s+an?\s+empty\s+(?:room|void|audience)/i,         // "posted to an empty room"
+  /more\s+\w+\s+than\s+(?:likes?|engagement|readers?|views?)\b/i, // "more words than likes"
+];
+
 // Concluding punchlines — restate what setup already implies, never score 4.0+.
 // NOT included: /ngmi$/ (valid CT closer), /that's not X, that's Y/ (in GENERIC_PATTERNS).
 const CONCLUDING_PATTERNS = [
@@ -197,14 +214,28 @@ export function preFilter(tweetText: string, targetName?: string): PreFilterResu
     }
   }
 
-  // 7. Concluding punchline — restates the setup, never lands with humans
+  // 7. Temporal projection — "at current rate... year YYYY" (avg 2.47 in human review)
+  for (const p of FUTURE_PROJECTION_PATTERNS) {
+    if (p.test(tweetText)) {
+      return { pass: false, reason: `future year projection: ${p.source}` };
+    }
+  }
+
+  // 8. Engagement dunking — low likes/RTs as punchline (avg 2.5-3.0 in human review)
+  for (const p of ENGAGEMENT_DUNK_PATTERNS) {
+    if (p.test(tweetText)) {
+      return { pass: false, reason: `engagement dunking: ${p.source}` };
+    }
+  }
+
+  // 9. Concluding punchline — restates the setup, never lands with humans
   for (const p of CONCLUDING_PATTERNS) {
     if (p.test(tweetText)) {
       return { pass: false, reason: `concluding punchline: ${p.source}` };
     }
   }
 
-  // 8. Truncation detection — catch sentences cut off mid-thought
+  // 10. Truncation detection — catch sentences cut off mid-thought
   // Only flag obvious mid-sentence breaks, not missing final punctuation (CT style)
   const trimmed = tweetText.trim();
   if (/\b(the|a|an|of|in|for|to|and|but|or|with|that|is|was|are|were)\s*$/i.test(trimmed)) {

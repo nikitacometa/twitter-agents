@@ -13,27 +13,29 @@ export const ANGLES = [
   'FREESTYLE',
 ] as const;
 
-// Quality-based angle weights from human review (37 rated roasts, 7 batches, March 2026).
-// Data-backed weights have n≥4 samples. New angles are starting hypotheses — revisit after farm run.
+// Quality-based angle weights from human review (75+ rated roasts, S1+S2 combined, March 2026).
+// Recalibrated after S2 session: UNDERSTATEMENT corrected down (overweighted by 0.8),
+// DATA_BOMB and RULE_OF_THREE promoted based on consistent 4.0+ performance.
 //
-// Removed: RHETORICAL (human 2.80 avg but 27.5% stockpile = AI passes it, humans hate it),
-//          TIMELINE (human 2.67, 5.6% stockpile — worst by both metrics).
+// Removed: RHETORICAL (human 2.80 avg), TIMELINE (human 2.67 — worst by both metrics).
 export const DEFAULT_ANGLE_WEIGHTS: Record<string, number> = {
-  // Data-backed (n≥4 human samples):
-  UNDERSTATEMENT:  2.0,  // n=7, 3.73 avg — stable performer
-  QUOTE_FLIP:      1.8,  // n=4, 3.63 avg but ceiling 5.0 — ALL 4.5+ roasts use this
-  RULE_OF_THREE:   1.5,  // n=5, 4.00 avg — escalation + killer landing
-  DATA_BOMB:       1.0,  // n=6, 3.42 avg — solid supporting angle
-  COMPARISON:      0.8,  // n=5, 3.20 avg — below average
-  SELF_AWARE:      0.6,  // n=3, 3.17 avg — risky, sometimes lands
-  FAKE_COMPLIMENT: 0.4,  // n=8, 2.52 avg — confirmed weak, telegraphs punchline
+  // Top tier — consistent fire (4.0+ avg or high ceiling):
+  RULE_OF_THREE:   2.0,  // n=8, 4.00+ avg — escalation + killer landing, 2 fire-tier hits
+  DATA_BOMB:       1.8,  // n=10, 3.80 avg — coinbase 4.8 ceiling, math-as-setup works
+  QUOTE_FLIP:      1.8,  // n=8, 3.80 avg, ceiling 5.0 — hypocrisy exposure = #1 mechanism
+  DOMAIN_SHIFT:    1.5,  // n=4, 3.90 avg — max cognitive distance, mert 4.5 hit
 
-  // Starting hypotheses (no human data yet — revisit after farm run):
-  FREESTYLE:       1.5,  // hybrid mode, 1 slot out of 3-4. Best roasts are multi-angle
-  MISDIRECTION:    1.5,  // n=1 (5.0) — structurally strong (surprise reversal)
-  BATHOS:          1.3,  // grandiose → trivial deflation. Untested as assigned angle
-  DOMAIN_SHIFT:    1.3,  // max cognitive distance. Untested as assigned angle
-  IRONIC_REVERSAL: 1.0,  // frame bad as good, let reader do math. Default until data
+  // Mid tier — solid performers:
+  IRONIC_REVERSAL: 1.2,  // n=4, 3.60 avg — frame bad as good, KAPO 4.5 hit
+  UNDERSTATEMENT:  1.2,  // n=10, 3.40 avg — S2 correction: was 2.0, avg dropped with more data
+  BATHOS:          1.2,  // n=3, 3.70 avg — high variance, nickshirleyy 4.5 hit
+  MISDIRECTION:    1.2,  // n=3, 3.50 avg — FelixCraft 4.5 hit, structurally strong
+
+  // Lower tier — use sparingly:
+  COMPARISON:      1.0,  // n=6, 3.30 avg — improved with domain-shift pairing
+  FREESTYLE:       1.0,  // hybrid mode — best roasts are multi-angle but hard to control
+  FAKE_COMPLIMENT: 0.7,  // n=10, 2.80 avg — telegraphs punchline, but improved from S1
+  SELF_AWARE:      0.6,  // n=3, 3.17 avg — risky, insufficient data to promote
 };
 
 export type RoastAngle = (typeof ANGLES)[number];
@@ -223,12 +225,12 @@ Use the Read tool to view these images. Reference what you see in your roast if 
 // ---------------------------------------------------------------------------
 
 function buildLengthAndPunchlineConstraints(): string {
-  return `- TARGET LENGTH: 80-150 characters. Under 120 is ideal.
+  return `- TARGET LENGTH: 80-170 characters. Sweet spot: 90-150 chars. Fire-tier roasts average 127 chars. Over 170 — cut.
 - You MAY go up to 280 chars ONLY if every additional word earns its place.
-- Data shows: roasts under 150 chars score 3.4 avg; over 200 chars score 2.3 avg.
+- Data shows: roasts under 150 chars score 3.8 avg; over 200 chars score 2.3 avg.
 - MAX 2 sentences. Setup + punchline. No exceptions.
 - Your punchline must work in ISOLATION. Extract the last 5-10 words — if they're not funny alone, rewrite.
-- Best punchlines are 1-5 words that reframe the entire setup: "unprecedented.", "decentralized.", "evolution."
+- Best punchlines are 1-5 words that reframe the entire setup: "small numbers can feel like home.", "guess which one wrote this.", "recognition was never the problem."
 - ONE core idea per roast — max 2 data points. Three facts = confusion, not punch.
 - Do NOT open with "i'm a language model", "i'm a forensic AI", "as an AI" — it wastes characters and kills the punchline.
 - Punchline must land without specialized knowledge — if it relies on a niche cultural reference, rewrite with a universal one.
@@ -270,6 +272,10 @@ SER ADDRESS: Condescending patience, explain obvious thing to a child.
 
 DELAYED OBVIOUS: Present facts neutrally. Do NOT explain the implication.
   "$SAFU token. liquidity locked 30 days. dev wallet: 40%."
+
+THERAPEUTIC REFRAME: Frame the target's failure as a psychological coping mechanism. Psychologically devastating.
+  "it's completely normal to be excited about $0.001 after your last project made $2.8M. small numbers can feel like home."
+  The technique: treat the target's behavior as a symptom, offer fake empathy that makes the diagnosis worse.
 `;
 }
 
@@ -277,13 +283,15 @@ function buildBannedPhrases(): string {
   return `
 ## BANNED PHRASES (these kill the punchline — auto-reject if used)
 - "i want to frame this with compassion"
-- "you have to respect the [CAPS WORD]"
+- "you have to respect the [X]"
 - "that's not [X], that's [Y]"
 - "ironically" / "surprisingly" / "but wait"
 - "i have nothing to add"
 - "most [X] could never achieve that"
 - "this is fine" / "probably nothing" / "few understand"
 - Any phrase that announces a joke is coming
+
+REPETITION GUARD: "showed/explained to a normie" framing — use MAXIMUM ONCE per batch. The outsider-perspective trick works once. Used twice it becomes a crutch.
 `;
 }
 
@@ -303,20 +311,35 @@ function buildCharacterCheckpoint(): string {
    Jargon alone is BORING: "failure to thrive", "a pattern", "unprecedented" — these are labels, not jokes.
    Jargon in absurd context is GOOD: "couples therapy for blockchains", "peer-reviewed lemonade stand".
    Rule: the CONTEXT must be absurd, not the jargon. If the jargon just describes the situation, rewrite.
+
+4. Is the punchline accessible?
+   Every word must be understood by a crypto-native who dropped out of college.
+   DEAD ON ARRIVAL: "eulogy", "pallbearer", "materiality", "fiduciary", "adjudicated" — if it needs a dictionary, the punchline is dead.
+   Use the simplest word that hits hardest. "Funeral" beats "eulogy". "Theft" beats "misappropriation".
+
+5. ENGAGEMENT BAN: Is the joke just "they have low engagement"?
+   BAD: "X likes from Y followers" — this is an observation, not comedy.
+   GOOD: "posted 'you are being farmed' to 0.3% of his own followers" — the joke is the HYPOCRISY, not the number.
+   Rule: engagement data may appear as SETUP for irony, never AS the punchline itself. If the roast still works without the like/RT count, keep it. If removing it kills the joke, rewrite.
 `;
 }
 
 function buildQuoteHuntingSection(): string {
   return `
-## RESEARCH PRIORITY: FIND QUOTES
+## RESEARCH PRIORITY: FIND QUOTES & CONTRADICTIONS
+
+HYPOCRISY IS YOUR #1 WEAPON.
+7 of 10 highest-rated roasts in human review exposed a contradiction: the target's OWN words vs their OWN reality. Before generating, answer: "What is this target saying that their own data disproves?" If you find a contradiction → build the entire roast around it.
 
 When researching, actively search for:
 - Their own tweets/claims that aged badly
 - Whitepaper promises vs current state
 - Founder statements that contradict reality
 - Marketing copy that sounds absurd given the data
+- Their advice to others that they themselves violate
 
 A direct quote flipped against them is 2x more devastating than your own observation.
+The best formula: "[their quote]" + [data that disproves it] + [punchline that reframes both].
 `;
 }
 
@@ -336,7 +359,7 @@ const UNHINGED_OVERRIDES = [
 ];
 
 function buildUnhingedOverride(): string {
-  if (Math.random() > 0.15) return ''; // 85% chance: no override
+  if (Math.random() > 0.25) return ''; // 75% chance: no override (bumped from 15% → 25% — no evidence of firing in S2)
   const override = UNHINGED_OVERRIDES[Math.floor(Math.random() * UNHINGED_OVERRIDES.length)]!;
   return `\n## ${override}\n`;
 }
@@ -400,17 +423,19 @@ Read the target tweet. Write down:
 1. The single most quotable phrase (would hurt most if flipped)
 2. Any specific number they cited
 3. Any claim or flex
-4. If the tweet has engagement metrics — are they embarrassingly low? ("127 likes on an announcement tweet ser")
+4. Any contradiction between what they said and what their data shows (hypocrisy = #1 weapon)
 
 Your FIRST variant MUST use one of these as setup, with reality as punchline.
 If nothing quotable found → note "no quote-flip material" and proceed to research.
 
 TWEET-SPECIFIC SLOP WARNING: The obvious reply to any tweet is "lol ratio" or restating what they said but meaner. Your roast must be specific to WHAT they said — if your roast works as a reply to ANY tweet, it's slop. Quote their exact words and flip them.
 
+LIST/COLLECTION TWEETS: If the target tweet contains a LIST or COLLECTION (multiple tokens, projects, stats), roast the PATTERN of the list — don't fixate on one item. The funniest angle is what the collection reveals about the author.
+
 ### STEP 1 — RESEARCH
 1. Use WebSearch to fact-check the claims from Step 0 — find counter-evidence or ironic context.
 2. Search "@${targetName} [key claim]" to find contradictions or past takes.
-3. If engagement metrics are available — compare to their follower count or prior tweets. Low engagement on a big claim = roast material.
+3. If engagement metrics are available — use ONLY if they expose irony or hypocrisy. "Low likes" alone is not a joke. "Tweeted 'you are being farmed' to 0.3% of own followers" — that's a joke.
 4. Author profile (## AUTHOR PROFILE above) is supplementary color — not the main target.${imagePaths?.length ? '\n5. Also Read the attached images — they are part of the tweet being roasted.' : ''}`;
 }
 

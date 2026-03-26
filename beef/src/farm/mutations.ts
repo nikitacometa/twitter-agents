@@ -7,8 +7,6 @@ export const MUTATIONS: Mutation[] = [
   { id: 'single-sent', type: 'constraint', text: 'CONSTRAINT: Single sentence only. No periods except the last one.' },
   { id: 'no-data', type: 'constraint', text: 'CONSTRAINT: No numbers, percentages, or dollar amounts. Pure narrative roast.' },
   { id: 'number-lead', type: 'constraint', text: 'CONSTRAINT: Must open with a specific number (dollar amount, percentage, date, or count).' },
-  { id: 'math-projection', type: 'constraint', text: 'CONSTRAINT: Must include an "at current rate" or "at this pace" projection into an absurdly distant year. Example: "breaks even in the year 3,999." The temporal absurdity IS the punchline.' },
-
   // --- Voice mutations ---
   { id: 'ice-cold', type: 'voice', text: 'VOICE OVERRIDE: Maximum restraint. Ice cold. No exclamation energy. Whisper the kill shot.' },
   { id: 'amused', type: 'voice', text: 'VOICE OVERRIDE: Genuinely amused, not angry. You find this project FUNNY. The humor is that it exists.' },
