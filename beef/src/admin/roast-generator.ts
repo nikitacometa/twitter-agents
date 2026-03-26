@@ -109,7 +109,7 @@ export async function generateRoasts(
           targetType: 'project',
           tweetText: variant.text,
           angle: variant.angle,
-          strategy: 'rubric',
+          strategy: 'unified',
           llmSelfScore: variant.score,
           researchNotes: result.draft.researchNotes ?? undefined,
           factCheckPassed: result.draft.factCheckPassed,

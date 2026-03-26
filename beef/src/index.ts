@@ -472,9 +472,10 @@ if (queueManager) {
 
 if (mentionHandler) {
   const mh = mentionHandler;
+  const pollMinutes = Math.max(1, Math.round(config.MENTION_POLL_INTERVAL_MS / 60_000));
   scheduler.register({
     name: 'mention-poller',
-    cronTime: '*/5 * * * *',
+    cronTime: `*/${String(pollMinutes)} * * * *`,
     jitterMs: 1 * 60 * 1000,
     handler: async () => {
       const result = await mh.poll();
@@ -535,11 +536,12 @@ scheduler.register({
   name: 'mention-rescue',
   cronTime: '30 * * * *',
   jitterMs: 0,
-  handler: async () => {
+  handler: () => {
     const rescued = queueRepo.rescueFailedMentions();
     if (rescued > 0) {
       logger.info({ rescued }, 'Rescued failed mention queue items');
     }
+    return Promise.resolve();
   },
 });
 

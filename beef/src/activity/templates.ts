@@ -388,9 +388,13 @@ export function pickTemplate(type: ActivityEventType, eventId: string): string {
  * Replace {variable} placeholders with data values.
  */
 export function interpolate(template: string, data: Record<string, unknown>): string {
-  return template.replace(/\{(\w+)\}/g, (match, key) => {
+  return template.replace(/\{(\w+)\}/g, (match, key: string) => {
     const value = data[key];
-    return value !== undefined && value !== null ? String(value) : match;
+    if (value === undefined || value === null) return match;
+    if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
+      return String(value);
+    }
+    return match;
   });
 }
 

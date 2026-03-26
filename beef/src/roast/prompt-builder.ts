@@ -108,8 +108,8 @@ function buildExamples(
   character: CharacterConfig,
   memory?: CreativeMemory,
 ): string {
-  // Curated static examples are the quality floor — show 3-4 of them
-  const dynamicExamples = memory?.fireExamples ?? [];
+  // Dynamic pool: operator-curated external examples first, then system-learned fire examples
+  const dynamicExamples = [...(memory?.externalExamples ?? []), ...(memory?.fireExamples ?? [])];
   const dynamicCount = Math.min(dynamicExamples.length, 2);
   const staticCount = Math.max(3, 4 - dynamicCount);
 

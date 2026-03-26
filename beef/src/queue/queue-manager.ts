@@ -242,15 +242,19 @@ export class QueueManager {
 
     this.logger.info({ queueId: item.id, target: item.targetName, source: item.source }, 'Processing queue item');
 
-    // M3.4: Idempotency — skip if a roast for this target was already posted recently (crash recovery)
-    const existing = this.roastRepo.findRecentByTarget(item.targetName, item.source);
-    if (existing?.tweetId) {
-      this.logger.warn(
-        { queueId: item.id, existingRoastId: existing.id, tweetId: existing.tweetId },
-        'Skipping — roast already posted for this target (idempotency)',
-      );
-      this.queueRepo.complete(item.id);
-      return { dequeued: true, posted: true, tweetId: existing.tweetId, target: item.targetName };
+    // M3.4: Idempotency — skip if an autonomous roast for this target was already posted recently.
+    // Only applies to autonomous source (scheduler shouldn't double-post same target).
+    // Mention/reply flows are deduped by reply_to_id and conversation_id below.
+    if (item.source === 'autonomous') {
+      const existing = this.roastRepo.findRecentByTarget(item.targetName, item.source);
+      if (existing?.tweetId) {
+        this.logger.warn(
+          { queueId: item.id, existingRoastId: existing.id, tweetId: existing.tweetId },
+          'Skipping — roast already posted for this target (idempotency)',
+        );
+        this.queueRepo.complete(item.id);
+        return { dequeued: true, posted: true, tweetId: existing.tweetId, target: item.targetName };
+      }
     }
 
     // Thread-level dedup — never reply twice to the same tweet

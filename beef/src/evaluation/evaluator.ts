@@ -61,7 +61,7 @@ export function checkFunnyConsensusVeto(
   results: JudgeEvaluation[],
 ): string | null {
   const lowFunnyCount = results.filter((r) => r.result.scores.funny < 2).length;
-  const majorityThreshold = Math.ceil(results.length / 2) + 1;
+  const majorityThreshold = Math.floor(results.length / 2) + 1;
   if (lowFunnyCount >= majorityThreshold) {
     return `FUNNY_CONSENSUS: ${String(lowFunnyCount)}/${String(results.length)} judges scored FUNNY < 2`;
   }
