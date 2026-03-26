@@ -61,6 +61,14 @@ Status: `[ ]` pending, `[~]` in progress, `[x]` done, `[!]` blocked
 [ ] #B-26 — Farcaster cross-posting backup channel
 [ ] #B-27 — Claude Code skills: /pre-launch-checklist, /deploy-verify, /roast-quality-check
 
+## Backlog: Autonomy
+
+[ ] #B-33 — Auto-farm cron: every 6h farm top 3-5 targets from timeline monitor, dedup 48h, stockpile low alert
+[ ] #B-34 — Auto-post from stockpile: every 3h post best entry (humanScore ≥ 4, buffer ≥ 5), max 3/day, notify after
+[ ] #B-35 — Smart reply autonomy: stratify by follower count (<1K auto, 1-10K auto if eval ≥ 4.0, >10K require approval)
+[ ] #B-36 — Closed learning loop: high-engagement → auto few-shot, low-engagement → negative examples, weekly report
+[ ] #B-37 — OpenClaw integration evaluation: when autonomy ladder (B-33–B-36) is complete and manual overhead persists, evaluate OpenClaw as NL orchestration layer. See docs/openclaw-integration-analysis.md
+
 ## Backlog: Visuals (high priority)
 
 [ ] #B-28 — Integrate card system into posting pipeline: generate roast card for every posted roast, attach as media. Requires `postTweetWithMedia(text, imagePath)` in ITwitterClient + both implementations (Official API: v1.uploadMedia → v2.tweet with media_ids; Scraper: GraphQL media upload). Card generator lives in `beef-web/src/cards/generator.ts`, integration guide: `beef-web/docs/card-integration-guide.md`

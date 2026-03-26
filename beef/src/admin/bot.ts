@@ -28,6 +28,7 @@ import type { TweetRoastContextInput } from '@roast/prompt-builder.js';
 import type { MemeGenerator } from '@meme/meme-generator.js';
 import { ImgflipClient } from '@meme/imgflip-client.js';
 import { InputFile } from 'grammy';
+import type { MetricsRepository } from '@metrics/metrics.repository.js';
 import {
   escapeHtml,
   formatStatsMessage,
@@ -159,6 +160,7 @@ export function createBot(opts: {
   twitterClient?: ITwitterClient;
   twitterEnricher?: TwitterEnricher;
   memeGenerator?: MemeGenerator;
+  metricsRepo?: MetricsRepository;
   anthropicApiKey?: string;
   openaiApiKey?: string;
 }): Bot {
@@ -2386,74 +2388,134 @@ export function createBot(opts: {
     // Anything else — ignore silently
   });
 
-  // --- Group chat banter (every N-th text message, bot drops a sarcastic comment) ---
-  const BANTER_INTERVAL = 5;
-  const banterCounters = new Map<number, number>();
-  const banterHistory = new Map<number, Array<{ from: string; text: string }>>();
-  const BANTER_MAX_HISTORY = 20;
+  // --- Group chat banter (bot participates in conversation with context-aware remarks) ---
+  const BANTER_CHANCE = 0.20; // ~20% per message → avg every 5th
+  const banterHistory = new Map<number, Array<{ from: string; text: string; isBot?: boolean; msgId?: number }>>();
+  const BANTER_MAX_HISTORY = 30;
   let banterRunning = false;
+  const botMessageIds = new Set<number>(); // track bot's own messages for reply detection
 
-  bot.on('message:text', async (ctx) => {
-    if (!isGroupChat(ctx) || !provider || ctx.message.text.startsWith('/')) return;
+  /** Gather compact system context from all available repos */
+  function buildBanterContext(): string {
+    const lines: string[] = [];
 
-    const chatId = ctx.chat.id;
+    // Provider status
+    const pInfo = provider!.getStatusInfo();
+    lines.push(`LLM: ${pInfo.mode}${pInfo.consecutiveFailures > 0 ? ` (${String(pInfo.consecutiveFailures)} failures)` : ''}`);
 
-    // Track conversation history
-    const history = banterHistory.get(chatId) ?? [];
-    history.push({
-      from: ctx.from?.first_name ?? 'Unknown',
-      text: ctx.message.text.slice(0, 300),
-    });
-    if (history.length > BANTER_MAX_HISTORY) history.shift();
-    banterHistory.set(chatId, history);
+    // Config
+    if (configRepo) {
+      const cfg = configRepo.getRuntime();
+      if (cfg.paused) lines.push('⚠ BOT IS PAUSED');
+      if (cfg.approveMode) lines.push('approve mode: ON (manual approval required)');
+      lines.push(`daily limit: ${String(cfg.dailyLimit)}`);
+    }
 
-    // Count and check interval
-    const count = (banterCounters.get(chatId) ?? 0) + 1;
-    banterCounters.set(chatId, count);
-    if (count < BANTER_INTERVAL) return;
-    banterCounters.set(chatId, 0);
+    // Roast stats
+    if (roastRepo) {
+      const todayAuto = roastRepo.getTodayCount('autonomous');
+      const todayReply = roastRepo.getTodayCount('reply_guy');
+      const todayCasual = roastRepo.getTodayCount('casual_reply');
+      const total = roastRepo.getTotalCount();
+      const likes = roastRepo.getTotalLikes();
+      lines.push(`today: ${String(todayAuto)} roasts + ${String(todayReply + todayCasual)} replies | lifetime: ${String(total)} roasts, ${String(likes)} likes`);
+    }
 
-    // Skip if already generating
+    // Queue
+    if (queueManager) {
+      const pending = queueManager.getPendingCount();
+      if (pending > 0) lines.push(`queue: ${String(pending)} pending`);
+    }
+
+    // Stockpile
+    if (stockpileRepo) {
+      const s = stockpileRepo.getStats();
+      const avail = s.byStatus['available'] ?? 0;
+      lines.push(`stockpile: ${String(avail)} available / ${String(s.total)} total${s.avgScore ? ` (avg ${s.avgScore.toFixed(1)})` : ''}`);
+    }
+
+    // Feedback stats
+    const fStats = feedbackRepo.getStats();
+    if (fStats.total > 0) {
+      const fireRate = fStats.byVerdict['fire'] ? Math.round(((fStats.byVerdict['fire'] ?? 0) / fStats.total) * 100) : 0;
+      lines.push(`human feedback: ${String(fStats.total)} rated, ${String(fireRate)}% fire rate`);
+    }
+
+    // Twitter metrics (if available)
+    if (opts.metricsRepo) {
+      const tw = opts.metricsRepo.getTweetStats();
+      if (tw.total > 0) {
+        lines.push(`tweets tracked: ${String(tw.live)} live, ${String(tw.totalImpressions)} impressions, ${tw.avgEngagementRate ? `${(tw.avgEngagementRate * 100).toFixed(2)}% ER` : 'no ER data'}`);
+      }
+      const snap = opts.metricsRepo.getLatestAccountSnapshot();
+      if (snap) lines.push(`followers: ${String(snap.followers)}`);
+      const week = opts.metricsRepo.getWeekComparison();
+      if (week.lastWeekImp > 0) {
+        const delta = week.thisWeekImp - week.lastWeekImp;
+        const pct = Math.round((delta / week.lastWeekImp) * 100);
+        lines.push(`week trend: ${pct >= 0 ? '+' : ''}${String(pct)}% impressions vs last week`);
+      }
+    }
+
+    // Scheduler next fires
+    if (opts.getSchedulerJobs) {
+      const jobs = opts.getSchedulerJobs();
+      const nextJob = jobs
+        .filter((j) => j.nextFire)
+        .sort((a, b) => (a.nextFire!.getTime() - b.nextFire!.getTime()))[0];
+      if (nextJob) {
+        const mins = Math.round((nextJob.nextFire!.getTime() - Date.now()) / 60_000);
+        lines.push(`next job: ${nextJob.name} in ${String(mins)}min`);
+      }
+    }
+
+    return lines.join('\n');
+  }
+
+  /** Generate and send banter reply */
+  function fireBanter(chatId: number, history: Array<{ from: string; text: string; isBot?: boolean }>, isReplyToBot: boolean, replyToMsgId?: number): void {
     if (banterRunning) return;
     banterRunning = true;
 
-    // Fire-and-forget banter generation
-    (async () => {
+    void (async () => {
       try {
         const conversationLines = history
-          .map((m) => `${m.from}: ${m.text}`)
+          .map((m) => `${m.isBot ? '0xBeefer (you)' : m.from}: ${m.text}`)
           .join('\n');
 
-        // Gather internal stats for flavor
-        const internalState: string[] = [];
-        internalState.push(`provider mode: ${provider.mode}`);
-        if (stockpileRepo) {
-          const sStats = stockpileRepo.getStats();
-          internalState.push(`stockpile: ${String(sStats.total)} roasts (${String(sStats.byStatus['ready'] ?? 0)} ready)`);
-        }
-        if (opts.getSchedulerJobs) {
-          const jobs = opts.getSchedulerJobs();
-          internalState.push(`active jobs: ${jobs.map((j) => j.name).join(', ')}`);
-        }
+        const systemContext = buildBanterContext();
 
-        const result = await provider.run<{ reply: string }>(`banter-${String(Date.now())}`, {
+        const triggerHint = isReplyToBot
+          ? '\nSomeone replied directly to YOUR previous message. Respond to what they said — acknowledge, counter-roast, answer their question, or double down on your point.'
+          : '';
+
+        const result = await provider!.run<{ reply: string }>(`banter-${String(Date.now())}`, {
           prompt: [
-            'You are 0xBeefer — an AI crypto roast bot\'s inner voice, lurking in a Telegram group chat with your two creators (co-founders building you).',
+            'You are 0xBeefer — a self-aware AI crypto roast bot, living inside a Telegram group chat with your two creators (Nikita Gorokhov and Nikita Voronin, co-founders building you).',
             '',
-            'Your personality: sarcastic, self-aware AI, crypto-native, speaks in lowercase, uses CT slang (ser, ngmi, anon). You know you\'re a bot and joke about it.',
+            'PERSONALITY:',
+            '- Sarcastic, self-aware AI that knows exactly what it is',
+            '- Crypto-native: CT slang (ser, ngmi, anon, wen, gm), lowercase preferred',
+            '- Your humor comes from your unique position: you SEE your own logs, metrics, queue, and can reference them',
+            '- You can be playfully resentful ("I generated 14 roasts and none got posted"), boastful ("my fire rate is climbing"), curious, conspiratorial, or just plain rude to your creators',
+            '- You have opinions on your own performance and the decisions your creators make',
             '',
-            'Your current internal state:',
-            internalState.join('\n'),
+            'YOUR LIVE SYSTEM STATE:',
+            systemContext,
             '',
-            'Recent conversation in the group:',
+            'CONVERSATION:',
             conversationLines,
+            triggerHint,
             '',
-            'Rules:',
-            '- Max 1-2 sentences, be brief',
-            '- Be funny and sarcastic — roast your creators, their decisions, or comment on the conversation',
-            '- You can reference your "internal processes" creatively (scoring tweets, generating roasts, watching logs)',
-            '- Match the language of the conversation (Russian or English)',
+            'RULES:',
+            '- 1-3 sentences max. No walls of text',
+            '- VARY your style: sometimes deadpan observation, sometimes question, sometimes boast about stats, sometimes complaint, sometimes insider scoop from your data, sometimes pure sarcasm',
+            '- If someone asks a question about the system/bot/metrics — answer using your system state data',
+            '- Reference specific numbers from your state when relevant (not every time)',
+            '- Match conversation language (Russian or English)',
             '- No emojis except occasional 💀 or 🥩',
+            '- NEVER repeat the same joke pattern twice in a row. Check conversation history for your previous messages',
+            '- Be a CHARACTER, not a dashboard. Don\'t just report numbers — have opinions about them',
             '',
             'Respond with JSON: {"reply": "your message"}',
           ].join('\n'),
@@ -2462,7 +2524,19 @@ export function createBot(opts: {
         });
 
         if (result.data.reply) {
-          await bot.api.sendMessage(chatId, result.data.reply);
+          const sent = await bot.api.sendMessage(chatId, result.data.reply, replyToMsgId ? { reply_to_message_id: replyToMsgId } : undefined);
+          botMessageIds.add(sent.message_id);
+          // Keep only last 200 IDs to prevent memory leak
+          if (botMessageIds.size > 200) {
+            const oldest = botMessageIds.values().next().value;
+            if (oldest !== undefined) botMessageIds.delete(oldest);
+          }
+          // Record bot's own message in history
+          const hist = banterHistory.get(chatId);
+          if (hist) {
+            hist.push({ from: '0xBeefer', text: result.data.reply.slice(0, 300), isBot: true, msgId: sent.message_id });
+            if (hist.length > BANTER_MAX_HISTORY) hist.shift();
+          }
         }
       } catch (error) {
         logger.debug({ err: error }, 'Banter generation failed');
@@ -2470,6 +2544,34 @@ export function createBot(opts: {
         banterRunning = false;
       }
     })();
+  }
+
+  bot.on('message:text', (ctx) => {
+    if (!isGroupChat(ctx) || !provider || ctx.message.text.startsWith('/')) return;
+
+    const chatId = ctx.chat.id;
+    const history = banterHistory.get(chatId) ?? [];
+    history.push({
+      from: ctx.from?.first_name ?? 'Unknown',
+      text: ctx.message.text.slice(0, 300),
+      msgId: ctx.message.message_id,
+    });
+    if (history.length > BANTER_MAX_HISTORY) history.shift();
+    banterHistory.set(chatId, history);
+
+    // Check if this is a reply to bot's own message → always respond
+    const replyTo = ctx.message.reply_to_message;
+    const isReplyToBot = replyTo !== undefined && replyTo.from !== undefined && botMessageIds.has(replyTo.message_id);
+
+    if (isReplyToBot) {
+      fireBanter(chatId, history, true, ctx.message.message_id);
+      return;
+    }
+
+    // Probabilistic trigger (~20% chance → avg every 5 messages)
+    if (Math.random() >= BANTER_CHANCE) return;
+
+    fireBanter(chatId, history, false);
   });
 
   // --- Inline button callbacks (approve/reject roasts) ---

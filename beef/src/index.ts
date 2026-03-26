@@ -21,6 +21,7 @@ import { RoastPatternRepository } from './storage/repositories/roast-pattern.rep
 import { StockpileRepository } from './storage/repositories/stockpile.repository.js';
 import { FarmAttemptRepository } from './storage/repositories/farm-attempt.repository.js';
 import { TweetRepository } from './storage/repositories/tweet.repository.js';
+import { MetricsRepository } from './metrics/metrics.repository.js';
 import { TargetRepository } from './storage/repositories/target.repository.js';
 import { ClaudeCodeProvider } from './agent/claude-code.provider.js';
 import { createCodexProvider } from './agent/codex.provider.js';
@@ -78,6 +79,7 @@ const stockpileRepo = new StockpileRepository(db);
 const farmAttemptRepo = new FarmAttemptRepository(db);
 const tweetRepo = new TweetRepository(db);
 const targetRepo = new TargetRepository(db);
+const metricsRepo = new MetricsRepository(db);
 
 // --- Recover stuck queue items from previous crash ---
 const resetCount = queueRepo.resetProcessing();
@@ -596,6 +598,7 @@ if (config.TELEGRAM_BOT_TOKEN) {
     twitterClient: twitter,
     twitterEnricher,
     memeGenerator,
+    metricsRepo,
     anthropicApiKey: config.ANTHROPIC_API_KEY,
     openaiApiKey: config.OPENAI_API_KEY,
   });
