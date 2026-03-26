@@ -27,29 +27,41 @@ function formatDigestEntry(idx: number, tweet: ScoredTweet): string {
   );
 }
 
+function formatSection(title: string, tweets: ScoredTweet[]): string {
+  if (tweets.length === 0) return '';
+  let section = `\n<b>${title}</b> (${String(tweets.length)})\n`;
+  for (let i = 0; i < tweets.length; i++) {
+    section += '\n' + formatDigestEntry(i + 1, tweets[i]!);
+  }
+  return section;
+}
+
 export function formatMonitorDigest(tweets: ScoredTweet[]): string[] {
   if (tweets.length === 0) return [];
 
-  const header = `📊 <b>Monitor Digest</b> — ${String(tweets.length)} tweet${tweets.length > 1 ? 's' : ''}\n`;
-  const messages: string[] = [];
-  let current = header;
-  let globalIdx = 1;
+  const baseTweets = tweets.filter((t) => t.category === 'base');
+  const generalTweets = tweets.filter((t) => t.category === 'general');
 
-  for (const tweet of tweets) {
-    const entry = formatDigestEntry(globalIdx, tweet);
-    const candidate = current + '\n' + entry;
+  const header = `📊 <b>Monitor Digest</b> — ${String(tweets.length)} tweet${tweets.length > 1 ? 's' : ''}`;
+  const baseSection = formatSection('🔵 BASE ECOSYSTEM', baseTweets);
+  const generalSection = formatSection('🌐 GENERAL CRYPTO', generalTweets);
 
-    if (candidate.length > TELEGRAM_MAX_LENGTH - 100 && current !== header) {
-      messages.push(current);
-      current = entry;
-    } else {
-      current = candidate;
-    }
-    globalIdx++;
+  const fullMessage = header + baseSection + generalSection;
+
+  // Split into chunks if exceeds Telegram limit
+  if (fullMessage.length <= TELEGRAM_MAX_LENGTH - 100) {
+    return [fullMessage];
   }
 
-  if (current.length > 0) {
-    messages.push(current);
+  // Send sections as separate messages if combined is too long
+  const messages: string[] = [];
+  const baseMessage = header + baseSection;
+  if (baseMessage.length > 0 && baseTweets.length > 0) {
+    messages.push(baseMessage);
+  }
+  if (generalTweets.length > 0) {
+    const genHeader = baseTweets.length > 0 ? '' : header + '\n';
+    messages.push(genHeader + generalSection);
   }
 
   return messages;

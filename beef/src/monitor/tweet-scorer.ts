@@ -1,10 +1,11 @@
-import type { MonitorTarget, MonitorTier } from './monitor-targets.js';
+import type { MonitorCategory, MonitorTarget, MonitorTier } from './monitor-targets.js';
 import { TIER_SCORES } from './monitor-targets.js';
 
 export interface ScoredTweet {
   tweetId: string;
   authorHandle: string;
   tier: MonitorTier;
+  category: MonitorCategory;
   followersK: number;
   text: string;
   createdAt: string;
@@ -83,6 +84,7 @@ export function scoreTweet(
     tweetId,
     authorHandle,
     tier: target.tier,
+    category: target.category,
     followersK: target.followersK,
     text,
     createdAt,
