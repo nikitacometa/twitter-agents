@@ -98,8 +98,11 @@ export function buildSearchBatches(targets: readonly MonitorTarget[]): string[][
   return batches;
 }
 
+const QUERY_FILTERS = '-is:reply -is:retweet';
+
 export function buildSearchQuery(handles: string[]): string {
-  return handles.map((h) => `from:${h}`).join(' OR ');
+  const fromClauses = handles.map((h) => `from:${h}`).join(' OR ');
+  return `(${fromClauses}) ${QUERY_FILTERS}`;
 }
 
 export function buildTargetMap(targets: readonly MonitorTarget[]): Map<string, MonitorTarget> {
