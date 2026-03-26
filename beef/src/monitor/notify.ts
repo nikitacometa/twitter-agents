@@ -15,25 +15,22 @@ function formatFollowers(k: number): string {
 const TELEGRAM_MAX_LENGTH = 4096;
 const DIGEST_TEXT_LIMIT = 100;
 
-function formatDigestEntry(idx: number, tweet: ScoredTweet): string {
+function formatDigestEntry(tweet: ScoredTweet): string {
   const tierEmoji = tweet.tier === 'S' ? '🔥' : tweet.tier === 'A' ? '🎯' : '▫️';
   const truncText =
     tweet.text.length > DIGEST_TEXT_LIMIT ? tweet.text.slice(0, DIGEST_TEXT_LIMIT) + '…' : tweet.text;
 
+  const handleLink = `<a href="${tweet.tweetUrl}">@${escapeHtml(tweet.authorHandle)}</a>`;
   return (
-    `<b>${String(idx)}.</b> ${tierEmoji}[${tweet.tier}] @${escapeHtml(tweet.authorHandle)} (${formatFollowers(tweet.followersK)}) · <b>${String(tweet.score)}</b>pts · ${String(tweet.ageMinutes)}m\n` +
-    `"${escapeHtml(truncText)}"\n` +
-    tweet.tweetUrl
+    `${tierEmoji} ${handleLink} · ${formatFollowers(tweet.followersK)} · <b>${String(tweet.score)}</b>pts · ${String(tweet.ageMinutes)}m\n` +
+    `<i>"${escapeHtml(truncText)}"</i>`
   );
 }
 
 function formatSection(title: string, tweets: ScoredTweet[]): string {
   if (tweets.length === 0) return '';
-  let section = `\n<b>${title}</b> (${String(tweets.length)})\n`;
-  for (let i = 0; i < tweets.length; i++) {
-    section += '\n' + formatDigestEntry(i + 1, tweets[i]!);
-  }
-  return section;
+  const entries = tweets.map((t) => formatDigestEntry(t));
+  return `\n━━ <b>${title}</b> ━━\n\n${entries.join('\n\n')}`;
 }
 
 export function formatMonitorDigest(tweets: ScoredTweet[]): string[] {

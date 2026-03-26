@@ -46,6 +46,7 @@ import { ActivityLogger } from './activity/activity-logger.js';
 import { ImgflipClient } from './meme/imgflip-client.js';
 import { MemeHistoryRepository } from './meme/meme-history.repository.js';
 import { MemeGenerator } from './meme/meme-generator.js';
+import { ApiServer } from './api/api-server.js';
 
 const config = validateEnv();
 
@@ -354,10 +355,12 @@ async function notifyQueueResult(
     }
     if (result.replyToId) {
       const tweetUrl = `https://x.com/i/status/${result.replyToId}`;
-      lines.push(result.postBlocked ? `Target: ${tweetUrl}` : `Reply to: <code>${escHtml(result.replyToId)}</code>`);
+      lines.push(`↩️ Original: <a href="${tweetUrl}">open tweet</a>`);
     }
-    if (result.evaluationScore) lines.push(`Eval: <b>${result.evaluationScore.toFixed(1)}</b>/5`);
-    if (result.newStockpileCount) lines.push(`Stockpiled: <b>${String(result.newStockpileCount)}</b> new`);
+    const meta: string[] = [];
+    if (result.evaluationScore) meta.push(`Eval: <b>${result.evaluationScore.toFixed(1)}</b>/5`);
+    if (result.newStockpileCount) meta.push(`📦 ${String(result.newStockpileCount)} stockpiled`);
+    if (meta.length > 0) lines.push(meta.join(' · '));
 
     const text = lines.join('\n');
     const isReplySource = result.roastSource && ['mention', 'reply_guy', 'casual_reply'].includes(result.roastSource);
@@ -397,14 +400,33 @@ async function notifyQueueResult(
     const label = result.posted ? 'Posted' : 'Saved (no Twitter)';
     const stockpileTag = result.fromStockpile ? ' [stockpile]' : '';
     const sourceLabel = result.roastSource ?? source;
+
+    // Header line
     lines.push(`${emoji} <b>${label}${stockpileTag}</b> — ${escHtml(result.target ?? '?')} <i>(${sourceLabel})</i>`);
-    if (result.tweetId) lines.push(`Tweet: <code>${escHtml(result.tweetId)}</code>`);
-    if (result.evaluationScore) lines.push(`Eval: <b>${result.evaluationScore.toFixed(1)}</b>/5`);
+
+    // Metadata: eval + stockpile on one line
+    const meta: string[] = [];
+    if (result.evaluationScore) meta.push(`Eval: <b>${result.evaluationScore.toFixed(1)}</b>/5`);
+    if (result.newStockpileCount) meta.push(`📦 ${String(result.newStockpileCount)} stockpiled`);
     if (result.newStockpileCount === 0 && !result.fromStockpile) {
-      lines.push('⚠️ Nothing passed evaluation — used best self-scored');
+      meta.push('⚠️ best self-scored');
     }
-    if (result.newStockpileCount) lines.push(`📦 Stockpiled: <b>${String(result.newStockpileCount)}</b> new`);
-    if (result.postedText) lines.push(`\n<code>${escHtml(result.postedText)}</code>`);
+    if (meta.length > 0) lines.push(meta.join(' · '));
+
+    // Original tweet link (what we replied to)
+    if (result.replyToId) {
+      const originalUrl = `https://x.com/i/status/${result.replyToId}`;
+      lines.push(`\n↩️ Original: <a href="${originalUrl}">open tweet</a>`);
+    }
+
+    // Our roast text + link to our tweet
+    if (result.postedText) {
+      lines.push(`🔥 <i>"${escHtml(result.postedText)}"</i>`);
+    }
+    if (result.tweetId) {
+      const replyUrl = `https://x.com/0xBeefer/status/${result.tweetId}`;
+      lines.push(`↗️ <a href="${replyUrl}">our reply</a>`);
+    }
   } else {
     lines.push(`❌ <b>Failed</b> — ${escHtml(result.target ?? '?')} <i>(${source})</i>`);
     if (result.error) lines.push(escHtml(result.error.slice(0, 300)));
@@ -643,8 +665,23 @@ if (config.TELEGRAM_BOT_TOKEN) {
   logger.warn('TELEGRAM_BOT_TOKEN not set — Telegram bot disabled');
 }
 
+// --- API Server ---
+const apiServer = new ApiServer({
+  port: config.API_PORT,
+  logger,
+  stockpileRepo,
+  roastRepo,
+  queueRepo,
+  configRepo,
+  feedbackRepo,
+  healthMonitor,
+  scheduler,
+  provider,
+});
+
 // Start services
 healthMonitor.start();
+apiServer.start();
 scheduler.start();
 
 // --- Graceful shutdown ---
@@ -654,6 +691,7 @@ const shutdown = async () => {
   activityLogger?.setStatus('offline');
   try {
     scheduler.stop();
+    apiServer.stop();
     healthMonitor.stop();
     if (bot) await bot.stop();
     if (provider) {
