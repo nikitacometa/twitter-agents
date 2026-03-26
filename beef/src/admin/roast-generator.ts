@@ -54,6 +54,7 @@ export async function generateRoasts(
   roastMeMode?: boolean,
   targetType?: 'person' | 'project' | 'token' | 'trend',
   tweetMode?: boolean,
+  userContext?: string,
 ): Promise<GenerateRoastsResult> {
   const engine = getEngine(provider, logger, evaluationMode, evaluationThreshold);
 
@@ -67,13 +68,18 @@ export async function generateRoasts(
     stockpileRepo,
     farmAttemptRepo,
   });
-  if (profileContext && memory) {
-    memory = { ...memory, profileContext, roastMeMode, targetType, tweetMode };
-  } else if (profileContext) {
-    memory = { fireExamples: [], profileContext, roastMeMode, targetType, tweetMode };
+
+  // Ensure memory exists if any augmentation fields are provided
+  const hasAugmentation = profileContext || userContext || roastMeMode || targetType || tweetMode;
+  if (hasAugmentation && !memory) {
+    memory = { fireExamples: [] };
   }
-  if (memory && (roastMeMode || targetType || tweetMode)) {
-    memory = { ...memory, roastMeMode, targetType, tweetMode };
+  if (memory) {
+    if (profileContext) memory = { ...memory, profileContext };
+    if (userContext) memory = { ...memory, userContext };
+    if (roastMeMode !== undefined || targetType || tweetMode !== undefined) {
+      memory = { ...memory, roastMeMode, targetType, tweetMode };
+    }
   }
 
   if (memory && (memory.fireExamples.length > 0 || memory.angleWeights || memory.rejectExamples || memory.externalExamples)) {

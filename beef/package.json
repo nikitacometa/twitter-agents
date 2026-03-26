@@ -26,6 +26,7 @@
     "sync:pull-feedback": "bash scripts/sync.sh pull-feedback",
     "setup:vps": "bash scripts/setup-vps.sh",
     "farm": "tsx src/farm/index.ts",
+    "farm:tweet": "tsx src/farm/farm-tweet.ts",
     "metrics": "tsx scripts/metrics.ts"
   },
   "dependencies": {

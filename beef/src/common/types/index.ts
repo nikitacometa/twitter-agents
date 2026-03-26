@@ -197,6 +197,8 @@ export interface CreativeMemory {
   tweetMode?: boolean;
   /** Recent punchline closers from stockpile — used to prevent repetition */
   recentClosers?: string[];
+  /** Operator-provided context: angles, insider info, news, creative direction */
+  userContext?: string;
 }
 
 // --- External examples ---

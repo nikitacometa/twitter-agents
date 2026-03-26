@@ -48,6 +48,35 @@ function buildMemeKeyboard(roasts: { id: number }[]): InlineKeyboard {
   return kb;
 }
 
+/** Check if input looks like a Twitter @handle (e.g. @elonmusk) */
+function isTwitterHandle(input: string): boolean {
+  return /^@\w{1,15}$/.test(input);
+}
+
+const TWITTER_RESERVED_PATHS = new Set([
+  'home', 'explore', 'search', 'notifications', 'messages',
+  'settings', 'i', 'about', 'tos', 'privacy', 'login', 'signup',
+  'compose', 'lists', 'bookmarks', 'communities', 'jobs',
+]);
+
+/** Check if input is a Twitter profile URL (not a tweet URL or reserved path) */
+function isTwitterProfileUrl(input: string): boolean {
+  const match = /^(?:https?:\/\/)?(?:x\.com|twitter\.com)\/(\w{1,15})\/?(?:[?#].*)?$/.exec(input);
+  if (!match) return false;
+  return !TWITTER_RESERVED_PATHS.has(match[1]!.toLowerCase());
+}
+
+/** Extract handle from @mention or profile URL. Returns null if neither or reserved path. */
+function extractTwitterHandle(input: string): string | null {
+  const handleMatch = /^@(\w{1,15})$/.exec(input);
+  if (handleMatch) return handleMatch[1]!;
+  const urlMatch = /(?:x\.com|twitter\.com)\/(\w{1,15})\/?(?:[?#].*)?$/.exec(input);
+  if (!urlMatch) return null;
+  const handle = urlMatch[1]!;
+  if (TWITTER_RESERVED_PATHS.has(handle.toLowerCase())) return null;
+  return handle;
+}
+
 interface ParsedFlags {
   target: string;
   eval: boolean;
@@ -59,19 +88,19 @@ interface ParsedFlags {
 }
 
 function parseRoastFlags(input: string): ParsedFlags {
-  const hasEval = /\s--eval\b/.test(input);
-  const hasMutate = /\s--mutate\b/.test(input);
-  const hasQuick = /\s--quick\b/.test(input);
+  const hasEval = /(?:^|\s)--eval\b/.test(input);
+  const hasMutate = /(?:^|\s)--mutate\b/.test(input);
+  const hasQuick = /(?:^|\s)--quick\b/.test(input);
 
-  const variantsMatch = /\s--variants\s+(\d+)/.exec(input);
-  const mutationsMatch = /\s--mutations\s+(\d+)/.exec(input);
-  const thresholdMatch = /\s--threshold\s+([\d.]+)/.exec(input);
+  const variantsMatch = /(?:^|\s)--variants\s+(\d+)/.exec(input);
+  const mutationsMatch = /(?:^|\s)--mutations\s+(\d+)/.exec(input);
+  const thresholdMatch = /(?:^|\s)--threshold\s+([\d.]+)/.exec(input);
 
   const target = input
-    .replace(/\s--(?:eval|mutate|quick)\b/g, '')
-    .replace(/\s--variants\s+\d+/g, '')
-    .replace(/\s--mutations\s+\d+/g, '')
-    .replace(/\s--threshold\s+[\d.]+/g, '')
+    .replace(/(?:^|\s)--(?:eval|mutate|quick)\b/g, '')
+    .replace(/(?:^|\s)--variants\s+\d+/g, '')
+    .replace(/(?:^|\s)--mutations\s+\d+/g, '')
+    .replace(/(?:^|\s)--threshold\s+[\d.]+/g, '')
     .trim();
 
   return {
@@ -194,14 +223,13 @@ export function createBot(opts: {
         '',
         '━━━━━━━━━━━━━━━━━━━━━━',
         '<b>📝 /roast</b> &lt;target&gt; [flags]',
-        'Sonnet · 3 strategies × 3 = <b>9 variants</b> · no eval',
-        '  <code>--eval</code>        add quick eval (1 judge)',
-        '  <code>--mutate</code>      add creative mutations',
-        '  <code>--variants N</code>  per strategy <i>(default: 3, total: N×3)</i>',
-        '  <code>--mutations N</code> mutation count <i>(default: 1)</i>',
-        '',
-        '<b>⚡ /roasttweet</b> &lt;tweet_url&gt;',
-        'Opus roast of a specific tweet (full enrichment + eval)',
+        'Universal roast — auto-detects target type:',
+        '  <code>/roast https://x.com/.../status/...</code> — tweet',
+        '  <code>/roast @handle</code> — person (enriched)',
+        '  <code>/roast https://x.com/handle</code> — person',
+        '  <code>/roast hyperliquid</code> — freeform',
+        '  Operator context: second line = hints/angles/news',
+        '  <code>--eval</code> <code>--mutate</code> <code>--variants N</code> <code>--mutations N</code>',
         '',
         '<b>🌾 /farm</b> &lt;target&gt; [flags]',
         'Farm · 3 strategies × 2 = <b>6 variants</b> · 2 mutations · serious eval (5 judges)',
@@ -268,6 +296,10 @@ export function createBot(opts: {
     mutationCount?: number;
     evaluationThreshold?: number;
     settingsLines?: string[];
+    profileContext?: string;
+    targetType?: 'person' | 'project' | 'token' | 'trend';
+    imagePaths?: string[];
+    userContext?: string;
   }
 
   function handleRoastCommand(o: RoastCommandOpts): void {
@@ -303,8 +335,9 @@ export function createBot(opts: {
         const output = await generateRoasts(
           o.target, provider!, logger, feedbackRepo, o.profile, o.variantCount,
           configRepo, exampleRepo, patternRepo,
-          undefined, undefined, o.evaluationMode, stockpileRepo, o.mutationCount,
+          o.imagePaths, o.profileContext, o.evaluationMode, stockpileRepo, o.mutationCount,
           farmAttemptRepo, o.evaluationThreshold,
+          undefined, o.targetType, undefined, o.userContext,
         );
 
         clearInterval(progressInterval);
@@ -390,12 +423,317 @@ export function createBot(opts: {
     return lines.join('\n');
   }
 
+  // ---------------------------------------------------------------------------
+  // Tweet roast pipeline — shared by /roast (tweet URL detected) and /roasttweet
+  // ---------------------------------------------------------------------------
+
+  function handleTweetRoast(ctx: Context, tweetUrl: string, userContext?: string): void {
+    if (!provider) {
+      void ctx.reply('⚠️ LLM provider not configured.');
+      return;
+    }
+    const twitterClient = opts.twitterClient;
+    if (!twitterClient?.getTweet) {
+      void ctx.reply('⚠️ Twitter client not configured or getTweet not available.');
+      return;
+    }
+    const chatId = ctx.chat?.id;
+    if (!chatId) return;
+    const api = ctx.api;
+
+    void (async () => {
+      const startTime = Date.now();
+      const statusMsg = await api.sendMessage(chatId, '🔍 Fetching tweet...');
+      let mediaCleanup: (() => Promise<void>) | undefined;
+      let ctxKey: string | undefined;
+
+      const updateStatus = (stage: string): void => {
+        const elapsed = Math.round((Date.now() - startTime) / 1000);
+        api
+          .editMessageText(chatId, statusMsg.message_id, `${stage} <i>(${String(elapsed)}s)</i>`, { parse_mode: 'HTML' })
+          .catch(() => {});
+      };
+
+      try {
+        const tweetId = parseTweetUrl(tweetUrl);
+        if (!tweetId) {
+          await api.editMessageText(chatId, statusMsg.message_id, '❌ Invalid tweet URL.');
+          return;
+        }
+
+        const tweet = await twitterClient.getTweet!(tweetId);
+        if (!tweet) {
+          await api.editMessageText(chatId, statusMsg.message_id, '❌ Could not fetch tweet. It may be deleted or protected.');
+          return;
+        }
+
+        const targetName = tweet.authorName;
+
+        updateStatus('🖼 Downloading media...');
+        let imagePaths: string[] = [];
+        if (tweet.mediaUrls && tweet.mediaUrls.length > 0) {
+          try {
+            const media = await downloadTweetMedia(tweet.mediaUrls, logger);
+            imagePaths = media.paths;
+            mediaCleanup = media.cleanup;
+          } catch (err) {
+            logger.warn({ err, tweetId: tweet.tweetId }, 'Media download failed — continuing without');
+          }
+        }
+
+        updateStatus('👤 Enriching author profile...');
+        let enrichmentContext: string | undefined;
+        if (opts.twitterEnricher) {
+          try {
+            const enrichment = await opts.twitterEnricher.enrich(targetName);
+            if (enrichment?.hasData) {
+              enrichmentContext = enrichment.profileContext;
+            }
+          } catch (err) {
+            logger.warn({ err, target: targetName }, 'Author enrichment failed — continuing without');
+          }
+        }
+
+        let parentTweet: { text: string; author: string } | undefined;
+        let quotedTweet: { text: string; author: string } | undefined;
+        const refTweetId = tweet.inReplyToTweetId ?? tweet.quotedTweetId;
+        if (refTweetId && twitterClient.getTweet) {
+          try {
+            updateStatus('🔗 Fetching referenced tweet...');
+            const refTweet = await twitterClient.getTweet(refTweetId);
+            if (refTweet) {
+              const ref = { text: refTweet.text, author: refTweet.authorName };
+              if (tweet.inReplyToTweetId) parentTweet = ref;
+              else quotedTweet = ref;
+            }
+          } catch (err) {
+            logger.warn({ err, refTweetId }, 'Referenced tweet fetch failed — continuing without');
+          }
+        }
+
+        const tweetAgeDays = tweet.createdAt
+          ? Math.floor((Date.now() - new Date(tweet.createdAt).getTime()) / 86_400_000)
+          : undefined;
+
+        const contextInput: TweetRoastContextInput = {
+          tweetText: tweet.text,
+          tweetAuthor: targetName,
+          enrichmentContext,
+          imagePaths: imagePaths.length > 0 ? imagePaths : undefined,
+          metrics: tweet.likes != null ? {
+            likes: tweet.likes ?? 0,
+            retweets: tweet.retweets ?? 0,
+            replies: tweet.replies ?? 0,
+            views: tweet.views,
+          } : undefined,
+          tweetAgeDays,
+          parentTweet,
+          quotedTweet,
+        };
+
+        const profileContext = buildTweetRoastContext(contextInput);
+
+        ctxKey = `rt-${Date.now()}-${tweetId}`;
+        roastTweetContexts.set(ctxKey, {
+          tweetUrl,
+          targetName,
+          profileContext,
+          imagePaths,
+          cleanup: mediaCleanup,
+          userContext,
+        });
+
+        // Cleanup helper — removes context cache + temp media files
+        const scheduleCleanup = (delayMs: number): void => {
+          const key = ctxKey;
+          setTimeout(() => {
+            if (mediaCleanup) mediaCleanup().catch(() => {});
+            if (key) roastTweetContexts.delete(key);
+          }, delayMs);
+        };
+
+        updateStatus(`⚡ Generating roasts for <b>${escapeHtml(targetName)}</b>...`);
+
+        const output = await generateRoasts(
+          targetName, provider, logger, feedbackRepo, 'farm-generate', 3,
+          configRepo, exampleRepo, patternRepo,
+          imagePaths.length > 0 ? imagePaths : undefined,
+          profileContext,
+          'quick', stockpileRepo, 1,
+          farmAttemptRepo, undefined,
+          false, 'person', true,
+          userContext,
+        );
+
+        const elapsed = Math.round((Date.now() - startTime) / 1000);
+
+        const normalizedUrl = tweetUrl.startsWith('http') ? tweetUrl : `https://${tweetUrl}`;
+        const headerLines: string[] = [
+          `⚡ <b>${escapeHtml(targetName)}</b> — ${String(elapsed)}s`,
+          `<a href="${escapeHtml(normalizedUrl)}">Original tweet</a>`,
+        ];
+        if (output.evaluation) {
+          headerLines[0] += ` · eval ${output.evaluation.compositeScore.toFixed(1)}/5`;
+        }
+
+        const variants = output.variants;
+        if (variants.length === 0) {
+          headerLines.push('');
+          headerLines.push('❌ <i>All variants filtered or scored below threshold.</i>');
+          if (output.evaluation?.preFilterReason) {
+            headerLines.push(`<i>Pre-filter: ${escapeHtml(output.evaluation.preFilterReason)}</i>`);
+          }
+          await api.editMessageText(chatId, statusMsg.message_id, headerLines.join('\n'), { parse_mode: 'HTML' });
+          scheduleCleanup(30_000);
+          return;
+        }
+
+        headerLines.push('');
+        for (let i = 0; i < variants.length; i++) {
+          const v = variants[i]!;
+          headerLines.push(`<b>${String(i + 1)}.</b> <i>${escapeHtml(v.angle)}</i>`);
+          headerLines.push(`<pre>${escapeHtml(v.text)}</pre>`);
+          headerLines.push('');
+        }
+
+        const keyboard = new InlineKeyboard()
+          .text('🔄 Regen', `rt-regen:${ctxKey}`);
+
+        await api.deleteMessage(chatId, statusMsg.message_id).catch(() => {});
+        await api.sendMessage(chatId, headerLines.join('\n'), {
+          parse_mode: 'HTML',
+          reply_markup: keyboard,
+          link_preview_options: { is_disabled: true },
+        });
+
+        // Keep context alive for 10 min for regen button
+        scheduleCleanup(600_000);
+
+      } catch (error) {
+        const elapsed = Math.round((Date.now() - startTime) / 1000);
+        logger.error({ err: error, url: tweetUrl, elapsedSec: elapsed }, 'Tweet roast pipeline failed');
+        // Clean up context cache + media on failure
+        if (mediaCleanup) mediaCleanup().catch(() => {});
+        if (ctxKey) roastTweetContexts.delete(ctxKey);
+        await api
+          .editMessageText(
+            chatId,
+            statusMsg.message_id,
+            `❌ Failed after ${String(elapsed)}s: ${escapeHtml(getErrorMessage(error).slice(0, 200))}`,
+            { parse_mode: 'HTML' },
+          )
+          .catch(() => {});
+      }
+    })();
+  }
+
+  // ---------------------------------------------------------------------------
+  // Person roast via @handle or profile URL — enriches first, then generates
+  // ---------------------------------------------------------------------------
+
+  function handlePersonRoast(ctx: Context, handle: string, flags: ParsedFlags, userContext?: string): void {
+    if (!provider) {
+      void ctx.reply('⚠️ LLM provider not configured.');
+      return;
+    }
+    const chatId = ctx.chat?.id;
+    if (!chatId) return;
+    const api = ctx.api;
+
+    void (async () => {
+      const startTime = Date.now();
+      const statusMsg = await api.sendMessage(
+        chatId,
+        `👤 Enriching <b>@${escapeHtml(handle)}</b>...`,
+        { parse_mode: 'HTML' },
+      );
+
+      let enrichmentContext: string | undefined;
+      if (opts.twitterEnricher) {
+        try {
+          const enrichment = await opts.twitterEnricher.enrich(handle);
+          if (enrichment?.hasData) {
+            enrichmentContext = enrichment.profileContext;
+          }
+        } catch (err) {
+          logger.warn({ err, target: handle }, 'Person enrichment failed — continuing without');
+        }
+      }
+
+      const elapsed = Math.round((Date.now() - startTime) / 1000);
+      await api.editMessageText(
+        chatId, statusMsg.message_id,
+        `🔍 Researching <b>@${escapeHtml(handle)}</b>... <i>(enriched in ${String(elapsed)}s)</i>`,
+        { parse_mode: 'HTML' },
+      ).catch(() => {});
+
+      const variants = flags.variants ?? 3;
+      const evalMode = flags.eval ? 'quick' as const : undefined;
+      const mutations = flags.mutate ? (flags.mutations ?? 1) : undefined;
+
+      try {
+        const output = await generateRoasts(
+          handle, provider, logger, feedbackRepo, 'roast-research', variants,
+          configRepo, exampleRepo, patternRepo,
+          undefined, enrichmentContext, evalMode, stockpileRepo, mutations,
+          farmAttemptRepo, undefined,
+          undefined, 'person', undefined, userContext,
+        );
+
+        const totalElapsed = Math.round((Date.now() - startTime) / 1000);
+
+        const researchNote = output.researchNotes
+          ? `\n<i>${escapeHtml(output.researchNotes.slice(0, 200))}</i>`
+          : '';
+        const header = `✅ <b>@${escapeHtml(handle)}</b> — ${String(output.variants.length)} variants, ${String(totalElapsed)}s${researchNote}`;
+        const result = formatRoastOutput(handle, output, evalMode);
+        await api.editMessageText(
+          chatId,
+          statusMsg.message_id,
+          header + '\n\n' + result,
+          { parse_mode: 'HTML' },
+        );
+      } catch (error) {
+        const totalElapsed = Math.round((Date.now() - startTime) / 1000);
+        logger.error({ err: error, target: handle, elapsedSec: totalElapsed }, 'Person roast failed');
+        await api
+          .editMessageText(
+            chatId,
+            statusMsg.message_id,
+            `❌ Generation failed after ${String(totalElapsed)}s: ${escapeHtml(getErrorMessage(error).slice(0, 200))}`,
+            { parse_mode: 'HTML' },
+          )
+          .catch(() => {});
+      }
+    })();
+  }
+
+  // ---------------------------------------------------------------------------
+  // /roast — unified command: tweet URL | @handle | profile URL | freeform target
+  // Context: everything after the first line becomes operator context
+  // ---------------------------------------------------------------------------
+
   bot.command('roast', async (ctx) => {
     const raw = ctx.match?.trim();
     if (!raw) {
-      await ctx.reply('Usage: /roast &lt;target&gt; [--eval] [--mutate] [--variants N]\nExample: /roast hyperliquid --eval', {
-        parse_mode: 'HTML',
-      });
+      await ctx.reply(
+        [
+          'Usage: /roast &lt;target&gt; [flags]',
+          '',
+          'Target types:',
+          '  <code>/roast https://x.com/.../status/...</code> — roast a tweet',
+          '  <code>/roast @handle</code> — roast a person',
+          '  <code>/roast https://x.com/handle</code> — roast a person',
+          '  <code>/roast hyperliquid</code> — roast anything',
+          '',
+          'Operator context (optional, second line):',
+          '  <code>/roast @handle</code>',
+          '  <code>he shilled 3 rugs this week, focus on that</code>',
+          '',
+          'Flags: <code>--eval</code> <code>--mutate</code> <code>--variants N</code>',
+        ].join('\n'),
+        { parse_mode: 'HTML' },
+      );
       return;
     }
 
@@ -404,22 +742,50 @@ export function createBot(opts: {
       return;
     }
 
-    const flags = parseRoastFlags(raw);
+    // Split first line (target + flags) from subsequent lines (operator context)
+    const lines = raw.split('\n');
+    const firstLine = lines[0]!.trim();
+    const userContext = lines.slice(1).join('\n').trim() || undefined;
+
+    const flags = parseRoastFlags(firstLine);
     if (!flags.target) {
-      await ctx.reply('Usage: /roast &lt;target&gt; [--eval] [--mutate] [--variants N]\nExample: /roast hyperliquid --eval', {
-        parse_mode: 'HTML',
-      });
+      await ctx.reply('Usage: /roast &lt;target&gt;\nExample: /roast hyperliquid --eval', { parse_mode: 'HTML' });
       return;
     }
 
+    const target = flags.target;
+
+    // --- Mode 1: Tweet URL ---
+    if (isTweetUrl(target)) {
+      handleTweetRoast(ctx, target, userContext);
+      return;
+    }
+
+    // --- Mode 2: @handle ---
+    if (isTwitterHandle(target)) {
+      const handle = target.slice(1); // strip @
+      handlePersonRoast(ctx, handle, flags, userContext);
+      return;
+    }
+
+    // --- Mode 3: Profile URL ---
+    if (isTwitterProfileUrl(target)) {
+      const handle = extractTwitterHandle(target);
+      if (handle) {
+        handlePersonRoast(ctx, handle, flags, userContext);
+        return;
+      }
+    }
+
+    // --- Mode 4: Freeform target ---
     const variants = flags.variants ?? 3;
     const evalMode = flags.eval ? 'quick' as const : undefined;
     const mutations = flags.mutate ? (flags.mutations ?? 1) : undefined;
 
     handleRoastCommand({
-      ctx, target: flags.target, profile: 'roast-research',
+      ctx, target, profile: 'roast-research',
       variantCount: variants, progressEmoji: '🔍', progressLabel: 'Researching',
-      evaluationMode: evalMode, mutationCount: mutations,
+      evaluationMode: evalMode, mutationCount: mutations, userContext,
     });
   });
 
@@ -473,227 +839,32 @@ export function createBot(opts: {
     });
   });
 
-  // --- /roast-tweet — Opus roast of a specific tweet with full enrichment ---
-
-  // Context cache for regen — keyed by a unique ID per /roast-tweet invocation
+  // Context cache for regen — keyed by a unique ID per tweet roast invocation
   const roastTweetContexts = new Map<string, {
     tweetUrl: string;
     targetName: string;
     profileContext: string;
     imagePaths: string[];
     cleanup?: () => Promise<void>;
+    userContext?: string;
   }>();
 
+  // /roasttweet — alias for /roast with tweet URL
   bot.command('roasttweet', async (ctx) => {
     const raw = ctx.match?.trim();
-    if (!raw || !isTweetUrl(raw)) {
-      await ctx.reply(
-        'Usage: /roasttweet &lt;tweet_url&gt;\nExample: /roasttweet https://x.com/user/status/123456',
-        { parse_mode: 'HTML' },
-      );
+    if (!raw) {
+      await ctx.reply('Usage: /roasttweet &lt;tweet_url&gt;\nUse <code>/roast &lt;tweet_url&gt;</code> instead — same thing.', { parse_mode: 'HTML' });
       return;
     }
-
-    if (!provider) {
-      await ctx.reply('⚠️ LLM provider not configured.');
+    // Split context from first line, same as /roast
+    const lines = raw.split('\n');
+    const tweetUrl = lines[0]!.trim();
+    const userContext = lines.slice(1).join('\n').trim() || undefined;
+    if (!isTweetUrl(tweetUrl)) {
+      await ctx.reply('Usage: /roasttweet &lt;tweet_url&gt;\nExample: /roasttweet https://x.com/user/status/123456', { parse_mode: 'HTML' });
       return;
     }
-
-    const twitterClient = opts.twitterClient;
-    if (!twitterClient?.getTweet) {
-      await ctx.reply('⚠️ Twitter client not configured or getTweet not available.');
-      return;
-    }
-
-    const chatId = ctx.chat?.id;
-    if (!chatId) return;
-    const api = ctx.api;
-
-    // Fire-and-forget: don't block grammY's update loop
-    void (async () => {
-      const startTime = Date.now();
-      const statusMsg = await api.sendMessage(chatId, '🔍 Fetching tweet...');
-
-      const updateStatus = (stage: string): void => {
-        const elapsed = Math.round((Date.now() - startTime) / 1000);
-        api
-          .editMessageText(chatId, statusMsg.message_id, `${stage} <i>(${String(elapsed)}s)</i>`, { parse_mode: 'HTML' })
-          .catch(() => {});
-      };
-
-      try {
-        // --- Step 1: Fetch tweet ---
-        const tweetId = parseTweetUrl(raw);
-        if (!tweetId) {
-          await api.editMessageText(chatId, statusMsg.message_id, '❌ Invalid tweet URL.');
-          return;
-        }
-
-        const tweet = await twitterClient.getTweet!(tweetId);
-        if (!tweet) {
-          await api.editMessageText(chatId, statusMsg.message_id, '❌ Could not fetch tweet. It may be deleted or protected.');
-          return;
-        }
-
-        const targetName = tweet.authorName;
-
-        // --- Step 2: Download media (graceful) ---
-        updateStatus('🖼 Downloading media...');
-        let imagePaths: string[] = [];
-        let mediaCleanup: (() => Promise<void>) | undefined;
-        if (tweet.mediaUrls && tweet.mediaUrls.length > 0) {
-          try {
-            const media = await downloadTweetMedia(tweet.mediaUrls, logger);
-            imagePaths = media.paths;
-            mediaCleanup = media.cleanup;
-          } catch (err) {
-            logger.warn({ err, tweetId: tweet.tweetId }, 'Media download failed — continuing without');
-          }
-        }
-
-        // --- Step 3: Enrich author (graceful) ---
-        updateStatus('👤 Enriching author profile...');
-        let enrichmentContext: string | undefined;
-        if (opts.twitterEnricher) {
-          try {
-            const enrichment = await opts.twitterEnricher.enrich(targetName);
-            if (enrichment?.hasData) {
-              enrichmentContext = enrichment.profileContext;
-            }
-          } catch (err) {
-            logger.warn({ err, target: targetName }, 'Author enrichment failed — continuing without');
-          }
-        }
-
-        // --- Step 3b: Fetch parent/quoted tweet for richer context (graceful) ---
-        let parentTweet: { text: string; author: string } | undefined;
-        let quotedTweet: { text: string; author: string } | undefined;
-        const refTweetId = tweet.inReplyToTweetId ?? tweet.quotedTweetId;
-        if (refTweetId && twitterClient.getTweet) {
-          try {
-            updateStatus('🔗 Fetching referenced tweet...');
-            const refTweet = await twitterClient.getTweet(refTweetId);
-            if (refTweet) {
-              const ref = { text: refTweet.text, author: refTweet.authorName };
-              if (tweet.inReplyToTweetId) parentTweet = ref;
-              else quotedTweet = ref;
-            }
-          } catch (err) {
-            logger.warn({ err, refTweetId }, 'Referenced tweet fetch failed — continuing without');
-          }
-        }
-
-        // --- Step 4: Build context ---
-        const tweetAgeDays = tweet.createdAt
-          ? Math.floor((Date.now() - new Date(tweet.createdAt).getTime()) / 86_400_000)
-          : undefined;
-
-        const contextInput: TweetRoastContextInput = {
-          tweetText: tweet.text,
-          tweetAuthor: targetName,
-          enrichmentContext,
-          imagePaths: imagePaths.length > 0 ? imagePaths : undefined,
-          metrics: tweet.likes != null ? {
-            likes: tweet.likes ?? 0,
-            retweets: tweet.retweets ?? 0,
-            replies: tweet.replies ?? 0,
-            views: tweet.views,
-          } : undefined,
-          tweetAgeDays,
-          parentTweet,
-          quotedTweet,
-        };
-
-        const profileContext = buildTweetRoastContext(contextInput);
-
-        // Store context for regen
-        const ctxKey = `rt-${Date.now()}-${tweetId}`;
-        roastTweetContexts.set(ctxKey, {
-          tweetUrl: raw,
-          targetName,
-          profileContext,
-          imagePaths,
-          cleanup: mediaCleanup,
-        });
-
-        // --- Step 5: Generate roasts ---
-        updateStatus(`⚡ Generating roasts for <b>${escapeHtml(targetName)}</b>...`);
-
-        const output = await generateRoasts(
-          targetName, provider, logger, feedbackRepo, 'farm-generate', 3,
-          configRepo, exampleRepo, patternRepo,
-          imagePaths.length > 0 ? imagePaths : undefined,
-          profileContext,
-          'quick', stockpileRepo, 1,
-          farmAttemptRepo, undefined,
-          false, 'person', true,
-        );
-
-        const elapsed = Math.round((Date.now() - startTime) / 1000);
-
-        // --- Step 6: Show results ---
-        // Normalize tweet URL to a clean link
-        const tweetUrl = raw.startsWith('http') ? raw : `https://${raw}`;
-
-        const headerLines: string[] = [
-          `⚡ <b>${escapeHtml(targetName)}</b> — ${String(elapsed)}s`,
-          `<a href="${escapeHtml(tweetUrl)}">Original tweet</a>`,
-        ];
-        if (output.evaluation) {
-          headerLines[0] += ` · eval ${output.evaluation.compositeScore.toFixed(1)}/5`;
-        }
-
-        // Show all non-discarded variants (sorted by score from generation)
-        const variants = output.variants;
-        if (variants.length === 0) {
-          headerLines.push('');
-          headerLines.push('❌ <i>All variants filtered or scored below threshold.</i>');
-          if (output.evaluation?.preFilterReason) {
-            headerLines.push(`<i>Pre-filter: ${escapeHtml(output.evaluation.preFilterReason)}</i>`);
-          }
-          await api.editMessageText(chatId, statusMsg.message_id, headerLines.join('\n'), { parse_mode: 'HTML' });
-          return;
-        }
-
-        headerLines.push('');
-        for (let i = 0; i < variants.length; i++) {
-          const v = variants[i]!;
-          headerLines.push(`<b>${String(i + 1)}.</b> <i>${escapeHtml(v.angle)}</i>`);
-          headerLines.push(`<pre>${escapeHtml(v.text)}</pre>`);
-          headerLines.push('');
-        }
-
-        const keyboard = new InlineKeyboard()
-          .text('🔄 Regen', `rt-regen:${ctxKey}`);
-
-        // Delete status message and send results as a new message
-        await api.deleteMessage(chatId, statusMsg.message_id).catch(() => {});
-        await api.sendMessage(chatId, headerLines.join('\n'), {
-          parse_mode: 'HTML',
-          reply_markup: keyboard,
-          link_preview_options: { is_disabled: true },
-        });
-
-        // Cleanup media after 10 min (keeps files for image-reading LLM calls during regen)
-        const cleanupTimer = (): void => {
-          if (mediaCleanup) mediaCleanup().catch(() => {});
-          roastTweetContexts.delete(ctxKey);
-        };
-        setTimeout(cleanupTimer, 600_000);
-
-      } catch (error) {
-        const elapsed = Math.round((Date.now() - startTime) / 1000);
-        logger.error({ err: error, url: raw, elapsedSec: elapsed }, '/roast-tweet pipeline failed');
-        await api
-          .editMessageText(
-            chatId,
-            statusMsg.message_id,
-            `❌ Failed after ${String(elapsed)}s: ${escapeHtml(getErrorMessage(error).slice(0, 200))}`,
-            { parse_mode: 'HTML' },
-          )
-          .catch(() => {});
-      }
-    })();
+    handleTweetRoast(ctx, tweetUrl, userContext);
   });
 
   // ---------------------------------------------------------------------------
@@ -2457,7 +2628,7 @@ export function createBot(opts: {
       const ctxKey = data.slice(9);
       const storedCtx = roastTweetContexts.get(ctxKey);
       if (!storedCtx) {
-        await ctx.answerCallbackQuery({ text: 'Context expired — run /roasttweet again', show_alert: true });
+        await ctx.answerCallbackQuery({ text: 'Context expired — run /roast again', show_alert: true });
         return;
       }
 
@@ -2483,6 +2654,7 @@ export function createBot(opts: {
             'quick', stockpileRepo, 1,
             farmAttemptRepo, undefined,
             false, 'person', true,
+            storedCtx.userContext,
           );
 
           const tweetUrl = storedCtx.tweetUrl.startsWith('http') ? storedCtx.tweetUrl : `https://${storedCtx.tweetUrl}`;
