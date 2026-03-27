@@ -321,7 +321,7 @@ export class RoastEngine {
     // --- Phase 1: Research + Gen Call 0 in parallel ---
     const useResearch = this.provider.capabilities.hasPerplexity || this.provider.capabilities.hasWebSearch;
 
-    const angleDistribution = distributeFastAngles(FAST_CALL_CONFIGS.length, undefined, tweetMode);
+    const angleDistribution = distributeFastAngles(FAST_CALL_CONFIGS.length, memory?.angleWeights, tweetMode);
     const variantsPerCall = 5;
 
     // Inject tweetMode into memory so prompt builder picks it up
@@ -352,7 +352,7 @@ export class RoastEngine {
 
     // Start research in parallel (if available)
     if (useResearch) {
-      const researchPrompt = buildFastResearchPrompt(targetName, this.character, memory);
+      const researchPrompt = buildFastResearchPrompt(targetName, this.character, effectiveMemory);
       try {
         const researchResult = await this.provider.run<AgentFastResearchOutput>(
           `${taskId}-research`,
@@ -432,7 +432,14 @@ export class RoastEngine {
           );
         } catch (parseErr) {
           callResults.push({ codename: config.codename, status: 'failed', variants: 0 });
-          this.logger.warn({ taskId, call: config.codename, err: parseErr }, 'Gen call parse failed');
+          const raw: unknown = result.value.data;
+          const rawSnippet = typeof raw === 'string'
+            ? raw.slice(0, 300)
+            : JSON.stringify(raw).slice(0, 300);
+          this.logger.warn(
+            { taskId, call: config.codename, err: parseErr, rawSnippet },
+            'Gen call parse failed',
+          );
         }
       } else {
         callResults.push({ codename: config.codename, status: 'failed', variants: 0 });
@@ -511,11 +518,11 @@ export class RoastEngine {
       };
     }
 
-    // Map rankings back to variants
+    // Map rankings back to variants (bounds-check indices)
     const rankedVariants: FastRoastResult['variants'] = [];
     for (const r of rankingOutput.rankings) {
-      const v = deduped[r.index];
-      if (!v) continue;
+      if (r.index < 0 || r.index >= deduped.length) continue;
+      const v = deduped[r.index]!;
       rankedVariants.push({
         text: v.text,
         angle: v.angle,
@@ -527,6 +534,24 @@ export class RoastEngine {
         reason: r.reason,
         callCodename: v.callCodename,
       });
+    }
+
+    // Fallback: if ranking produced no valid entries, use self-score order
+    if (rankedVariants.length === 0) {
+      this.logger.warn({ taskId, rankingCount: rankingOutput.rankings.length }, 'Ranking mapped 0 variants, using self-score order');
+      for (const v of deduped) {
+        rankedVariants.push({
+          text: v.text,
+          angle: v.angle,
+          selfScore: v.selfScore,
+          judgeScore: v.selfScore,
+          funny: 0,
+          impact: 0,
+          original: 0,
+          reason: 'self-score fallback (ranking indices invalid)',
+          callCodename: v.callCodename,
+        });
+      }
     }
 
     const durationMs = Date.now() - startMs;

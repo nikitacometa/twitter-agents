@@ -991,7 +991,7 @@ Would someone LAUGH out loud, or just nod? If nod — rewrite with more absurdit
 ### OUTPUT FORMAT (strict JSON, no markdown wrapping):
 {
   "variants": [
-    { "text": "the full tweet text", "score": 4.2, "angle": "${angles[0] ?? 'DATA_BOMB'}" }
+    { "text": "the full tweet text", "score": 4.2, "angle": "ANGLE_YOU_USED" }
   ],
   "bestIndex": 0,
   "researchNotes": null,
