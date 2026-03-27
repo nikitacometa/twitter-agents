@@ -8,12 +8,16 @@ import type { FeedbackRepository } from '@storage/repositories/feedback.reposito
 import type { ProviderManager } from '@agent/provider-manager.js';
 import type { HealthMonitor } from '@health/health-monitor.js';
 import type { Scheduler } from '@scheduler/scheduler.js';
+import type { QueueManager } from '@queue/queue-manager.js';
 
 type RouteHandler = (url: URL) => unknown;
+type ApiResponse = Record<string, unknown>;
+type PostRouteHandler = (url: URL) => ApiResponse | Promise<ApiResponse>;
 
 export interface ApiServerDeps {
   port: number;
   logger: Logger;
+  apiToken?: string;
   stockpileRepo: StockpileRepository;
   roastRepo: RoastRepository;
   queueRepo: QueueRepository;
@@ -22,21 +26,26 @@ export interface ApiServerDeps {
   healthMonitor: HealthMonitor;
   scheduler: Scheduler;
   provider: ProviderManager | null;
+  queueManager?: QueueManager;
 }
 
 export class ApiServer {
   private server: Server | null = null;
   private readonly port: number;
   private readonly logger: Logger;
-  private readonly routes: Map<string, RouteHandler>;
+  private readonly apiToken: string | undefined;
+  private readonly getRoutes: Map<string, RouteHandler>;
+  private readonly postRoutes: Map<string, PostRouteHandler>;
 
   constructor(private readonly deps: ApiServerDeps) {
     this.port = deps.port;
     this.logger = deps.logger;
-    this.routes = this.buildRoutes();
+    this.apiToken = deps.apiToken;
+    this.getRoutes = this.buildGetRoutes();
+    this.postRoutes = this.buildPostRoutes();
   }
 
-  private buildRoutes(): Map<string, RouteHandler> {
+  private buildGetRoutes(): Map<string, RouteHandler> {
     const routes = new Map<string, RouteHandler>();
     const { stockpileRepo, roastRepo, queueRepo, configRepo, feedbackRepo, healthMonitor, scheduler, provider } =
       this.deps;
@@ -127,34 +136,99 @@ export class ApiServer {
     return routes;
   }
 
+  private buildPostRoutes(): Map<string, PostRouteHandler> {
+    const routes = new Map<string, PostRouteHandler>();
+    const { configRepo, queueManager } = this.deps;
+
+    routes.set('/api/pause', () => {
+      configRepo.setPaused(true);
+      return { ok: true, paused: true };
+    });
+
+    routes.set('/api/resume', () => {
+      configRepo.setPaused(false);
+      return { ok: true, paused: false };
+    });
+
+    routes.set('/api/approve-mode', (url) => {
+      const enabled = url.searchParams.get('enabled') !== 'false';
+      configRepo.setApproveMode(enabled);
+      return { ok: true, approveMode: enabled };
+    });
+
+    routes.set('/api/approve', async (url) => {
+      const id = parseInt(url.searchParams.get('id') ?? '', 10);
+      if (!Number.isFinite(id)) return { ok: false, error: 'Missing or invalid ?id parameter' };
+      if (!queueManager) return { ok: false, error: 'QueueManager not available' };
+      const result = await queueManager.approveRoast(id);
+      if (!result) return { ok: false, error: 'Roast not found or not pending' };
+      return { ok: true, tweetId: result.tweetId, text: result.text };
+    });
+
+    routes.set('/api/reject', (url) => {
+      const id = parseInt(url.searchParams.get('id') ?? '', 10);
+      if (!Number.isFinite(id)) return { ok: false, error: 'Missing or invalid ?id parameter' };
+      if (!queueManager) return { ok: false, error: 'QueueManager not available' };
+      const rejected = queueManager.rejectRoast(id);
+      return { ok: rejected, error: rejected ? undefined : 'Roast not found or not pending' };
+    });
+
+    return routes;
+  }
+
   start(): void {
     this.server = createServer((req: IncomingMessage, res: ServerResponse) => {
-      if (req.method !== 'GET') {
-        res.writeHead(405, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ error: 'Method not allowed' }));
-        return;
-      }
-
       const url = new URL(req.url ?? '/', `http://localhost:${String(this.port)}`);
-      const handler = this.routes.get(url.pathname);
+      const start = Date.now();
 
-      if (!handler) {
-        res.writeHead(404, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ error: 'Not found', routes: [...this.routes.keys()] }));
+      if (req.method === 'GET') {
+        const handler = this.getRoutes.get(url.pathname);
+        if (!handler) {
+          res.writeHead(404, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: 'Not found', routes: [...this.getRoutes.keys(), ...this.postRoutes.keys()] }));
+          return;
+        }
+        try {
+          const data = handler(url);
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify(data));
+          this.logger.debug({ path: url.pathname, ms: Date.now() - start }, 'api request');
+        } catch (err) {
+          this.logger.error({ err, path: url.pathname, ms: Date.now() - start }, 'API route error');
+          res.writeHead(500, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: 'Internal server error' }));
+        }
         return;
       }
 
-      const start = Date.now();
-      try {
-        const data = handler(url);
-        res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify(data));
-        this.logger.debug({ path: url.pathname, ms: Date.now() - start }, 'api request');
-      } catch (err) {
-        this.logger.error({ err, path: url.pathname, ms: Date.now() - start }, 'API route error');
-        res.writeHead(500, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ error: 'Internal server error' }));
+      if (req.method === 'POST') {
+        const handler = this.postRoutes.get(url.pathname);
+        if (!handler) {
+          res.writeHead(404, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: 'Not found' }));
+          return;
+        }
+        if (!this.checkAuth(req)) {
+          res.writeHead(401, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: 'Unauthorized' }));
+          return;
+        }
+        Promise.resolve(handler(url))
+          .then((data) => {
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify(data));
+            this.logger.info({ path: url.pathname, ms: Date.now() - start }, 'api post request');
+          })
+          .catch((err: unknown) => {
+            this.logger.error({ err, path: url.pathname, ms: Date.now() - start }, 'API post route error');
+            res.writeHead(500, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: 'Internal server error' }));
+          });
+        return;
       }
+
+      res.writeHead(405, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: 'Method not allowed' }));
     });
 
     this.server.on('error', (err: NodeJS.ErrnoException) => {
@@ -167,8 +241,16 @@ export class ApiServer {
     });
 
     this.server.listen(this.port, '127.0.0.1', () => {
-      this.logger.info({ port: this.port, routes: [...this.routes.keys()] }, 'API server started (localhost only)');
+      this.logger.info({ port: this.port, routes: [...this.getRoutes.keys(), ...this.postRoutes.keys()] }, 'API server started (localhost only)');
     });
+  }
+
+  private checkAuth(req: IncomingMessage): boolean {
+    if (!this.apiToken) return true;
+    const auth = req.headers.authorization;
+    if (!auth) return false;
+    const token = auth.startsWith('Bearer ') ? auth.slice(7) : auth;
+    return token === this.apiToken;
   }
 
   stop(): void {

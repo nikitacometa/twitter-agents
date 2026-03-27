@@ -96,8 +96,9 @@ const envSchema = z
       .default('true')
       .transform((v) => v === 'true'),
 
-    // API server (dashboard & monitoring)
+    // API server (dashboard & monitoring, OpenClaw bridge)
     API_PORT: z.coerce.number().int().min(1024).max(65535).default(3001),
+    API_AUTH_TOKEN: z.string().optional(),
 
     // Environment
     NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),

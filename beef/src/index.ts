@@ -671,6 +671,7 @@ if (config.TELEGRAM_BOT_TOKEN) {
 const apiServer = new ApiServer({
   port: config.API_PORT,
   logger,
+  apiToken: config.API_AUTH_TOKEN,
   stockpileRepo,
   roastRepo,
   queueRepo,
@@ -679,6 +680,7 @@ const apiServer = new ApiServer({
   healthMonitor,
   scheduler,
   provider,
+  queueManager: queueManager ?? undefined,
 });
 
 // Start services
