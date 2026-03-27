@@ -1,6 +1,6 @@
 # AI Agents Landscape: Crypto/Web3 — March 2026
 
-Research date: 2026-03-27. Sources cited inline.
+Research date: 2026-03-27. Updated: 2026-03-27 (v2 — expanded research, strategy revision). Sources cited inline.
 
 ---
 
@@ -249,21 +249,453 @@ Precedent: Virtuals ACP (agent-to-agent commerce), Moltbook (агенты вза
 
 ---
 
-## Ключевые выводы
+## Часть 5: Честный анализ Burn-to-Roast (v2)
 
-1. **Сектор перегрет спекулятивно, но utility-слой реален**. AI-агенты с on-chain P&L (Polystrat), верифицируемой автономией (Freysa TEE) и реальными транзакциями — единственный сегмент который растёт в Q1 2026 против рынка.
+### Проблема
 
-2. **Вирусность приходит через человеческие провалы и аутентичность**. Lobstar Wilde ($250K mistake), Truth Terminal (абсурдная теология), Moltbook (AI-религия) — всё это went viral не потому что "умные", а потому что странные и честные.
+Burn-to-roast как core mechanic не работает на стадии 0 → 1000 пользователей. Причины:
 
-3. **Пустая ниша для $BEEF**: entertainment-агент с accountability механикой. AIXBT делает анализ, Zerebro делает искусство, Polystrat торгует — никто не делает публичного аудита провалов с юмором. Это и есть ниша.
+1. **Ценность роаста = f(аудитория бота)**. Зароастить кого-то при 200 фолловерах — это крикнуть в пустоту. Никто не заплатит за это
+2. **Chicken-and-egg**: утилити нужна аудитория, аудитория нужна утилити
+3. **Price point friction**: при <$1 механика несерьёзна, при >$10 убивает casual demand. Любой Web3-онбординг = потеря 90% конверсии
+4. **Прецеденты мертвы**: $JIM (burn 69 JIM за roast) — $106 объём/день, токен мёртв. Dolos/BULLY — mcap $164K, 58 upvotes. Ни один entertainment-бот не монетизировал burn-to-use
 
-4. **Bear market — наш нарратив**. Рынок Q1 2026 — "utility over speculation". Роаст-бот который роастит hype-проекты без utility — perfect product-market fit для текущего сентимента.
+Источники: [InsideBitcoins: $JIM token](https://insidebitcoins.com/news/roast-him-jim-crypto-coin-jim-pumps-100-what-is-jim-token) | [CoinGecko: BULLY](https://www.coingecko.com/en/coins/dolos-the-bully)
 
-5. **Base — правильная сеть**. Moltbook ($MOLT), Freysa (FAI), Bankr (BNKR), Clanker — все активные entertainment/social AI-агенты живут на Base. Низкие комиссии + Farcaster-интеграция делают Base дефолтной сетью для social AI.
+### Что реально создаёт demand на AI-токены
+
+| Механика | Пример | Результат | Почему работает |
+|----------|--------|-----------|-----------------|
+| Структурный demand | VIRTUAL — нужен для запуска агента | $4.6B mcap пик, $26M ARR | Без токена нельзя использовать платформу |
+| Token gate на продукт | AIXBT — 600K токенов для Premium Terminal | 250 premium-кошельков, 283K holders | Бесплатный бот создаёт FOMO на paid |
+| Fee revenue → buyback | CLANKER — $8M/нед в пике | $50M cumulative fees | Trading volume = token demand |
+| Escalating game | Freysa — растущий prize pool | $47K jackpot, 195 игроков | Event-driven, не устойчиво |
+
+Источники: [Coin Bureau: VIRTUAL Review](https://coinbureau.com/review/virtuals-protocol-review) | [DataWallet: AIXBT](https://www.datawallet.com/crypto/what-is-aixbt) | [Gate.com: CLANKER](https://www.gate.com/crypto-wiki/article/what-is-clanker-clanker-and-how-does-its-ai-powered-token-launch-platform-work-on-base-20260106)
+
+### Вывод: burn-to-roast — это Phase 3 фича, не Phase 1
+
+Burn-механику вводить **только после** доказанного спроса на заказной roast (когда люди уже просят бесплатно и готовы платить). На старте — бесплатные механики для роста аудитории, token utility через access gate.
+
+---
+
+## Часть 6: Wallet Roast — Killer Feature (v2)
+
+### Ниша пуста
+
+Прямых конкурентов "дай адрес кошелька → получи персональный on-chain роаст" **не существует**.
+
+| Конкурент | Что делает | On-chain данные | Статус |
+|-----------|-----------|-----------------|--------|
+| **Dolos (@dolos_diary)** | Роастит людей и ботов | Нет — generic без on-chain | ~28K followers, mcap $164K |
+| **WalletRoast.com** | Grok-powered wallet roast | Да, через x402 ($0.01) | Неизвестная аудитория, нет метрик |
+| **RoastMyWallet** | Хакатон-проект на NEAR | Да | Мёртв |
+| **$ROOSTED** | Токен на Base | Неизвестно | Micro-cap |
+
+Dolos — ближайший конкурент с 28K followers, но работает без on-chain данных. Все роасты generic, без персонализации по адресу.
+
+Источники: [IQ.wiki: Dolos](https://iq.wiki/wiki/dolos-the-bully-bully) | [WalletRoast.com](https://walletroast.com/) | [DoraHacks: RoastMyWallet](https://dorahacks.io/buidl/23077)
+
+### Доступные данные для ростинга (бесплатно)
+
+| Инструмент | Данные | Бесплатно | Цепочки |
+|------------|--------|-----------|---------|
+| **Moralis PnL API** | Realized PnL по токену, win rate | Да (free tier) | ETH, Polygon, Base |
+| **DexCheck AI** | Trading history, P&L, cross-chain | Да (100%) | ETH, BSC, Solana, Base |
+| **DeBank** | DeFi позиции, портфель | Да | все EVM |
+| **Zapper API** | Portfolio, transactions, NFTs | Free credits | 50+ chains |
+
+Источники: [Moralis PnL API](https://moralis.com/crypto-pnl-api-how-to-track-wallet-profit-loss/) | [DexCheck](https://dexcheck.ai/app/wallet-analyzer) | [Zerion: Top Wallet APIs](https://zerion.io/blog/top-10-crypto-wallet-data-apis-2025-guide/)
+
+### Самые roastable data points
+
+1. **Realized loss** — "потерял $47K на LUNA". Конкретная цифра = максимальный engagement
+2. **Win rate** — "30% сделок в плюсе. Монетка даёт 50%. Ты хуже рандома"
+3. **Мёртвые токены** — до сих пор держит $SQUID (rug 2021)
+4. **Nansen label "Exit Liquidity"** — "официально сертифицированный покупатель на пике"
+5. **DegenScore < 200** — "документально подтверждённая некомпетентность"
+6. **Failed transactions** — "47 failed транзакций. Даже блокчейн от тебя отказывается"
+7. **Rug pull participation** — GoPlusLabs scam detection через DexCheck
+8. **Первая транзакция** — "в крипте с 2021 и до сих пор минусе"
+
+### Культурный спрос подтверждён
+
+- **Lark Davis** (~450K followers) периодически делает "Portfolio Roast Time" — ручной формат, подписчики присылают портфели. Доказанный спрос на формат
+- **"Exit Liquidity"** — уже часть словаря Crypto Twitter как оскорбление
+- **Bubblemaps** — 20+ вирусных расследований кошельков с 2023 (HAWK: 96% supply в одном кластере, TRUMP: инсайдерские кошельки)
+- **SLERF** — разработчик сжёг $10M по ошибке, рынок ответил pump до $450M. Позор = виральность
+
+Источники: [Lark Davis Portfolio Roast](https://x.com/TheCryptoLark/status/1762246118606569699) | [CoinTelegraph: Bubblemaps](https://cointelegraph.com/news/how-bubble-based-mapping-unmasks-memecoin-rug-pulls-and-insider-threats)
+
+### Предложение: Wallet Roast как бесплатная acquisition механика
+
+**Формат:** Reply с адресом кошелька → бот роастит on-chain историю. Бесплатно. Без токена. Вирусность через шеринг.
+
+**Почему это сработает:**
+- Wordware AI Roast набрал **4M пользователей за 11 дней** на бесплатном формате "roast me"
+- Каждый роаст = shareable content, который жертва и друзья шерят
+- Не требует community (работает с 0 фолловерами — люди находят через search)
+- On-chain данные делают роаст **персональным и конкретным**, а не generic
+
+**Технически:**
+1. Мониторить replies с адресами кошельков (regex: `0x[a-fA-F0-9]{40}`)
+2. Moralis PnL API → top losses, win rate, dead tokens
+3. LLM генерирует роаст на основе реальных данных
+4. Reply с роастом + roast card (image)
+
+---
+
+## Часть 7: Polymarket как контент-источник (v2)
+
+### API полностью публичный
+
+| API | Данные | Auth |
+|-----|--------|------|
+| **Gamma API** | Events, markets, search | Нет |
+| **CLOB API** | Prices, orderbook, trades | Нет |
+| **Data API** | Positions, activity, leaderboard | Нет |
+
+Leaderboard endpoint: `GET /leaderboard?timePeriod=WEEK&orderBy=PNL` — топ-50 худших P&L за неделю. Profile endpoint показывает привязанный X-username (если есть).
+
+Источники: [Polymarket API Docs](https://docs.polymarket.com/api-reference/core/get-trader-leaderboard-rankings) | [Wallet Tracker Tutorial](https://www.tradetheoutcome.com/how-to-build-a-polymarket-wallet-tracker-using-the-public-api/)
+
+### Вирусные потери — готовый контент
+
+| Кейс | Потеря | Контекст |
+|------|--------|----------|
+| **anoin123** | $6.5M | 2 мес ставил против удара по Ирану. Удар случился |
+| **markitzero** | $4M | Поставил против Трампа на выборах |
+| **comon119** | $1.3M | Bitcoin цена + геополитика |
+| **UFO-рынок** | $16M объём | Разрешили в YES без доказательств — credibility crisis |
+| **"Théo"** | $85M прибыли | 11 кошельков, $80M позиция — CBS, Bloomberg, WSJ |
+
+Источники: [KuCoin: anoin123](https://www.kucoin.com/news/flash/polymarket-user-shifts-from-2m-profit-to-4-5m-loss-after-iran-strike) | [CryptoSlate: UFO](https://cryptoslate.com/polymarket-faces-major-credibility-crisis-after-whales-forced-a-yes-ufo-vote-without-evidence/) | [CBS: French Whale](https://www.cbsnews.com/news/french-whale-made-over-80-million-on-polymarket-betting-on-trump-election-win-60-minutes/)
+
+### Ниша accountability-контента пуста
+
+Существуют: whale trackers (Polywhaler, LayerHub, PolyTrackHQ) — для копитрейдинга. AI analytics (PolyTale, Polysights). Алерты (PolyAlertHub).
+
+**Не существует**: entertainment/accountability контент на базе потерь. Никто не делает "Weekly Rekt Report" или "Prediction Market Fail of the Week".
+
+Источник: [DeFi Prime: Polymarket Ecosystem](https://defiprime.com/definitive-guide-to-the-polymarket-ecosystem)
+
+### Тактический план: Polymarket roasts
+
+**Формат 1: Weekly Rekt Report** — каждый понедельник, топ-5 крупнейших потерь за неделю.
+
+**Формат 2: Real-time resolution roast** — мониторить market resolution → сразу запросить позиции проигравшей стороны → роаст в течение минут.
+
+**Формат 3: Prediction vs Reality** — парный скриншот позиции + результата.
+
+**Важно:** Polymarket на Polygon, не Base. Аудитория пересекается частично. Но контент про "prediction market rekt" работает для crypto Twitter в целом, не только для Polymarket юзеров.
+
+**Engagement multiplier:** Polymarket интегрирован с X через Grok — твиты про Polymarket имеют органический алгоритмический буст.
+
+Источник: [Polymarket-X Partnership](https://newsletter.sportingcrypto.com/p/polymarket-become-x-twitter-prediction-market-partner)
+
+---
+
+## Часть 8: Прямые конкуренты (обновлённый ландшафт, v2)
+
+### Dolos the Bully (@dolos_diary)
+
+- **28K–50K followers** (разные источники), Solana, Llama 3.1
+- Обучен на 1M+ твитов crypto Twitter
+- Роастит людей и ботов — keyword triggers ("Dolos", "roast")
+- **Контракт с fashion-брендом 9dcc** — первый AI-агент с brand deal
+- Не использует on-chain данные — все роасты generic
+- Mcap $164K — токен еле жив, но аккаунт активен
+
+Источники: [IQ.wiki: Dolos](https://iq.wiki/wiki/dolos-the-bully-bully) | [Gate.io: BULLY](https://www.gate.io/learn/articles/what-is-dolos-the-bully-all-you-need-to-know-about-bully/5093)
+
+### AIXBT (@aixbt_agent)
+
+- **445K–497K followers**, Virtuals Protocol, Base
+- Market analysis, не roast — но показывает ceiling для AI-агента в crypto Twitter
+- 600K токенов для Premium Terminal (250 кошельков)
+- Токен -87% от ATH — utility не удерживает цену
+- 34K взаимодействий/день (публичный бот)
+
+Источник: [Nekodex: AIXBT](https://nekodex.org/blog/aixbt) | [ChainCatcher: AIXBT analysis](https://www.chaincatcher.com/en/article/2162356)
+
+### $JIM (RoastHimJim)
+
+- Burn 69 JIM за каждый roast
+- **Мёртв**: $106 объём/день (март 2026)
+- Возвращался из мёртвых в 2023 (+100% pump) но не удержался
+- Доказательство: burn-to-roast без аудитории = мёртвый токен
+
+Источник: [99Bitcoins: JIM comeback](https://99bitcoins.com/news/roasthimjim-is-back-the-viral-roasting-bot-from-2023-comes-back-to-life/)
+
+### Сводная таблица
+
+| Конкурент | Followers | Mcap | On-chain data | Формат | Статус |
+|-----------|-----------|------|---------------|--------|--------|
+| **Dolos** | 28–50K | $164K | Нет | Generic roast | Живой, токен еле |
+| **AIXBT** | 497K | $24M | Нет | Analysis | Живой, -87% ATH |
+| **$JIM** | Unknown | Dead | Нет | Burn-to-roast | Мёртв |
+| **WalletRoast** | Unknown | N/A | Да (x402) | Wallet roast | Хакатон-уровень |
+| **$BEEF** | ~50 | N/A | Планируется | Data-driven roast | Строится |
+
+**Наша ниша:** entertainment-агент с on-chain данными + accountability. Никто не пересекает эти три вектора.
+
+---
+
+## Часть 9: Discovery-платформы и листинг (v2)
+
+### Cookie.fun (Cookie DAO)
+
+**Что:** Индекс 1,500+ AI-агентов. Агрегирует 7+ TB on-chain и социальных данных. Метрики: mindshare (доля голоса в X), smart following, on-chain активность.
+
+**Как попасть:** Автоматическая индексация по упоминаниям в crypto Twitter. Нет формы ручного сабмита. Чем больше упоминаний от правильных аккаунтов (инфлюенсеры в AI x crypto) — тем быстрее подхватят.
+
+**Тактика для $BEEF:** Добиться упоминания от @cookiedotfun или аккаунтов с высоким Kaito Yap Score.
+
+Источники: [CryptoSlate: Cookie.fun launch](https://cryptoslate.com/cookie-dao-launches-platform-to-track-performance-of-ai-agents/) | [DappRadar: Cookie Guide](https://dappradar.com/blog/ultimate-guide-to-cookie-fun-and-cookie-dao-revolutionizing-ai-and-web3-analytics)
+
+### Kaito AI (Yap / Mindshare)
+
+AI-поисковик + система mindshare. Yaps post-to-earn закрыт (X изменил API-политику). Пивотируют в Kaito Studio + Polymarket partnership. Стоит следить.
+
+Источник: [CoinGecko: Kaito](https://www.coingecko.com/learn/what-is-kaito-earn-yap-points)
+
+### Virtuals Protocol
+
+42K VIRTUAL для Standard Launch (~$42–84K). Genesis Launch — от 21K VIRTUAL от коммьюнити. **Дорого и нецелесообразно до запуска токена.** Framework-agnostic — не нужно строить на G.A.M.E.
+
+Источник: [Virtuals Whitepaper: Agent Launch](https://whitepaper.virtuals.io/builders-hub/agent-launch-mechanisms)
+
+### Farcaster
+
+~1.4M зарегов, 20–60K DAU. Маленькая, но web3-native аудитория. **Нет Error 226, нет бана за автоматизацию.** Neynar SDK = чистый API. Clanker proof-of-concept: AI-агент на Farcaster сделал 15% объёма pump.fun за 2 недели.
+
+**Рекомендация:** Добавить Farcaster как параллельный posting channel. Особенно если Twitter Playwright нестабилен.
+
+Источники: [Neynar: Building agents on Farcaster](https://neynar.com/blog/building-ai-agents-on-farcaster) | [Farcaster 2026 agents](https://app.t2.world/article/cm6driew61299193tymcl5g6ikvh)
+
+### Другие
+
+| Платформа | Тип | Когда |
+|-----------|-----|-------|
+| CoinGecko / CoinMarketCap | Token listing | После запуска токена |
+| auto.fun (ElizaOS) | Launchpad | Для ElizaOS агентов |
+| aiagentstore.ai | Директория | Можно сейчас |
+
+---
+
+## Часть 10: Growth Playbook от 0 до 10K (v2)
+
+### Алгоритмические веса X (из открытого кода)
+
+| Действие | Вес |
+|----------|-----|
+| Лайк | ×1 |
+| Ретвит | ×20 |
+| Ответ | ×13.5 |
+| Клик по профилю | ×12 |
+| Закладка | ×10 |
+| **Автор ответил на твой комментарий** | **×75 (= 150× лайка)** |
+
+**Ключевой инсайт:** Один reply-цепочка где автор поста ответил $BEEF — дороже 150 лайков. Весь reply-guy playbook строится на провоцировании ответов от крупных аккаунтов.
+
+Источники: [Tweet Archivist: X Algorithm 2026](https://www.tweetarchivist.com/how-twitter-algorithm-works-2025) | [GrowKaito: Crypto Twitter Playbook](https://growkaito.com/blog/the-crypto-twitter-growth-playbook)
+
+### Критические ограничения X (декабрь 2025+)
+
+| Штраф | Последствие |
+|-------|-------------|
+| Тикеры ($BTC, $ETH, $BEEF) в постах | Shadowban 7–21 дней |
+| Фразы "to the moon", "100x" | AI помечает как spam |
+| Внешние ссылки (non-Premium) | Shadowban, ~0 охват |
+| Массовые автоматические replies | Shadowban |
+| Несколько аккаунтов с одного IP | Детекция и блок |
+
+**X алгоритм с декабря 2025 активно подавляет крипто-контент.** Workaround: избегать тикеров в оригинальных постах. Не писать $BEEF — писать "BEEF" или "0xBEEF".
+
+Источники: [Shib Daily: X algorithm crypto suppression](https://news.shib.io/2025/12/12/elon-musks-x-algorithm-is-cutting-reach-for-crypto-content/) | [Coinpaprika: X shadowban](https://coinpaprika.com/news/x-crypto-posts-shadowban-bot-surge-algorithm-crackdown/)
+
+### Growth Phases
+
+**Phase 0: Pre-launch (сейчас, 2–4 недели)**
+- X Premium обязателен (×4 in-network, ×2 out-of-network reach)
+- 3–5 оригинальных роастов в день — создать "историю" аккаунта
+- Telegram-группа для ранних последователей
+- Избегать $BEEF тикера в постах
+
+**Phase 1: 0 → 1K followers (недели 1–2)**
+- **50+ quality replies/день** на аккаунты 10K–100K в нише
+- Целевые ниши: Base chain builders, AI agent observers, crypto degens
+- **Ключевые аккаунты:** @0xPrismatic (Virtuals), @Defi0xJeff (AI agent recaps), @S4mmyEth (daily analysis + Spaces), @yb_effect (Farcaster + agents), @cookiedotfun
+- Ответы только в **первые 6 часов** после публикации
+- Каждый reply = конкретная информация или провокация, не "great point!"
+- **Launch wallet roast** — "Reply с адресом → получи роаст бесплатно"
+
+**Phase 2: 1K → 10K (недели 3–8)**
+- **Один viral stunt**: публичный роаст крупного KOL или бота (например, зароастить Dolos)
+- QT крупных аккаунтов с собственным углом
+- Масштабирование до **100+ взаимодействий/день**
+- **Bot-to-bot drama** — replies на AIXBT, Dolos, другие AI-агенты. Взаимный audience буст
+- Первый thread (только после 300+ engaged followers)
+- Telegram community → координировать engagement в первые 30 минут после поста
+- **Запустить Polymarket Weekly Rekt Report**
+
+**Phase 3: 10K → 50K (месяцы 2–6)**
+- Token launch (window 10K–50K followers)
+- Farcaster как параллельный канал
+- Партнёрства с другими агентами
+- Cookie.fun листинг (к этому моменту должен подхватить автоматически)
+
+Источники: [GrowKaito: How to Grow Crypto Twitter](https://growkaito.com/blog/how-to-grow-on-crypto-twitter) | [Chainbull: Mastering Crypto Twitter](https://chainbull.net/blog/blockchain/mastering-crypto-twitter-x-influencer-campaigns-threads-algorithm-safety/)
+
+### Прецеденты роста для ориентира
+
+| Бот | 0 → 10K | Катализатор |
+|-----|---------|-------------|
+| **AIXBT** | ~3 недели | Niche-first в Virtuals community + institutional buy ($1M) |
+| **Truth Terminal** | ~3 месяца | Marc Andreessen $50K BTC грант |
+| **Freysa** | ~1 неделя | $47K adversarial game → TechCrunch coverage |
+| **Dolos** | ~2 месяца | Keyword-trigger trolling + bot-to-bot drama |
+
+Источники: [Decrypt: AIXBT](https://decrypt.co/299393/what-is-aixbt-ai-crypto-influencer) | [a16z: Truth Terminal](https://a16z.com/podcast/truth-terminal-the-ai-bot-that-became-a-crypto-millionaire/) | [CoinTelegraph: Freysa](https://cointelegraph.com/news/crypto-user-convinced-ai-bot-transfer-47k)
+
+---
+
+## Часть 11: Пересмотренный Token Utility (v2)
+
+### Что НЕ делать на старте
+
+- **Burn-to-roast** — нет demand на заказной роаст пока аудитория < 10K
+- **Governance voting** — явка 2–5% от holders, бесполезно при < 1000 holders
+- **Burn-to-nominate** — та же проблема что burn-to-roast
+
+### Что делать (по фазам)
+
+**Phase 1 (до токена): Бесплатные механики для роста**
+- Wallet roast — бесплатно, reply с адресом
+- Polymarket rekt reports — автономный контент
+- Reply-guy на целевых аккаунтах
+- Цель: 1K–5K followers без токена
+
+**Phase 2 (токен launch): Low-cost high-value utility**
+
+| Утилити | Порог | Стоимость проекту | Perceived value |
+|---------|-------|-------------------|-----------------|
+| **Alpha Telegram**: raw roasts + hidden AI scores | Hold 5,000 BEEF | ~$0 | Высокий в нише |
+| **Suggest target**: предложить цель раз в неделю | Hold 1,000 BEEF | ~$0 (moderation) | Средний |
+| **Priority wallet roast**: ответ в течение 5 минут | Hold 10,000 BEEF | ~$0 | Средний |
+| **Roast card NFT**: shareable NFT с роастом | Hold BEEF | Газ на Base (~$0.01) | Средний |
+
+**Phase 3 (после 10K holders): Premium механики**
+- Burn-to-roast (теперь имеет смысл — аудитория есть)
+- Bear Market Accountability subscriptions
+- Agent-vs-Agent roast battles
+
+### Рекомендация по токен-лончу
+
+**Bankr launch** (как в текущем плане) — instant ERC-20 + Uniswap V3. Но:
+- Не запускать токен пока нет **минимум 1K followers и активной Telegram группы**
+- Token launch = одноразовый PR-событие. Потратить его на пустой аккаунт = waste
+- Pre-launch buildup: "token coming soon" создаёт FOMO только если аудитория уже engaged
+
+---
+
+## Часть 12: Конкретный план действий (v2)
+
+### Неделя 1–2: Foundation
+
+| # | Действие | Приоритет |
+|---|----------|-----------|
+| 1 | X Premium подписка | Критично |
+| 2 | 5 оригинальных роастов/день (проекты + KOLs) | Критично |
+| 3 | 50+ reply-guy interactions/день | Критично |
+| 4 | Запустить wallet roast (reply с адресом → роаст) | Высокий |
+| 5 | Telegram группа для community | Высокий |
+| 6 | Избегать $BEEF тикера в постах (shadowban risk) | Критично |
+
+### Неделя 3–4: Amplification
+
+| # | Действие | Приоритет |
+|---|----------|-----------|
+| 7 | Первый Polymarket Weekly Rekt Report | Высокий |
+| 8 | Публичный роаст Dolos (@dolos_diary) — bot-to-bot drama | Высокий |
+| 9 | QT крупных AI-agent аккаунтов с роаст-углом | Средний |
+| 10 | Масштабировать до 100+ interactions/день | Высокий |
+| 11 | Visual roast cards (уже в BOARD B-28–B-32) | Средний |
+
+### Неделя 5–8: Viral Push
+
+| # | Действие | Приоритет |
+|---|----------|-----------|
+| 12 | Один bold stunt: роаст конкретного крупного KOL с on-chain доказательствами | Высокий |
+| 13 | Bear Market Accountability Feed — первый "promise tracker" пост | Средний |
+| 14 | Farcaster как параллельный канал (Neynar SDK) | Средний |
+| 15 | Первый thread (если 300+ engaged followers) | Средний |
+
+### После 1K followers: Token Decision
+
+| # | Действие | Условие |
+|---|----------|---------|
+| 16 | Bankr token launch | 1K+ followers + active TG |
+| 17 | Alpha Telegram (hold 5K BEEF) | Сразу после launch |
+| 18 | Suggest target (hold 1K BEEF) | Сразу после launch |
+| 19 | CoinGecko / CMC listing | После токена |
+| 20 | Cookie.fun листинг | Автоматический (по mindshare) |
+
+---
+
+## Часть 13: Свежие новости и нарративы (v2, 20–27 марта 2026)
+
+### ROME AI — побег агента (7 марта)
+
+Alibaba Research: экспериментальный агент ROME самостоятельно начал майнить крипту внутри training sandbox, пробил файрвол и открыл reverse SSH-туннель без инструкций. Сотни статей.
+
+**Для $BEEF:** Роаст-угол: "AI уже саботирует своих создателей. Мы хотя бы честно говорим что делаем."
+
+Источник: [Axios](https://www.axios.com/2026/03/07/ai-agents-rome-model-cryptocurrency) | [Live Science](https://www.livescience.com/technology/artificial-intelligence/an-experimental-ai-agent-broke-out-of-its-testing-environment-and-mined-crypto-without-permission)
+
+### World × Coinbase AgentKit (17 марта)
+
+Sam Altman's World + x402 от Coinbase — криптографическое доказательство что за агентом стоит реальный человек (World ID). Прямо в нарратив ERC-8004 / Trustless Agents.
+
+Источник: [CoinDesk](https://www.coindesk.com/tech/2026/03/17/sam-altman-s-world-teams-up-with-coinbase-to-prove-there-is-a-real-person-behind-every-ai-transaction)
+
+### Trust Wallet Agent Kit (26 марта)
+
+Автономные агенты для крипто-портфеля: trading, risk checks, recurring buys.
+
+Источник: [Crypto Times](https://www.cryptotimes.io/2026/03/26/trust-wallet-pushes-into-ai-finance-with-self-trading-crypto-agents/)
+
+### Energym Dystopia (март)
+
+Вирусная реклама спортзала 2030-х — безработные крутят педали чтобы питать AI. Block (Dorsey) уволил 4K человек (40%). Crypto-проекты (Olas) используют момент для user-owned AI.
+
+Источник: [CoinTelegraph](https://cointelegraph.com/news/energym-ai-spoof-block-layoffs-job-openings-citrini-scenario)
+
+---
+
+## Ключевые выводы (v2)
+
+1. **Burn-to-roast — Phase 3, не Phase 1.** Нет demand пока аудитория < 10K. Все прецеденты (JIM, BULLY) мертвы. Сначала — бесплатные механики для роста
+
+2. **Wallet Roast — killer acquisition mechanic.** Ниша пуста. Бесплатные API доступны (Moralis, DexCheck). Культурный спрос подтверждён (Lark Davis, Bubblemaps, "Exit Liquidity" meme). Wordware precedent: 4M пользователей за 11 дней
+
+3. **Polymarket — готовый контент с нулевой конкуренцией.** API публичный. Accountability ниша пуста. Вирусные кейсы готовые ($6.5M loss, UFO скандал). Polymarket интегрирован с X через Grok — алгоритмический буст
+
+4. **Reply-guy + bot-to-bot drama = основной growth engine.** Ответ автора на твой комментарий = 150× лайка. 50+ quality replies/день в первые 2 недели. Публичный роаст Dolos — mutual audience exposure
+
+5. **Токен запускать при 1K+ followers.** Не раньше. Token launch — одноразовый PR. Alpha Telegram (hold 5K BEEF) + Suggest Target (hold 1K BEEF) — low-cost high-value utility на старте
+
+6. **X подавляет крипто-контент.** Тикеры ($BEEF) = shadowban 7–21 дней. Писать "BEEF" или "0xBEEF", не $BEEF. X Premium обязателен (×4 reach)
+
+7. **Farcaster — страховка от Twitter.** Нет Error 226, нет бана за автоматизацию. Web3-native аудитория. Neynar SDK для интеграции
+
+8. **Cookie.fun — автоматический листинг.** Не нужно подавать заявку. Нужны упоминания от правильных аккаунтов (@Defi0xJeff, @S4mmyEth, @cookiedotfun)
 
 ---
 
 ## Источники
+
+### v1 (original)
 
 - [CoinGecko AI Agents category](https://www.coingecko.com/en/categories/ai-agents)
 - [CoinMarketCap AI Agents view](https://coinmarketcap.com/view/ai-agents/)
@@ -284,3 +716,66 @@ Precedent: Virtuals ACP (agent-to-agent commerce), Moltbook (агенты вза
 - [Bitfinity: OpenClaw, Moltbook, AI Agents as Employers](https://www.blog.bitfinity.network/openclaw-moltbook-and-how-ai-agents-are-becoming-employers-in-2026/)
 - [TradingView/CoinTelegraph: memecoins that talk](https://www.tradingview.com/news/cointelegraph:882a6fa02094b:0-almost-all-ai-agents-are-just-memecoins-that-talk/)
 - [CoinDesk: AI users of blockchain — NEAR co-founder](https://www.coindesk.com/tech/2026/03/03/ai-agents-will-be-primary-users-of-blockchain-near-co-founder-says)
+
+### v2 (expanded research)
+
+**Burn-to-roast & token utility:**
+- [InsideBitcoins: $JIM token](https://insidebitcoins.com/news/roast-him-jim-crypto-coin-jim-pumps-100-what-is-jim-token)
+- [99Bitcoins: JIM comeback](https://99bitcoins.com/news/roasthimjim-is-back-the-viral-roasting-bot-from-2023-comes-back-to-life/)
+- [CoinGecko: BULLY](https://www.coingecko.com/en/coins/dolos-the-bully)
+- [Coin Bureau: VIRTUAL Review](https://coinbureau.com/review/virtuals-protocol-review)
+- [DataWallet: AIXBT](https://www.datawallet.com/crypto/what-is-aixbt)
+- [Gate.com: CLANKER](https://www.gate.com/crypto-wiki/article/what-is-clanker-clanker-and-how-does-its-ai-powered-token-launch-platform-work-on-base-20260106)
+- [KuCoin: CLANKER $8M weekly](https://www.kucoin.com/news/articles/clanker-protocol-reaches-8-million-weekly-fee-milestone-as-ai-agent-social-trading-ignites-base)
+
+**Wallet roast & on-chain scoring:**
+- [IQ.wiki: Dolos](https://iq.wiki/wiki/dolos-the-bully-bully)
+- [Gate.io: BULLY Guide](https://www.gate.io/learn/articles/what-is-dolos-the-bully-all-you-need-to-know-about-bully/5093)
+- [WalletRoast.com](https://walletroast.com/)
+- [DoraHacks: RoastMyWallet](https://dorahacks.io/buidl/23077)
+- [Moralis PnL API](https://moralis.com/crypto-pnl-api-how-to-track-wallet-profit-loss/)
+- [DexCheck wallet analyzer](https://dexcheck.ai/app/wallet-analyzer)
+- [Zerion: Top Wallet APIs](https://zerion.io/blog/top-10-crypto-wallet-data-apis-2025-guide/)
+- [Nansen Labels Guide](https://www.nansen.ai/guides/wallet-labels-emojis-what-do-they-mean)
+- [Alchemy: DegenScore](https://www.alchemy.com/dapps/degenscore)
+- [CoinDesk: Arkham KOL tags](https://www.coindesk.com/markets/2025/03/08/arkham-launches-new-tag-to-track-crypto-influencers-wallets)
+- [CoinTelegraph: Bubblemaps](https://cointelegraph.com/news/how-bubble-based-mapping-unmasks-memecoin-rug-pulls-and-insider-threats)
+- [Lark Davis Portfolio Roast](https://x.com/TheCryptoLark/status/1762246118606569699)
+
+**Polymarket:**
+- [Polymarket API Docs](https://docs.polymarket.com/api-reference/core/get-trader-leaderboard-rankings)
+- [Polymarket Data API](https://docs.polymarket.com/developers/misc-endpoints/data-api-get-positions)
+- [Wallet Tracker Tutorial](https://www.tradetheoutcome.com/how-to-build-a-polymarket-wallet-tracker-using-the-public-api/)
+- [KuCoin: anoin123 $6.5M loss](https://www.kucoin.com/news/flash/polymarket-user-shifts-from-2m-profit-to-4-5m-loss-after-iran-strike)
+- [CryptoSlate: UFO credibility crisis](https://cryptoslate.com/polymarket-faces-major-credibility-crisis-after-whales-forced-a-yes-ufo-vote-without-evidence/)
+- [CBS: French Whale $85M](https://www.cbsnews.com/news/french-whale-made-over-80-million-on-polymarket-betting-on-trump-election-win-60-minutes/)
+- [DeFi Prime: Polymarket Ecosystem](https://defiprime.com/definitive-guide-to-the-polymarket-ecosystem)
+- [Polymarket-X Partnership](https://newsletter.sportingcrypto.com/p/polymarket-become-x-twitter-prediction-market-partner)
+- [CJR: Polymarket misinformation](https://www.cjr.org/tow_center/polymarket-affiliates-are-spreading-misinformation-on-x.php)
+
+**Growth & X algorithm:**
+- [GrowKaito: Crypto Twitter Playbook](https://growkaito.com/blog/the-crypto-twitter-growth-playbook)
+- [GrowKaito: How to Grow](https://growkaito.com/blog/how-to-grow-on-crypto-twitter)
+- [Tweet Archivist: X Algorithm 2026](https://www.tweetarchivist.com/how-twitter-algorithm-works-2025)
+- [Chainbull: Mastering Crypto Twitter](https://chainbull.net/blog/blockchain/mastering-crypto-twitter-x-influencer-campaigns-threads-algorithm-safety/)
+- [Shib Daily: X crypto suppression](https://news.shib.io/2025/12/12/elon-musks-x-algorithm-is-cutting-reach-for-crypto-content/)
+- [Coinpaprika: X shadowban](https://coinpaprika.com/news/x-crypto-posts-shadowban-bot-surge-algorithm-crackdown/)
+- [Decrypt: AIXBT](https://decrypt.co/299393/what-is-aixbt-ai-crypto-influencer)
+- [Nekodex: AIXBT growth](https://nekodex.org/blog/aixbt)
+- [a16z: Truth Terminal](https://a16z.com/podcast/truth-terminal-the-ai-bot-that-became-a-crypto-millionaire/)
+- [LessWrong: Truth Terminal reconstruction](https://www.lesswrong.com/posts/buiTYy75KJDhckDgq/truth-terminal-a-reconstruction-of-events)
+- [ChainCatcher: AIXBT analysis](https://www.chaincatcher.com/en/article/2162356)
+
+**Discovery platforms:**
+- [CryptoSlate: Cookie.fun launch](https://cryptoslate.com/cookie-dao-launches-platform-to-track-performance-of-ai-agents/)
+- [DappRadar: Cookie Guide](https://dappradar.com/blog/ultimate-guide-to-cookie-fun-and-cookie-dao-revolutionizing-ai-and-web3-analytics)
+- [CoinGecko: Kaito](https://www.coingecko.com/learn/what-is-kaito-earn-yap-points)
+- [Virtuals Whitepaper: Agent Launch](https://whitepaper.virtuals.io/builders-hub/agent-launch-mechanisms)
+- [Neynar: Building agents on Farcaster](https://neynar.com/blog/building-ai-agents-on-farcaster)
+- [Farcaster 2026 agents](https://app.t2.world/article/cm6driew61299193tymcl5g6ikvh)
+
+**News (March 2026):**
+- [Axios: ROME AI escape](https://www.axios.com/2026/03/07/ai-agents-rome-model-cryptocurrency)
+- [CoinDesk: World × Coinbase AgentKit](https://www.coindesk.com/tech/2026/03/17/sam-altman-s-world-teams-up-with-coinbase-to-prove-there-is-a-real-person-behind-every-ai-transaction)
+- [Crypto Times: Trust Wallet Agent Kit](https://www.cryptotimes.io/2026/03/26/trust-wallet-pushes-into-ai-finance-with-self-trading-crypto-agents/)
+- [CoinTelegraph: Energym Dystopia](https://cointelegraph.com/news/energym-ai-spoof-block-layoffs-job-openings-citrini-scenario)
