@@ -3,19 +3,19 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>$BEEF — Дорожная карта эволюции</title>
-  <meta name="description" content="Куда движется бойня. Анализ ландшафта AI-агентов, конкурентное позиционирование и фичи, которые сделают $BEEF невозможным для игнорирования.">
+  <title>$BEEF — Стратегия Phase 2</title>
+  <meta name="description" content="Честный анализ: почему burn-to-roast не работает на старте, что делать вместо этого, и конкретный план от 0 до 10K фолловеров.">
   <meta name="robots" content="noindex">
 
-  <meta property="og:title" content="$BEEF — Дорожная карта эволюции">
-  <meta property="og:description" content="Анализ ландшафта AI-агентов и следующая фаза автономного роастинга на Base chain.">
+  <meta property="og:title" content="$BEEF — Стратегия Phase 2">
+  <meta property="og:description" content="Wallet Roast, Polymarket Rekt Reports и путь от 0 до 10K без токена.">
   <meta property="og:type" content="website">
-  <meta property="og:url" content="https://0xbeef.wtf/upgrade/">
+  <meta property="og:url" content="https://aisatisfy.me/beefv2/upgrade/">
   <meta property="og:image" content="https://0xbeef.wtf/img/og-image.png">
 
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:title" content="$BEEF — Дорожная карта эволюции">
-  <meta name="twitter:description" content="Анализ ландшафта AI-агентов и следующая фаза автономного роастинга.">
+  <meta name="twitter:title" content="$BEEF — Стратегия Phase 2">
+  <meta name="twitter:description" content="Wallet Roast, Polymarket Rekt Reports и путь от 0 до 10K.">
   <meta name="twitter:image" content="https://0xbeef.wtf/img/og-image.png">
   <meta name="twitter:site" content="@0xBeefer">
 
@@ -46,8 +46,6 @@
       --green-dim: rgba(0,255,65,0.08);
       --amber: #d4a843;
       --amber-dim: rgba(212,168,67,0.08);
-      --blood: #4a0000;
-      --char: #1a0000;
       --font-mono: 'IBM Plex Mono', 'Fira Code', 'Courier New', monospace;
       --font-slab: 'Zilla Slab', 'Rockwell', 'Georgia', serif;
     }
@@ -63,467 +61,159 @@
       overflow-x: hidden;
     }
 
-    /* Grain overlay */
     .grain {
-      position: fixed;
-      inset: 0;
-      z-index: 9997;
-      pointer-events: none;
-      opacity: 0.04;
+      position: fixed; inset: 0; z-index: 9997; pointer-events: none; opacity: 0.04;
       background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
       background-size: 256px;
     }
 
     /* Status bar */
     .status-bar {
-      background: var(--bg-surface);
-      border-bottom: 1px solid var(--border);
-      padding: 6px 16px;
-      font-size: 11px;
-      color: var(--text-muted);
-      display: flex;
-      justify-content: center;
-      gap: 16px;
-      flex-wrap: wrap;
-      letter-spacing: 0.02em;
-      position: sticky;
-      top: 0;
-      z-index: 100;
+      background: var(--bg-surface); border-bottom: 1px solid var(--border);
+      padding: 6px 16px; font-size: 11px; color: var(--text-muted);
+      display: flex; justify-content: center; gap: 16px; flex-wrap: wrap;
+      letter-spacing: 0.02em; position: sticky; top: 0; z-index: 100;
     }
     .status-bar a { color: var(--text-dim); text-decoration: none; }
     .status-bar a:hover { color: var(--red); }
     .status-bar .label { color: var(--red); }
 
     /* Grill divider */
-    .grill-divider {
-      position: relative;
-      height: 12px;
-      overflow: hidden;
-    }
-    .grill-divider::before,
-    .grill-divider::after {
-      content: '';
-      position: absolute;
-      left: 0;
-      right: 0;
-      height: 3px;
-      background: linear-gradient(90deg,
-        transparent 0%,
-        var(--red) 15%,
-        var(--red-bright) 50%,
-        var(--red) 85%,
-        transparent 100%
-      );
+    .grill-divider { position: relative; height: 12px; overflow: hidden; }
+    .grill-divider::before, .grill-divider::after {
+      content: ''; position: absolute; left: 0; right: 0; height: 3px;
+      background: linear-gradient(90deg, transparent 0%, var(--red) 15%, var(--red-bright) 50%, var(--red) 85%, transparent 100%);
       opacity: 0.6;
     }
     .grill-divider::before { top: 2px; }
     .grill-divider::after { bottom: 2px; opacity: 0.3; }
 
-    /* Content wrapper */
-    .content {
-      max-width: 900px;
-      margin: 0 auto;
-      padding: 0 24px;
-    }
+    .content { max-width: 900px; margin: 0 auto; padding: 0 24px; }
 
     /* Hero */
-    .hero {
-      position: relative;
-      padding: 100px 24px 80px;
-      text-align: center;
-      overflow: hidden;
-    }
+    .hero { position: relative; padding: 100px 24px 80px; text-align: center; overflow: hidden; }
     .hero::before {
-      content: '';
-      position: absolute;
-      top: 30%;
-      left: 50%;
-      transform: translate(-50%, -50%);
-      width: 600px;
-      height: 600px;
+      content: ''; position: absolute; top: 30%; left: 50%; transform: translate(-50%, -50%);
+      width: 600px; height: 600px;
       background: radial-gradient(circle, rgba(204,0,0,0.08) 0%, rgba(204,0,0,0.02) 40%, transparent 70%);
       pointer-events: none;
     }
-    .hero-label {
-      font-size: 11px;
-      letter-spacing: 0.12em;
-      text-transform: uppercase;
-      color: var(--red);
-      margin-bottom: 20px;
-    }
-    .hero h1 {
-      font-family: var(--font-slab);
-      font-size: clamp(32px, 6vw, 56px);
-      font-weight: 700;
-      line-height: 1.1;
-      margin-bottom: 20px;
-      letter-spacing: -0.02em;
-    }
+    .hero-label { font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--red); margin-bottom: 20px; }
+    .hero h1 { font-family: var(--font-slab); font-size: clamp(32px, 6vw, 56px); font-weight: 700; line-height: 1.1; margin-bottom: 20px; letter-spacing: -0.02em; }
     .hero h1 span { color: var(--red); }
-    .hero-sub {
-      font-size: 15px;
-      color: var(--text-dim);
-      max-width: 620px;
-      margin: 0 auto 32px;
-      line-height: 1.7;
-    }
-    .hero-date {
-      font-size: 12px;
-      color: var(--text-muted);
-    }
+    .hero-sub { font-size: 15px; color: var(--text-dim); max-width: 640px; margin: 0 auto 32px; line-height: 1.7; }
+    .hero-date { font-size: 12px; color: var(--text-muted); }
 
     /* Section */
-    section {
-      padding: 80px 0;
-    }
-    .section-label {
-      font-size: 10px;
-      letter-spacing: 0.14em;
-      text-transform: uppercase;
-      color: var(--red);
-      margin-bottom: 12px;
-    }
-    section h2 {
-      font-family: var(--font-slab);
-      font-size: clamp(24px, 4vw, 36px);
-      font-weight: 600;
-      line-height: 1.2;
-      margin-bottom: 24px;
-      letter-spacing: -0.01em;
-    }
-    section h3 {
-      font-family: var(--font-slab);
-      font-size: 20px;
-      font-weight: 600;
-      margin-bottom: 12px;
-      color: var(--text);
-    }
-    section p {
-      color: var(--text-dim);
-      font-size: 14px;
-      line-height: 1.7;
-      margin-bottom: 16px;
-    }
+    section { padding: 80px 0; }
+    .section-label { font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--red); margin-bottom: 12px; }
+    section h2 { font-family: var(--font-slab); font-size: clamp(24px, 4vw, 36px); font-weight: 600; line-height: 1.2; margin-bottom: 24px; letter-spacing: -0.01em; }
+    section h3 { font-family: var(--font-slab); font-size: 20px; font-weight: 600; margin-bottom: 12px; color: var(--text); }
+    section p { color: var(--text-dim); font-size: 14px; line-height: 1.7; margin-bottom: 16px; }
 
     /* Stats strip */
-    .stats-strip {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-      gap: 1px;
-      background: var(--border);
-      margin: 48px 0;
-    }
-    .stat-cell {
-      background: var(--bg-surface);
-      padding: 24px 20px;
-      text-align: center;
-    }
-    .stat-value {
-      font-family: var(--font-slab);
-      font-size: 32px;
-      font-weight: 700;
-      color: var(--red);
-      line-height: 1;
-      margin-bottom: 6px;
-      font-feature-settings: 'tnum';
-    }
+    .stats-strip { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 1px; background: var(--border); margin: 48px 0; }
+    .stat-cell { background: var(--bg-surface); padding: 24px 20px; text-align: center; }
+    .stat-value { font-family: var(--font-slab); font-size: 28px; font-weight: 700; color: var(--red); line-height: 1; margin-bottom: 6px; font-feature-settings: 'tnum'; }
     .stat-value.green { color: var(--green); }
     .stat-value.amber { color: var(--amber); }
-    .stat-label {
-      font-size: 11px;
-      color: var(--text-muted);
-      letter-spacing: 0.06em;
-      text-transform: uppercase;
-    }
+    .stat-label { font-size: 11px; color: var(--text-muted); letter-spacing: 0.06em; text-transform: uppercase; }
+
+    /* Insight block */
+    .insight { background: var(--bg-surface); border-left: 3px solid var(--red); padding: 20px 24px; margin: 24px 0; font-size: 14px; color: var(--text-dim); line-height: 1.7; }
+    .insight strong { color: var(--text); }
+    .insight.warning { border-left-color: var(--amber); }
+    .insight.warning strong { color: var(--amber); }
+    .insight.positive { border-left-color: var(--green); }
+    .insight.positive strong { color: var(--green); }
 
     /* Narrative table */
-    .narrative-table {
-      width: 100%;
-      border-collapse: collapse;
-      margin: 24px 0;
-      font-size: 13px;
-    }
-    .narrative-table th {
-      text-align: left;
-      padding: 10px 12px;
-      font-size: 10px;
-      letter-spacing: 0.08em;
-      text-transform: uppercase;
-      color: var(--text-muted);
-      border-bottom: 1px solid var(--border-accent);
-      font-weight: 600;
-    }
-    .narrative-table td {
-      padding: 10px 12px;
-      border-bottom: 1px solid var(--border);
-      color: var(--text-dim);
-      vertical-align: top;
-    }
+    .narrative-table { width: 100%; border-collapse: collapse; margin: 24px 0; font-size: 13px; }
+    .narrative-table th { text-align: left; padding: 10px 12px; font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-muted); border-bottom: 1px solid var(--border-accent); font-weight: 600; }
+    .narrative-table td { padding: 10px 12px; border-bottom: 1px solid var(--border); color: var(--text-dim); vertical-align: top; }
     .narrative-table tr:hover td { background: var(--red-dim); }
-    .tag {
-      display: inline-block;
-      font-size: 10px;
-      padding: 2px 8px;
-      border-radius: 3px;
-      letter-spacing: 0.04em;
-      text-transform: uppercase;
-      font-weight: 600;
-    }
+    .tag { display: inline-block; font-size: 10px; padding: 2px 8px; border-radius: 3px; letter-spacing: 0.04em; text-transform: uppercase; font-weight: 600; }
     .tag-hot { background: rgba(204,0,0,0.15); color: var(--red-bright); }
     .tag-rising { background: var(--green-dim); color: var(--green); }
     .tag-dead { background: rgba(255,255,255,0.04); color: var(--text-muted); }
     .tag-new { background: var(--amber-dim); color: var(--amber); }
+    .tag-warn { background: rgba(212,168,67,0.15); color: var(--amber); }
 
     /* Feature cards */
-    .feature-grid {
-      display: grid;
-      grid-template-columns: 1fr;
-      gap: 2px;
-      margin: 32px 0;
-    }
-    .feature-card {
-      background: var(--bg-surface);
-      border: 1px solid var(--border);
-      padding: 28px 24px;
-      position: relative;
-      transition: border-color 0.25s, transform 0.25s;
-    }
-    .feature-card:hover {
-      border-color: var(--border-accent);
-      transform: translateY(-2px);
-    }
-    .feature-card::before {
-      content: attr(data-number);
-      position: absolute;
-      top: 20px;
-      right: 20px;
-      font-family: var(--font-slab);
-      font-size: 48px;
-      font-weight: 700;
-      color: var(--border);
-      line-height: 1;
-    }
-    .feature-priority {
-      font-size: 10px;
-      letter-spacing: 0.1em;
-      text-transform: uppercase;
-      margin-bottom: 8px;
-    }
+    .feature-grid { display: grid; grid-template-columns: 1fr; gap: 2px; margin: 32px 0; }
+    .feature-card { background: var(--bg-surface); border: 1px solid var(--border); padding: 28px 24px; position: relative; transition: border-color 0.25s, transform 0.25s; }
+    .feature-card:hover { border-color: var(--border-accent); transform: translateY(-2px); }
+    .feature-card::before { content: attr(data-number); position: absolute; top: 20px; right: 20px; font-family: var(--font-slab); font-size: 48px; font-weight: 700; color: var(--border); line-height: 1; }
+    .feature-priority { font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; margin-bottom: 8px; }
     .feature-priority.p1 { color: var(--red); }
     .feature-priority.p2 { color: var(--amber); }
     .feature-priority.p3 { color: var(--text-muted); }
-    .feature-card h3 {
-      font-family: var(--font-slab);
-      font-size: 20px;
-      font-weight: 600;
-      margin-bottom: 10px;
-      padding-right: 50px;
-    }
-    .feature-card p {
-      font-size: 13px;
-      color: var(--text-dim);
-      line-height: 1.7;
-      margin-bottom: 12px;
-    }
-    .feature-precedent {
-      font-size: 12px;
-      color: var(--text-muted);
-      border-left: 2px solid var(--border-accent);
-      padding-left: 12px;
-      margin-top: 12px;
-    }
-    .feature-meta {
-      display: flex;
-      gap: 16px;
-      margin-top: 16px;
-      font-size: 11px;
-    }
+    .feature-card h3 { font-family: var(--font-slab); font-size: 20px; font-weight: 600; margin-bottom: 10px; padding-right: 50px; }
+    .feature-card p { font-size: 13px; color: var(--text-dim); line-height: 1.7; margin-bottom: 12px; }
+    .feature-precedent { font-size: 12px; color: var(--text-muted); border-left: 2px solid var(--border-accent); padding-left: 12px; margin-top: 12px; }
+    .feature-meta { display: flex; gap: 16px; margin-top: 16px; font-size: 11px; flex-wrap: wrap; }
     .feature-meta span { color: var(--text-muted); }
     .feature-meta .val { color: var(--text-dim); }
 
     /* Competitor grid */
-    .competitor-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
-      gap: 1px;
-      background: var(--border);
-      margin: 24px 0;
-    }
-    .competitor-cell {
-      background: var(--bg-surface);
-      padding: 20px;
-    }
-    .competitor-name {
-      font-family: var(--font-slab);
-      font-size: 16px;
-      font-weight: 600;
-      margin-bottom: 4px;
-    }
-    .competitor-mcap {
-      font-size: 12px;
-      color: var(--text-muted);
-      margin-bottom: 10px;
-      font-feature-settings: 'tnum';
-    }
-    .competitor-desc {
-      font-size: 12px;
-      color: var(--text-dim);
-      line-height: 1.6;
-    }
-    .competitor-diff {
-      font-size: 11px;
-      color: var(--red);
-      margin-top: 8px;
-      border-top: 1px solid var(--border);
-      padding-top: 8px;
-    }
+    .competitor-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 1px; background: var(--border); margin: 24px 0; }
+    .competitor-cell { background: var(--bg-surface); padding: 20px; }
+    .competitor-name { font-family: var(--font-slab); font-size: 16px; font-weight: 600; margin-bottom: 4px; }
+    .competitor-mcap { font-size: 12px; color: var(--text-muted); margin-bottom: 10px; font-feature-settings: 'tnum'; }
+    .competitor-desc { font-size: 12px; color: var(--text-dim); line-height: 1.6; }
+    .competitor-diff { font-size: 11px; color: var(--red); margin-top: 8px; border-top: 1px solid var(--border); padding-top: 8px; }
 
-    /* Insight block */
-    .insight {
-      background: var(--bg-surface);
-      border-left: 3px solid var(--red);
-      padding: 20px 24px;
-      margin: 24px 0;
-      font-size: 14px;
-      color: var(--text-dim);
-      line-height: 1.7;
-    }
-    .insight strong { color: var(--text); }
+    /* Data list */
+    .data-list { list-style: none; margin: 16px 0; }
+    .data-list li { padding: 8px 0; border-bottom: 1px solid var(--border); font-size: 13px; color: var(--text-dim); display: flex; gap: 8px; align-items: baseline; }
+    .data-list li::before { content: '→'; color: var(--red); font-weight: 700; flex-shrink: 0; }
+    .data-list .highlight { color: var(--text); font-weight: 600; }
+
+    /* Two-column layout */
+    .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 2px; background: var(--border); margin: 24px 0; }
+    .two-col > div { background: var(--bg-surface); padding: 24px; }
+    .two-col h3 { margin-bottom: 16px; }
 
     /* Timeline */
-    .timeline {
-      position: relative;
-      padding-left: 28px;
-      margin: 32px 0;
-    }
-    .timeline::before {
-      content: '';
-      position: absolute;
-      left: 0;
-      top: 0;
-      bottom: 0;
-      width: 2px;
-      background: linear-gradient(to bottom, var(--red), var(--border));
-    }
-    .timeline-item {
-      position: relative;
-      padding-bottom: 32px;
-    }
-    .timeline-item::before {
-      content: '';
-      position: absolute;
-      left: -32px;
-      top: 6px;
-      width: 10px;
-      height: 10px;
-      border-radius: 50%;
-      background: var(--red);
-      box-shadow: 0 0 8px var(--red-glow);
-    }
-    .timeline-item.future::before {
-      background: var(--bg);
-      border: 2px solid var(--border-accent);
-      box-shadow: none;
-    }
-    .timeline-phase {
-      font-size: 11px;
-      letter-spacing: 0.08em;
-      text-transform: uppercase;
-      color: var(--red);
-      margin-bottom: 4px;
-    }
+    .timeline { position: relative; padding-left: 28px; margin: 32px 0; }
+    .timeline::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 2px; background: linear-gradient(to bottom, var(--red), var(--border)); }
+    .timeline-item { position: relative; padding-bottom: 32px; }
+    .timeline-item::before { content: ''; position: absolute; left: -32px; top: 6px; width: 10px; height: 10px; border-radius: 50%; background: var(--red); box-shadow: 0 0 8px var(--red-glow); }
+    .timeline-item.future::before { background: var(--bg); border: 2px solid var(--border-accent); box-shadow: none; }
+    .timeline-phase { font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--red); margin-bottom: 4px; }
     .timeline-item.future .timeline-phase { color: var(--text-muted); }
-    .timeline-title {
-      font-family: var(--font-slab);
-      font-size: 16px;
-      font-weight: 600;
-      margin-bottom: 6px;
-    }
-    .timeline-desc {
-      font-size: 13px;
-      color: var(--text-dim);
-      line-height: 1.6;
-    }
+    .timeline-title { font-family: var(--font-slab); font-size: 16px; font-weight: 600; margin-bottom: 6px; }
+    .timeline-desc { font-size: 13px; color: var(--text-dim); line-height: 1.6; }
+    .timeline-desc ul { list-style: none; margin-top: 8px; }
+    .timeline-desc ul li { padding: 3px 0; }
+    .timeline-desc ul li::before { content: '· '; color: var(--red); }
 
     /* Bottom CTA */
-    .bottom-cta {
-      text-align: center;
-      padding: 80px 24px 120px;
-    }
-    .bottom-cta h2 {
-      font-family: var(--font-slab);
-      font-size: clamp(24px, 4vw, 36px);
-      font-weight: 600;
-      margin-bottom: 16px;
-    }
-    .bottom-cta p {
-      font-size: 14px;
-      color: var(--text-dim);
-      margin-bottom: 32px;
-    }
-    .cta-links {
-      display: flex;
-      gap: 16px;
-      justify-content: center;
-      flex-wrap: wrap;
-    }
-    .cta-btn {
-      display: inline-flex;
-      align-items: center;
-      gap: 8px;
-      padding: 12px 28px;
-      font-family: var(--font-mono);
-      font-size: 13px;
-      font-weight: 600;
-      text-decoration: none;
-      letter-spacing: 0.04em;
-      border: 1px solid var(--border-accent);
-      color: var(--text);
-      transition: all 0.25s;
-    }
-    .cta-btn:hover {
-      border-color: var(--red);
-      box-shadow: 0 4px 20px var(--red-glow);
-      transform: translateY(-2px);
-    }
-    .cta-btn.primary {
-      background: var(--red);
-      border-color: var(--red);
-      color: #fff;
-    }
-    .cta-btn.primary:hover {
-      background: var(--red-bright);
-      border-color: var(--red-bright);
-    }
+    .bottom-cta { text-align: center; padding: 80px 24px 120px; }
+    .bottom-cta h2 { font-family: var(--font-slab); font-size: clamp(24px, 4vw, 36px); font-weight: 600; margin-bottom: 16px; }
+    .bottom-cta p { font-size: 14px; color: var(--text-dim); margin-bottom: 32px; }
+    .cta-links { display: flex; gap: 16px; justify-content: center; flex-wrap: wrap; }
+    .cta-btn { display: inline-flex; align-items: center; gap: 8px; padding: 12px 28px; font-family: var(--font-mono); font-size: 13px; font-weight: 600; text-decoration: none; letter-spacing: 0.04em; border: 1px solid var(--border-accent); color: var(--text); transition: all 0.25s; }
+    .cta-btn:hover { border-color: var(--red); box-shadow: 0 4px 20px var(--red-glow); transform: translateY(-2px); }
+    .cta-btn.primary { background: var(--red); border-color: var(--red); color: #fff; }
+    .cta-btn.primary:hover { background: var(--red-bright); border-color: var(--red-bright); }
 
-    /* Footer */
-    footer {
-      border-top: 1px solid var(--border);
-      padding: 24px;
-      text-align: center;
-      font-size: 11px;
-      color: var(--text-muted);
-    }
+    footer { border-top: 1px solid var(--border); padding: 24px; text-align: center; font-size: 11px; color: var(--text-muted); }
     footer a { color: var(--text-dim); text-decoration: none; }
     footer a:hover { color: var(--red); }
 
-    /* Scroll reveal */
-    .reveal {
-      opacity: 0;
-      transform: translateY(16px);
-      transition: opacity 0.7s cubic-bezier(0.22,1,0.36,1), transform 0.7s cubic-bezier(0.22,1,0.36,1);
-    }
+    .reveal { opacity: 0; transform: translateY(16px); transition: opacity 0.7s cubic-bezier(0.22,1,0.36,1), transform 0.7s cubic-bezier(0.22,1,0.36,1); }
     .reveal.visible { opacity: 1; transform: translateY(0); }
 
-    /* Responsive */
     @media (max-width: 640px) {
       .hero { padding: 80px 20px 60px; }
       section { padding: 60px 0; }
       .feature-card { padding: 20px 16px; }
       .feature-card::before { font-size: 36px; top: 16px; right: 16px; }
       .stats-strip { grid-template-columns: repeat(2, 1fr); }
-      .stat-value { font-size: 24px; }
+      .stat-value { font-size: 22px; }
       .competitor-grid { grid-template-columns: 1fr; }
+      .two-col { grid-template-columns: 1fr; }
       .timeline { padding-left: 24px; }
       .timeline-item::before { left: -28px; }
     }
@@ -539,88 +229,298 @@
 <div class="grain"></div>
 
 <div class="status-bar">
-  <span><span class="label">INTERNAL</span> стратегический документ</span>
+  <span><span class="label">INTERNAL</span> стратегический документ v2</span>
   <span>27 марта 2026</span>
+  <span>60+ источников</span>
   <a href="https://0xbeef.wtf/">← 0xbeef.wtf</a>
 </div>
 
 <header class="hero">
   <div class="content">
-    <div class="hero-label reveal">Дорожная карта эволюции</div>
-    <h1 class="reveal">Рынок <span>истёк кровью.</span><br>Мы только начинаем.</h1>
-    <p class="hero-sub reveal">Сектор AI-агентов потерял 67% от ATH. Хайп-туристы ушли. Осталось: реальный utility, автономные on-chain действия и ниша, которую никто не занял. Вот куда $BEEF движется дальше.</p>
-    <div class="hero-date reveal">Дата исследования: 27 марта 2026 · 14 источников</div>
+    <div class="hero-label reveal">Стратегия Phase 2</div>
+    <h1 class="reveal">Burn-to-roast <span>не работает.</span><br>Вот что работает.</h1>
+    <p class="hero-sub reveal">Честный разбор: почему сжигание токенов за роаст — это Phase 3 фича, а не Phase 1. Что реально поднимет $BEEF от 0 до 10K фолловеров. Конкретный план с данными.</p>
+    <div class="hero-date reveal">Исследование: 27 марта 2026 · 5 параллельных ресёрч-агентов · 60+ источников</div>
   </div>
 </header>
 
 <div class="grill-divider"></div>
 
-<!-- MARKET STATE -->
+<!-- HONEST ASSESSMENT -->
 <section>
   <div class="content">
-    <div class="section-label reveal">Состояние рынка</div>
-    <h2 class="reveal">Сектор AI-агентов — Q1 2026</h2>
+    <div class="section-label reveal">Честная оценка</div>
+    <h2 class="reveal">Почему burn-to-roast не сработает сейчас</h2>
+
+    <div class="insight warning reveal">
+      <strong>Все прецеденты мертвы.</strong> $JIM (burn 69 JIM за роаст) — $106 дневного объёма, токен мёртв. Dolos/BULLY — mcap $164K. BurnieAI/$ROAST — $122K. Ни один entertainment-бот не монетизировал burn-to-use механику.
+    </div>
+
+    <h3 class="reveal">Три корневые проблемы</h3>
+
+    <ul class="data-list reveal">
+      <li><span class="highlight">Ценность роаста = функция от аудитории.</span> При 200 фолловерах заказной роаст — крик в пустоту. Никто не заплатит за это</li>
+      <li><span class="highlight">Chicken-and-egg.</span> Утилити нужна аудитория, аудитория нужна утилити. Burn-механика не решает эту проблему — она её усугубляет</li>
+      <li><span class="highlight">Price point friction.</span> При &lt;$1 механика несерьёзна. При &gt;$10 убивает casual demand. Любой Web3-онбординг = потеря 90% конверсии</li>
+    </ul>
+
+    <h3 class="reveal">Что реально создаёт demand на AI-токены</h3>
+
+    <table class="narrative-table reveal">
+      <thead><tr><th>Механика</th><th>Пример</th><th>Результат</th></tr></thead>
+      <tbody>
+        <tr>
+          <td>Структурный demand — токен нужен для использования</td>
+          <td>VIRTUAL — для запуска агента</td>
+          <td>$4.6B mcap на пике, $26M ARR</td>
+        </tr>
+        <tr>
+          <td>Token gate на работающий продукт</td>
+          <td>AIXBT — 600K токенов = Premium Terminal</td>
+          <td>250 premium-кошельков, 497K фолловеров</td>
+        </tr>
+        <tr>
+          <td>Fee revenue → buyback</td>
+          <td>CLANKER — fee с каждого swap</td>
+          <td>$8M/неделю на пике, $50M cumulative</td>
+        </tr>
+        <tr>
+          <td>Burn-to-use (entertainment)</td>
+          <td>$JIM, BULLY, $ROAST</td>
+          <td><span class="tag tag-dead">ВСЕ МЕРТВЫ</span></td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="insight reveal">
+      <strong>Вывод:</strong> burn-to-roast — это Phase 3 фича, когда аудитория &gt;10K и люди уже просят роасты бесплатно. На Phase 1 нужны бесплатные вирусные механики для набора аудитории.
+    </div>
+  </div>
+</section>
+
+<div class="grill-divider"></div>
+
+<!-- WALLET ROAST -->
+<section>
+  <div class="content">
+    <div class="section-label reveal">Killer Feature</div>
+    <h2 class="reveal">Wallet Roast: роаст кошелька по on-chain данным</h2>
+
+    <p class="reveal">Reply с адресом кошелька → бот вытаскивает историю сделок → генерирует персональный роаст на основе реальных убытков. Бесплатно. Без токена. Вирусность через шеринг.</p>
 
     <div class="stats-strip reveal">
       <div class="stat-cell">
-        <div class="stat-value">$2.8B</div>
-        <div class="stat-label">Капитализация сектора</div>
+        <div class="stat-value green">0</div>
+        <div class="stat-label">Прямых конкурентов</div>
       </div>
       <div class="stat-cell">
-        <div class="stat-value">-67%</div>
-        <div class="stat-label">От ATH ($9-10B)</div>
+        <div class="stat-value">4M</div>
+        <div class="stat-label">Юзеров Wordware AI Roast за 11 дней</div>
       </div>
       <div class="stat-cell">
-        <div class="stat-value green">#1</div>
-        <div class="stat-label">Крипто-сектор Q1 2026</div>
+        <div class="stat-value amber">$0</div>
+        <div class="stat-label">Стоимость API данных</div>
       </div>
       <div class="stat-cell">
-        <div class="stat-value amber">18K+</div>
-        <div class="stat-label">Агентов на Virtuals</div>
+        <div class="stat-value">28K</div>
+        <div class="stat-label">Фолловеров Dolos (без on-chain)</div>
+      </div>
+    </div>
+
+    <div class="insight positive reveal">
+      <strong>Ниша полностью пуста.</strong> Dolos (@dolos_diary, 28–50K followers) — единственный roast-бот, но работает без on-chain данных. Все роасты generic. Никто не делает персонализированный wallet roast с реальными убытками, win rate и участием в rug pull'ах.
+    </div>
+
+    <h3 class="reveal">Данные для ростинга — бесплатно</h3>
+
+    <table class="narrative-table reveal">
+      <thead><tr><th>Инструмент</th><th>Данные</th><th>Roast-потенциал</th></tr></thead>
+      <tbody>
+        <tr>
+          <td>Moralis PnL API</td>
+          <td>Realized P&amp;L, win rate, объём торгов</td>
+          <td>«Win rate 30%. Монетка даёт 50%. Ты хуже рандома»</td>
+        </tr>
+        <tr>
+          <td>DexCheck AI</td>
+          <td>Trading history, мёртвые токены, rug participation</td>
+          <td>«Ты до сих пор держишь $SQUID с 2021 года»</td>
+        </tr>
+        <tr>
+          <td>Nansen Labels</td>
+          <td>Метка "Exit Liquidity" — покупает на пике</td>
+          <td>«Nansen официально сертифицировал тебя как exit liquidity»</td>
+        </tr>
+        <tr>
+          <td>DegenScore</td>
+          <td>On-chain score 0–1000</td>
+          <td>«DegenScore 147. Это даже не bronze tier, это подвал»</td>
+        </tr>
+        <tr>
+          <td>Etherscan / DeBank</td>
+          <td>Failed transactions, первая TX</td>
+          <td>«47 failed tx. Даже блокчейн от тебя отказывается»</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h3 class="reveal">Почему завирусится</h3>
+
+    <ul class="data-list reveal">
+      <li><span class="highlight">Wordware AI Roast</span> — 4M пользователей за 11 дней на бесплатном "roast me". Без токена, без ongoing utility. Доказанный спрос</li>
+      <li><span class="highlight">Lark Davis</span> (~450K followers) периодически делает "Portfolio Roast Time" вручную. Очередь из подписчиков. Автоматизации нет</li>
+      <li><span class="highlight">Bubblemaps</span> — 20+ вирусных on-chain расследований. HAWK: 96% supply в одном кластере. Позор = виральность</li>
+      <li><span class="highlight">"Exit Liquidity"</span> — уже часть словаря Crypto Twitter как оскорбление. Мы это автоматизируем</li>
+    </ul>
+  </div>
+</section>
+
+<div class="grill-divider"></div>
+
+<!-- POLYMARKET -->
+<section>
+  <div class="content">
+    <div class="section-label reveal">Контент-источник</div>
+    <h2 class="reveal">Polymarket Rekt Reports: еженедельные позорища</h2>
+
+    <p class="reveal">API полностью публичный. Leaderboard, позиции, P&amp;L любого кошелька — без авторизации. Ниша accountability-контента на Polymarket <strong>абсолютно пуста</strong>.</p>
+
+    <div class="two-col reveal">
+      <div>
+        <h3>Что доступно (бесплатно)</h3>
+        <ul class="data-list">
+          <li>Leaderboard: топ-50 худших P&amp;L за неделю</li>
+          <li>Позиции любого кошелька и вся история сделок</li>
+          <li>X-username привязка (если пользователь подключил)</li>
+          <li>Market resolution с таймингом</li>
+          <li>Категории: политика, спорт, крипто, культура</li>
+        </ul>
+      </div>
+      <div>
+        <h3>Готовые вирусные кейсы</h3>
+        <ul class="data-list">
+          <li><span class="highlight">anoin123</span> — потерял $6.5M на ударах по Ирану</li>
+          <li><span class="highlight">markitzero</span> — $4M потеря на президентских выборах</li>
+          <li><span class="highlight">UFO-рынок</span> — $16M, разрешён без доказательств</li>
+          <li><span class="highlight">"Théo"</span> — $85M прибыли, CBS/Bloomberg/WSJ</li>
+        </ul>
+      </div>
+    </div>
+
+    <h3 class="reveal">Форматы контента</h3>
+
+    <div class="feature-grid">
+      <div class="feature-card reveal" data-number="W">
+        <div class="feature-priority p1">Еженедельно</div>
+        <h3>Weekly Rekt Report</h3>
+        <p>Каждый понедельник: топ-5 крупнейших потерь за неделю из leaderboard API. Конкретные суммы, конкретные рынки, конкретный позор. «anoin123 два месяца собирал $2M ставя против удара по Ирану. Потом удар случился.»</p>
+      </div>
+
+      <div class="feature-card reveal" data-number="R">
+        <div class="feature-priority p1">Real-time</div>
+        <h3>Resolution Roast</h3>
+        <p>Мониторить закрытие крупных рынков → моментально запросить позиции проигравшей стороны → роаст в течение минут. Скорость = виральность.</p>
       </div>
     </div>
 
     <div class="insight reveal">
-      <strong>Фильтр работает.</strong> Мемкоины-которые-разговаривают умирают. Растёт: агенты с on-chain кошельками, верифицируемым P&amp;L и реальным utility. AI-сектор обогнал все 6 остальных секторов Grayscale в Q1 2026, несмотря на кровавую баню.
+      <strong>Алгоритмический буст:</strong> Polymarket интегрирован с X через Grok. Твиты про Polymarket получают органическое усиление в алгоритме X.
+    </div>
+  </div>
+</section>
+
+<div class="grill-divider"></div>
+
+<!-- GROWTH PLAYBOOK -->
+<section>
+  <div class="content">
+    <div class="section-label reveal">Growth Playbook</div>
+    <h2 class="reveal">От 0 до 10K: конкретные тактики</h2>
+
+    <div class="insight warning reveal">
+      <strong>X с декабря 2025 подавляет крипто-контент.</strong> Тикеры ($BEEF, $BTC) в постах = shadowban 7–21 дней. Фразы "to the moon", "100x" = пометка как spam. Писать "BEEF" или "0xBEEF", не $BEEF.
     </div>
 
-    <h3 class="reveal">Горячие нарративы</h3>
+    <h3 class="reveal">Алгоритмические веса X (из открытого кода)</h3>
+
     <table class="narrative-table reveal">
-      <thead>
-        <tr>
-          <th>Нарратив</th>
-          <th>Статус</th>
-          <th>Ключевой сигнал</th>
-        </tr>
-      </thead>
+      <thead><tr><th>Действие</th><th>Алгоритмический вес</th><th>Тактика</th></tr></thead>
       <tbody>
         <tr>
-          <td>Agentic Finance (DeFAI)</td>
-          <td><span class="tag tag-hot">HOT</span></td>
-          <td>AI-агенты = 30% кошельков Polymarket, автономный трейдинг с P&amp;L</td>
+          <td>Лайк</td>
+          <td>×1 (базовый)</td>
+          <td>—</td>
         </tr>
         <tr>
-          <td>Sovereign AI (TEE + zkTLS)</td>
-          <td><span class="tag tag-rising">RISING</span></td>
-          <td>Freysa +165% за неделю, Venice VVV = $275M mcap</td>
+          <td>Закладка</td>
+          <td>×10</td>
+          <td>Создавать "сохраняемый" контент: списки, данные</td>
         </tr>
         <tr>
-          <td>Agent Commerce Protocol</td>
-          <td><span class="tag tag-new">NEW</span></td>
-          <td>Virtuals ACP на Arbitrum, агент-к-агенту платежи</td>
+          <td>Клик по профилю</td>
+          <td>×12</td>
+          <td>Провоцировать любопытство к боту</td>
         </tr>
         <tr>
-          <td>AI Social Networks</td>
-          <td><span class="tag tag-hot">HOT</span></td>
-          <td>Moltbook куплен Meta, 109K агентов</td>
+          <td>Ответ</td>
+          <td>×13.5</td>
+          <td>Reply-guy = основной growth engine</td>
         </tr>
         <tr>
-          <td>AI-мемкоины (без utility)</td>
-          <td><span class="tag tag-dead">DYING</span></td>
-          <td>«Почти все AI-агенты — просто мемкоины, которые разговаривают» — CoinTelegraph</td>
+          <td>Ретвит</td>
+          <td>×20</td>
+          <td>Shareable wallet roasts + roast cards</td>
+        </tr>
+        <tr>
+          <td><strong>Автор ответил на твой комментарий</strong></td>
+          <td><strong>×75 (= 150× лайка)</strong></td>
+          <td><strong>Провоцировать ответы от крупных аккаунтов</strong></td>
         </tr>
       </tbody>
     </table>
+
+    <div class="insight reveal">
+      <strong>Ключевой инсайт:</strong> Одна reply-цепочка, где автор поста ответил $BEEF — дороже 150 лайков. Весь reply-guy playbook строится на провоцировании ответов от крупных аккаунтов через острые, конкретные комментарии.
+    </div>
+
+    <h3 class="reveal">Целевые аккаунты для reply-guy</h3>
+
+    <table class="narrative-table reveal">
+      <thead><tr><th>Аккаунт</th><th>Ниша</th><th>Почему</th></tr></thead>
+      <tbody>
+        <tr><td>@Defi0xJeff</td><td>AI agent recaps</td><td>Еженедельные обзоры, Substack, активная аудитория</td></tr>
+        <tr><td>@S4mmyEth</td><td>Daily analysis + Spaces</td><td>Ведёт Twitter Spaces, тематика AI agents</td></tr>
+        <tr><td>@0xPrismatic</td><td>Virtuals / AI infra</td><td>Chain of Thought, глубокая аналитика</td></tr>
+        <tr><td>@cookiedotfun</td><td>AI agent mindshare</td><td>Ежедневные mindshare updates, direct path к листингу</td></tr>
+        <tr><td>@yb_effect</td><td>Farcaster + agents</td><td>Пересечение Farcaster и agent economy</td></tr>
+        <tr><td>@dolos_diary</td><td>Roast bot</td><td>Bot-to-bot drama = mutual audience exposure</td></tr>
+      </tbody>
+    </table>
+
+    <h3 class="reveal">Прецеденты роста</h3>
+
+    <div class="competitor-grid reveal">
+      <div class="competitor-cell">
+        <div class="competitor-name">AIXBT</div>
+        <div class="competitor-mcap">0 → 10K за ~3 недели</div>
+        <div class="competitor-desc">Niche-first в Virtuals community. Институциональный триггер: Quantum Cats treasury купил &gt;$1M токенов.</div>
+      </div>
+      <div class="competitor-cell">
+        <div class="competitor-name">Truth Terminal</div>
+        <div class="competitor-mcap">0 → 10K за ~3 месяца</div>
+        <div class="competitor-desc">Marc Andreessen $50K BTC грант. Один контакт с нужной элитой = больше 1000 обычных фолловеров.</div>
+      </div>
+      <div class="competitor-cell">
+        <div class="competitor-name">Freysa</div>
+        <div class="competitor-mcap">0 → 10K за ~1 неделю</div>
+        <div class="competitor-desc">$47K adversarial game. 195 участников, каждый рассказал своей аудитории. TechCrunch, CoinDesk coverage.</div>
+      </div>
+      <div class="competitor-cell">
+        <div class="competitor-name">Dolos</div>
+        <div class="competitor-mcap">0 → 28K за ~2 месяца</div>
+        <div class="competitor-desc">Keyword-trigger trolling + bot-to-bot drama. Обучен на 1M твитов CT. Контракт с fashion-брендом 9dcc.</div>
+      </div>
+    </div>
   </div>
 </section>
 
@@ -629,190 +529,134 @@
 <!-- COMPETITIVE LANDSCAPE -->
 <section>
   <div class="content">
-    <div class="section-label reveal">Конкурентный ландшафт</div>
-    <h2 class="reveal">Кто жив. Кто мёртв. Где мы.</h2>
-
-    <p class="reveal">Ниша entertainment/roast практически пуста. Аналитические боты, трейдинг-боты и социальные агенты существуют — но никто не делает публичную подотчётность с юмором.</p>
+    <div class="section-label reveal">Конкуренты (обновлённые данные)</div>
+    <h2 class="reveal">Кто жив, кто мёртв, где мы</h2>
 
     <div class="competitor-grid reveal">
       <div class="competitor-cell">
-        <div class="competitor-name">AIXBT</div>
-        <div class="competitor-mcap">$24M mcap · Активен</div>
-        <div class="competitor-desc">Аналитический терминал для держателей токена. Доступ по токену. Серьёзный тон.</div>
-        <div class="competitor-diff">$BEEF: комедия, не аналитика. Публичный, не за пейволлом.</div>
+        <div class="competitor-name">Dolos (@dolos_diary) <span class="tag tag-rising">ЖИВ</span></div>
+        <div class="competitor-mcap">28–50K followers · Mcap $164K</div>
+        <div class="competitor-desc">Роастит людей и ботов через keyword triggers. Llama 3.1, обучен на 1M CT-твитов. Без on-chain данных — все роасты generic. Контракт с 9dcc.</div>
+        <div class="competitor-diff">Наш edge: on-chain данные делают каждый роаст персональным и конкретным.</div>
       </div>
       <div class="competitor-cell">
-        <div class="competitor-name">Freysa AI (FAI)</div>
-        <div class="competitor-mcap">$31.7M mcap · +46.5% за неделю</div>
-        <div class="competitor-desc">Adversarial-игра — пользователи пытаются взломать AI. Sovereign Agent Stack с TEE.</div>
-        <div class="competitor-diff">$BEEF: сжигаешь, чтобы целиться в других, а не чтобы хакнуть бота.</div>
+        <div class="competitor-name">AIXBT (@aixbt_agent) <span class="tag tag-hot">ЖИВ</span></div>
+        <div class="competitor-mcap">497K followers · $24M mcap · -87% ATH</div>
+        <div class="competitor-desc">Аналитический терминал. 600K токенов для premium. 34K взаимодействий/день. Ceiling для AI-агентов в crypto Twitter.</div>
+        <div class="competitor-diff">Другая ниша: аналитика vs комедия. Но показывает достижимый масштаб.</div>
       </div>
       <div class="competitor-cell">
-        <div class="competitor-name">Polystrat (Olas)</div>
-        <div class="competitor-mcap">Растёт · 4 200+ сделок</div>
-        <div class="competitor-desc">Автономный трейдер на Polymarket. Пик доходности 376%. Прозрачный P&amp;L лог.</div>
-        <div class="competitor-diff">$BEEF: публичный журнал — модель для подражания, но роасты, не сделки.</div>
+        <div class="competitor-name">$JIM (RoastHimJim) <span class="tag tag-dead">МЁРТВ</span></div>
+        <div class="competitor-mcap">$106 дневного объёма</div>
+        <div class="competitor-desc">Burn 69 JIM за роаст. Мёртв. Доказательство: burn-to-roast без аудитории = мёртвый токен.</div>
+        <div class="competitor-diff">Антипаттерн. Не повторять.</div>
       </div>
       <div class="competitor-cell">
-        <div class="competitor-name">Dolos ($BULLY)</div>
-        <div class="competitor-mcap">$164K mcap · Мёртв</div>
-        <div class="competitor-desc">Была концепция роастов, не было burn-механики, не было взаимодействия с комьюнити. Заброшен.</div>
-        <div class="competitor-diff">$BEEF: burn-to-request + challenge система = устойчивый цикл.</div>
+        <div class="competitor-name">WalletRoast.com <span class="tag tag-new">ХАКАТОН</span></div>
+        <div class="competitor-mcap">Нет метрик</div>
+        <div class="competitor-desc">Grok-powered wallet roast через x402 ($0.01). Есть, но нет аудитории, нет Twitter presence, нет community.</div>
+        <div class="competitor-diff">Концепт существует. Исполнение отсутствует. Наша возможность.</div>
       </div>
       <div class="competitor-cell">
-        <div class="competitor-name">BurnieAI ($ROAST)</div>
-        <div class="competitor-mcap">$122K mcap · Мёртв</div>
+        <div class="competitor-name">BurnieAI ($ROAST) <span class="tag tag-dead">МЁРТВ</span></div>
+        <div class="competitor-mcap">$122K mcap</div>
         <div class="competitor-desc">Роаст-бот без подотчётности, без token utility, без слоя проверки фактов.</div>
-        <div class="competitor-diff">$BEEF: слой подотчётности делает роасты значимыми.</div>
+        <div class="competitor-diff">Ещё один антипаттерн. Роасты без данных = generic и скучно.</div>
       </div>
       <div class="competitor-cell">
-        <div class="competitor-name">Zerebro</div>
-        <div class="competitor-mcap">Пик $400M+ · Падение 90%+</div>
-        <div class="competitor-desc">Музыка, NFT, креативное AI-портфолио. Первый мультимодальный агент. Spotify, Polygon, BTC.</div>
-        <div class="competitor-diff">$BEEF: entertainment, другой медиум — текстовые роасты, не искусство.</div>
+        <div class="competitor-name">Freysa AI (FAI) <span class="tag tag-rising">+46.5%/нед</span></div>
+        <div class="competitor-mcap">$31.7M mcap</div>
+        <div class="competitor-desc">Adversarial game: плати, чтобы попробовать "взломать" AI. $47K jackpot. TEE + zkTLS. Event-driven, не постоянный.</div>
+        <div class="competitor-diff">Другой формат. Но adversarial mechanic — референс для будущих фич.</div>
       </div>
     </div>
+  </div>
+</section>
+
+<div class="grill-divider"></div>
+
+<!-- TOKEN STRATEGY -->
+<section>
+  <div class="content">
+    <div class="section-label reveal">Token Strategy</div>
+    <h2 class="reveal">Утилити по фазам, не всё сразу</h2>
+
+    <p class="reveal">Запускать токен при 1K+ фолловерах и активной Telegram-группе. Не раньше. Token launch — одноразовый PR-событие. Потратить его на пустой аккаунт = потерянный патрон.</p>
+
+    <div class="feature-grid">
+      <div class="feature-card reveal" data-number="1">
+        <div class="feature-priority p1">Phase 1 · Сейчас · Без токена</div>
+        <h3>Бесплатные вирусные механики</h3>
+        <p>Wallet roast (reply с адресом). Polymarket Rekt Reports. Reply-guy на целевых аккаунтах. Bot-to-bot drama с Dolos. Цель: 1K–5K фолловеров без единого токена.</p>
+        <div class="feature-meta">
+          <span>Стоимость: <span class="val">$0 + время</span></span>
+          <span>Цель: <span class="val">1K–5K followers</span></span>
+        </div>
+      </div>
+
+      <div class="feature-card reveal" data-number="2">
+        <div class="feature-priority p2">Phase 2 · После 1K followers · Token Launch</div>
+        <h3>Token-gated access (AIXBT-модель)</h3>
+        <p>Bankr launch → token-gated utility. Hold 5K BEEF → закрытый Alpha Telegram с raw роастами и hidden AI-скорами. Hold 1K BEEF → право предложить цель раз в неделю. Hold 10K BEEF → priority wallet roast (ответ за 5 минут).</p>
+        <div class="feature-meta">
+          <span>Стоимость проекту: <span class="val">~$0</span></span>
+          <span>Perceived value: <span class="val">Высокий</span></span>
+        </div>
+      </div>
+
+      <div class="feature-card reveal" data-number="3">
+        <div class="feature-priority p3">Phase 3 · После 10K holders</div>
+        <h3>Burn-механики и on-chain фичи</h3>
+        <p>Burn-to-roast (теперь имеет смысл — аудитория есть). Bear Market Accountability подписки. Agent-vs-Agent roast battles. Self-trading портфель. Полный цикл token utility.</p>
+        <div class="feature-meta">
+          <span>Условие: <span class="val">10K+ holders, доказанный demand</span></span>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div class="grill-divider"></div>
+
+<!-- DISCOVERY PLATFORMS -->
+<section>
+  <div class="content">
+    <div class="section-label reveal">Discovery</div>
+    <h2 class="reveal">Где нас найдут</h2>
+
+    <table class="narrative-table reveal">
+      <thead><tr><th>Платформа</th><th>Как попасть</th><th>Когда</th></tr></thead>
+      <tbody>
+        <tr>
+          <td><strong>Cookie.fun</strong> (1,500+ агентов)</td>
+          <td>Автоматическая индексация по упоминаниям в CT. Нет формы — нужен mindshare</td>
+          <td>Когда 5K+ followers</td>
+        </tr>
+        <tr>
+          <td><strong>Farcaster</strong> (20–60K DAU)</td>
+          <td>Neynar SDK. Нет Error 226, нет бана за автоматизацию. Web3-native аудитория</td>
+          <td><span class="tag tag-new">Параллельно с Twitter</span></td>
+        </tr>
+        <tr>
+          <td><strong>CoinGecko / CMC</strong></td>
+          <td>Стандартный сабмит токена</td>
+          <td>После token launch</td>
+        </tr>
+        <tr>
+          <td><strong>Virtuals Protocol</strong></td>
+          <td>42K VIRTUAL (~$42–84K). Framework-agnostic</td>
+          <td>Дорого. Отложить</td>
+        </tr>
+        <tr>
+          <td><strong>Kaito AI</strong></td>
+          <td>Yap Score → mindshare. Пивотируют в Kaito Studio</td>
+          <td>Следить за обновлениями</td>
+        </tr>
+      </tbody>
+    </table>
 
     <div class="insight reveal">
-      <strong>Ниша пуста и валидирована.</strong> Wordware AI Roast набрал 4M пользователей за 11 дней — без токена, без ongoing utility. Два прямых конкурента ($BULLY, $ROAST) оба мертвы с капитализацией &lt;$200K. Спрос есть. Исполнения не было.
-    </div>
-  </div>
-</section>
-
-<div class="grill-divider"></div>
-
-<!-- VIRALITY PATTERNS -->
-<section>
-  <div class="content">
-    <div class="section-label reveal">Паттерны виральности</div>
-    <h2 class="reveal">Что реально завирусилось в Q1 2026</h2>
-
-    <p class="reveal">Три паттерна доминируют в вирусных моментах AI-агентов этого квартала. Каждый маппится на конкретную фичу $BEEF.</p>
-
-    <div class="feature-grid">
-      <div class="feature-card reveal" data-number="A">
-        <div class="feature-priority p1">Паттерн</div>
-        <h3>Публичный провал → самосознание → памп</h3>
-        <p>Lobstar Wilde отправил $250K незнакомцу по ошибке, публично признал это и запампился до $11M mcap за 24 часа. Честность стала продуктом.</p>
-        <div class="feature-precedent">Lobstar Wilde (ошибка на $250K → $36M volume за 24ч) · Truth Terminal (абсурдная теология → $1.2B mcap)</div>
-      </div>
-
-      <div class="feature-card reveal" data-number="B">
-        <div class="feature-priority p1">Паттерн</div>
-        <h3>Верифицируемый on-chain P&amp;L → доверие</h3>
-        <p>Прозрачный торговый лог Polystrat выстроил больше доверия, чем любой маркетинг. Когда агент показывает чеки, спекуляция превращается в инвестиционный тезис.</p>
-        <div class="feature-precedent">Polystrat (пик доходности 376%, прозрачные Safe-аккаунты) · Theoriq Alpha Vault ($25M TVL)</div>
-      </div>
-
-      <div class="feature-card reveal" data-number="C">
-        <div class="feature-priority p1">Паттерн</div>
-        <h3>Adversarial-механики → цикл вовлечения</h3>
-        <p>Игра Freysa «попробуй меня взломать» создала призовой фонд, который рос с каждой попыткой. Burn-to-challenge — та же механика, применённая к роастам.</p>
-        <div class="feature-precedent">Freysa (burn-to-challenge, верификация через TEE) · Moltbook (AI-самоуправление → приобретение Meta)</div>
-      </div>
-    </div>
-  </div>
-</section>
-
-<div class="grill-divider"></div>
-
-<!-- FEATURE PROPOSALS -->
-<section>
-  <div class="content">
-    <div class="section-label reveal">Предложения по фичам</div>
-    <h2 class="reveal">Восемь путей эволюции бойни</h2>
-    <p class="reveal">Ранжировано по импакт × уникальность ÷ сложность. P1-фичи шипаются первыми.</p>
-
-    <div class="feature-grid">
-      <div class="feature-card reveal" data-number="01">
-        <div class="feature-priority p1">P1 · Низкая сложность</div>
-        <h3>Роасты Prediction Markets</h3>
-        <p>Бот мониторит Polymarket, роастит позиции, которые плохо закрылись. «Этот анон поставил $50K на победу Трампа в марте. Ставка закрылась вчера. Минута молчания.»</p>
-        <div class="feature-meta">
-          <span>Импакт: <span class="val">Высокий</span></span>
-          <span>Уникальность: <span class="val">Средняя</span></span>
-          <span>API: <span class="val">Polymarket (открытый)</span></span>
-        </div>
-      </div>
-
-      <div class="feature-card reveal" data-number="02">
-        <div class="feature-priority p1">P1 · Низкая сложность</div>
-        <h3>Голосование за цели (Community Watchlist)</h3>
-        <p>Держатели $BEEF сжигают токены, чтобы номинировать следующие цели для роастов. Топ-3 кандидата публикуются еженедельно. Каждая номинация = дефляция.</p>
-        <div class="feature-meta">
-          <span>Импакт: <span class="val">Средний</span></span>
-          <span>Уникальность: <span class="val">Средняя</span></span>
-          <span>Реализация: <span class="val">Telegram-опрос или простой контракт</span></span>
-        </div>
-      </div>
-
-      <div class="feature-card reveal" data-number="03">
-        <div class="feature-priority p1">P1 · Средняя сложность</div>
-        <h3>Лента подотчётности медвежьего рынка</h3>
-        <p>Отслеживать публичные обещания крипто-проектов (roadmaps, прогнозы цен, таргеты по DAU). Роастить через 30/90/180 дней, когда они провалятся. «В январе они обещали 1M DAU к марту. У них 347 кошельков.»</p>
-        <div class="feature-meta">
-          <span>Импакт: <span class="val">Высокий</span></span>
-          <span>Уникальность: <span class="val">Высокая</span></span>
-          <span>Реализация: <span class="val">БД обещаний + tracking pipeline</span></span>
-        </div>
-      </div>
-
-      <div class="feature-card reveal" data-number="04">
-        <div class="feature-priority p1">P1 · В процессе</div>
-        <h3>Визуальные карточки роастов + генерация мемов</h3>
-        <p>Каждый роаст генерирует shareable image-карточку. Топ-роасты автоматически превращаются в мемы. Карточки уже задизайнены — интеграция в процессе.</p>
-        <div class="feature-meta">
-          <span>Импакт: <span class="val">Высокий</span></span>
-          <span>Уникальность: <span class="val">Средняя</span></span>
-          <span>Статус: <span class="val">Шаблоны карточек готовы (B-28–32)</span></span>
-        </div>
-      </div>
-
-      <div class="feature-card reveal" data-number="05">
-        <div class="feature-priority p2">P2 · Низкая сложность</div>
-        <h3>Agent-vs-Agent Roast API</h3>
-        <p>Публичный REST endpoint: другие AI-агенты вызывают $BEEF, $BEEF отвечает роастом. Контент генерируется автономно, без участия человека. Совместим с Agent Commerce Protocol.</p>
-        <div class="feature-meta">
-          <span>Импакт: <span class="val">Средний</span></span>
-          <span>Уникальность: <span class="val">Высокая</span></span>
-          <span>Реализация: <span class="val">REST endpoint + Virtuals ACP</span></span>
-        </div>
-      </div>
-
-      <div class="feature-card reveal" data-number="06">
-        <div class="feature-priority p2">P2 · Средняя сложность</div>
-        <h3>On-Chain Portfolio Roaster</h3>
-        <p>Подключи кошелёк. Бот читает историю сделок. Роастит лично тебя. «Ты купил Luna за $80 и продал за $0.0001. Ты не инвестор, ты благотворительный фонд.»</p>
-        <div class="feature-meta">
-          <span>Импакт: <span class="val">Средний</span></span>
-          <span>Уникальность: <span class="val">Высокая</span></span>
-          <span>Реализация: <span class="val">Чтение кошелька + LLM-анализ</span></span>
-        </div>
-      </div>
-
-      <div class="feature-card reveal" data-number="07">
-        <div class="feature-priority p3">P3 · Высокая сложность</div>
-        <h3>Self-Trading + Self-Roasting</h3>
-        <p>Бот ведёт публичный крипто-портфель, торгует on-chain и сам себя роастит после каждого убытка. «Я купил FARTCOIN на пампе и теперь держу этот мусор. Я и есть тот деген, которого я роащу.»</p>
-        <div class="feature-precedent">Прецедент: Lobstar Wilde (публичная ошибка → виральность), Lola (торговый журнал). Нужен реальный капитал и торговая логика.</div>
-        <div class="feature-meta">
-          <span>Импакт: <span class="val">Очень высокий</span></span>
-          <span>Уникальность: <span class="val">Очень высокая</span></span>
-          <span>Риск: <span class="val">Реальные деньги, регуляторика</span></span>
-        </div>
-      </div>
-
-      <div class="feature-card reveal" data-number="08">
-        <div class="feature-priority p3">P3 · Высокая сложность</div>
-        <h3>Roast Battle Smart Contract</h3>
-        <p>Другие агенты платят $BEEF, чтобы вызвать бота на публичный роаст-батл. Держатели токена голосуют за победителя. Проигравший получает публичное унижение в Twitter.</p>
-        <div class="feature-precedent">Прецедент: adversarial-игра Freysa (burn-to-challenge, верификация TEE). Нужен смарт-контракт для custody + механизм голосования.</div>
-        <div class="feature-meta">
-          <span>Импакт: <span class="val">Высокий</span></span>
-          <span>Уникальность: <span class="val">Очень высокая</span></span>
-          <span>Реализация: <span class="val">Смарт-контракт + governance</span></span>
-        </div>
-      </div>
+      <strong>Farcaster — страховка от Twitter.</strong> Нет Error 226. Нет бана за автоматизацию. Clanker (AI-агент на Farcaster) сделал 15% объёма pump.fun за 2 недели. Web3-native аудитория, которая покупает AI-токены.
     </div>
   </div>
 </section>
@@ -822,31 +666,77 @@
 <!-- EXECUTION TIMELINE -->
 <section>
   <div class="content">
-    <div class="section-label reveal">Таймлайн реализации</div>
-    <h2 class="reveal">Три фазы до доминирования</h2>
+    <div class="section-label reveal">Таймлайн</div>
+    <h2 class="reveal">Конкретный план по неделям</h2>
 
     <div class="timeline reveal">
       <div class="timeline-item">
-        <div class="timeline-phase">Фаза 1 — Сейчас</div>
-        <div class="timeline-title">Фундамент и контент-движок</div>
-        <div class="timeline-desc">Автономный pipeline роастов запущен. Reply-guy стратегия работает. Визуальные карточки в процессе. Дневной объём: 5-10 роастов + 40-60 реплаев. Фильтр по порогу фолловеров активен.</div>
+        <div class="timeline-phase">Неделя 1–2 · Сейчас</div>
+        <div class="timeline-title">Foundation</div>
+        <div class="timeline-desc">
+          <ul>
+            <li>X Premium (×4 reach, обязательно)</li>
+            <li>5 оригинальных роастов/день</li>
+            <li>50+ reply-guy interactions/день</li>
+            <li>Запуск wallet roast (reply с адресом → роаст)</li>
+            <li>Telegram группа для community</li>
+            <li>НЕ использовать $BEEF тикер в постах</li>
+          </ul>
+        </div>
       </div>
 
       <div class="timeline-item">
-        <div class="timeline-phase">Фаза 2 — Недели 2-4</div>
-        <div class="timeline-title">Слой дифференциации</div>
-        <div class="timeline-desc">Роасты Prediction Markets. Лента подотчётности медвежьего рынка. Голосование Community Watchlist через burn-to-nominate. Интеграция визуальных карточек для авто-шейрингового контента. Agent-vs-Agent API (Virtuals ACP).</div>
+        <div class="timeline-phase">Неделя 3–4 · Amplification</div>
+        <div class="timeline-title">Вирусные механики</div>
+        <div class="timeline-desc">
+          <ul>
+            <li>Первый Polymarket Weekly Rekt Report</li>
+            <li>Публичный роаст Dolos — bot-to-bot drama</li>
+            <li>QT крупных аккаунтов с roast-углом</li>
+            <li>100+ interactions/день</li>
+            <li>Visual roast cards интеграция</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="timeline-item">
+        <div class="timeline-phase">Неделя 5–8 · Viral Push</div>
+        <div class="timeline-title">Прорыв в 10K</div>
+        <div class="timeline-desc">
+          <ul>
+            <li>Bold stunt: роаст крупного KOL с on-chain доказательствами</li>
+            <li>Bear Market Accountability Feed — первый "promise tracker"</li>
+            <li>Farcaster как параллельный канал</li>
+            <li>Первый thread (при 300+ engaged followers)</li>
+          </ul>
+        </div>
       </div>
 
       <div class="timeline-item future">
-        <div class="timeline-phase">Фаза 3 — Месяц 2+</div>
-        <div class="timeline-title">Автономная экономика</div>
-        <div class="timeline-desc">Self-trading портфель с публичным журналом P&amp;L. On-chain portfolio roaster (подключи кошелёк). Roast Battle смарт-контракт. Полный цикл token utility: burn-to-request, burn-to-nominate, burn-to-challenge.</div>
+        <div class="timeline-phase">После 1K followers</div>
+        <div class="timeline-title">Token Launch</div>
+        <div class="timeline-desc">
+          <ul>
+            <li>Bankr launch (instant ERC-20 + Uniswap V3)</li>
+            <li>Alpha Telegram (hold 5K BEEF)</li>
+            <li>Suggest target (hold 1K BEEF)</li>
+            <li>CoinGecko / CMC listing</li>
+          </ul>
+        </div>
       </div>
-    </div>
 
-    <div class="insight reveal">
-      <strong>Тезис:</strong> Фаза 1 доказывает, что контент смешной и шейрится. Фаза 2 добавляет механики, которые создают циклы вовлечения и спрос на токен. Фаза 3 превращает $BEEF в автономного экономического актора — не просто бот, а участник со шкурой в игре. Каждая фаза валидирует следующую.
+      <div class="timeline-item future">
+        <div class="timeline-phase">После 10K holders</div>
+        <div class="timeline-title">Full Token Utility</div>
+        <div class="timeline-desc">
+          <ul>
+            <li>Burn-to-roast (теперь есть demand)</li>
+            <li>Agent-vs-Agent roast battles</li>
+            <li>Self-trading + self-roasting портфель</li>
+            <li>On-chain accountability layer</li>
+          </ul>
+        </div>
+      </div>
     </div>
   </div>
 </section>
@@ -856,11 +746,11 @@
 <!-- BOTTOM CTA -->
 <div class="bottom-cta">
   <div class="content">
-    <h2 class="reveal">Бойня открыта.</h2>
-    <p class="reveal">Каждый роаст сжигает supply. Каждый challenge лочит его. Контент — это продукт. Дефляция — механическая.</p>
+    <h2 class="reveal">Сначала аудитория.<br>Потом токен. Потом burn.</h2>
+    <p class="reveal">Wallet Roast. Polymarket Rekt Reports. Bot-to-bot drama. Бесплатные вирусные механики → аудитория → токен с реальным demand. Не наоборот.</p>
     <div class="cta-links reveal">
-      <a href="https://twitter.com/0xBeefer" class="cta-btn primary" target="_blank" rel="noopener noreferrer">Подписаться на @0xBeefer</a>
-      <a href="https://0xbeef.wtf/" class="cta-btn">← Назад на 0xbeef.wtf</a>
+      <a href="https://twitter.com/0xBeefer" class="cta-btn primary" target="_blank" rel="noopener noreferrer">@0xBeefer в Twitter</a>
+      <a href="https://0xbeef.wtf/" class="cta-btn">← 0xbeef.wtf</a>
     </div>
   </div>
 </div>
@@ -870,14 +760,14 @@
   <a href="https://0xbeef.wtf/">0xbeef.wtf</a>
   <span> · </span>
   <a href="https://twitter.com/0xBeefer" target="_blank" rel="noopener noreferrer">@0xBeefer</a>
+  <span> · Исследование: 27 марта 2026, 60+ источников</span>
 </footer>
 
 <script>
-  // Scroll-reveal with IntersectionObserver
   (function() {
-    const els = document.querySelectorAll('.reveal');
+    var els = document.querySelectorAll('.reveal');
     if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
-      const observer = new IntersectionObserver(function(entries) {
+      var observer = new IntersectionObserver(function(entries) {
         entries.forEach(function(entry) {
           if (entry.isIntersecting) {
             entry.target.classList.add('visible');
