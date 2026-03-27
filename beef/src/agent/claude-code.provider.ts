@@ -69,9 +69,12 @@ export class ClaudeCodeProvider implements LLMProvider {
       '--no-session-persistence',
     ];
 
-    // Always pass --allowedTools so no-tool profiles (e.g. roast-fast-gen)
-    // don't inherit the full default tool set. Empty string = no tools.
-    args.push('--allowedTools', tools);
+    if (tools) {
+      args.push('--allowedTools', tools);
+    } else {
+      // --tools "" disables all built-in and MCP tools (--allowedTools '' is ignored by CLI)
+      args.push('--tools', '');
+    }
 
     if (preset.fallbackModel) {
       args.push('--fallback-model', preset.fallbackModel);
