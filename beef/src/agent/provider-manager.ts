@@ -47,14 +47,16 @@ export class ProviderManager implements LLMProvider {
       return result;
     } catch (error) {
       primaryError = error;
-      this.consecutiveFailures++;
+      if (!task.skipDegradedTracking) {
+        this.consecutiveFailures++;
+      }
       this.logger.warn(
-        { taskId, failures: this.consecutiveFailures, err: error },
+        { taskId, failures: this.consecutiveFailures, skipTracking: task.skipDegradedTracking ?? false, err: error },
         `Primary provider failed (${String(this.consecutiveFailures)}/${String(FAILURE_THRESHOLD)}): ${getErrorMessage(error)}`,
       );
     }
 
-    // Below threshold — rethrow primary error, let caller retry later
+    // Below threshold (or tracking skipped) — rethrow primary error, let caller retry later
     if (this.consecutiveFailures < FAILURE_THRESHOLD) {
       throw primaryError;
     }

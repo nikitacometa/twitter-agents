@@ -25,6 +25,10 @@ export interface AgentTask {
   requiresResearch: boolean;
   /** Local file paths to images for multimodal context. */
   imagePaths?: string[];
+  /** When true, failures don't count toward provider degraded mode threshold.
+   *  Use for speculative parallel calls (e.g. fast gen batch) where individual
+   *  failures are expected and don't indicate a systemic provider issue. */
+  skipDegradedTracking?: boolean;
 }
 
 export interface AgentResult<T = unknown> {

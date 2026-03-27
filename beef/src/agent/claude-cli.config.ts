@@ -150,10 +150,10 @@ const DEFAULT_PRESETS: Record<TaskProfile, TaskPreset> = {
   },
   'roast-fast-gen': {
     model: 'sonnet',
-    effort: 'medium',
+    effort: 'low',
     tools: [],
     maxTurns: 1,
-    timeoutMs: 60_000,
+    timeoutMs: 90_000,
     fallbackModel: 'haiku',
   },
 };

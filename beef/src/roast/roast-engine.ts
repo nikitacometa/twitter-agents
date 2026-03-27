@@ -347,8 +347,11 @@ export class RoastEngine {
 
     const call0Promise = this.provider.run<AgentRoastOutput>(
       `${taskId}-gen-0-${call0Config.codename}`,
-      { prompt: call0Prompt, profile: 'roast-fast-gen', requiresResearch: false, imagePaths },
+      { prompt: call0Prompt, profile: 'roast-fast-gen', requiresResearch: false, imagePaths, skipDegradedTracking: true },
     );
+    // Prevent unhandled rejection if call0 fails while we await research.
+    // The rejection will be properly handled by Promise.allSettled below.
+    call0Promise.catch(() => {});
 
     // Start research in parallel (if available)
     if (useResearch) {
@@ -385,7 +388,7 @@ export class RoastEngine {
 
       return this.provider.run<AgentRoastOutput>(
         `${taskId}-gen-${String(callIndex)}-${config.codename}`,
-        { prompt, profile: 'roast-fast-gen', requiresResearch: false, imagePaths },
+        { prompt, profile: 'roast-fast-gen', requiresResearch: false, imagePaths, skipDegradedTracking: true },
       );
     });
 

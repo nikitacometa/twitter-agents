@@ -509,9 +509,13 @@ if (mentionHandler) {
         if (queuedCount > 0) {
           logger.info({ queuedCount }, 'Triggering immediate queue processing for new mentions');
           void (async () => {
-            for (let i = 0; i < queuedCount; i++) {
-              const queueResult = await qm.processNext();
-              await notifyQueueResult(queueResult, 'mention');
+            try {
+              for (let i = 0; i < queuedCount; i++) {
+                const queueResult = await qm.processNext();
+                await notifyQueueResult(queueResult, 'mention');
+              }
+            } catch (err) {
+              logger.error({ err }, 'Failed to process queued mentions');
             }
           })();
         }
