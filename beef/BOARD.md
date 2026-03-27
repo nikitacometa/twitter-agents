@@ -67,7 +67,7 @@ Status: `[ ]` pending, `[~]` in progress, `[x]` done, `[!]` blocked
 [ ] #B-34 — Auto-post from stockpile: every 3h post best entry (humanScore ≥ 4, buffer ≥ 5), max 3/day, notify after
 [ ] #B-35 — Smart reply autonomy: stratify by follower count (<1K auto, 1-10K auto if eval ≥ 4.0, >10K require approval)
 [ ] #B-36 — Closed learning loop: high-engagement → auto few-shot, low-engagement → negative examples, weekly report
-[ ] #B-37 — OpenClaw integration evaluation: when autonomy ladder (B-33–B-36) is complete and manual overhead persists, evaluate OpenClaw as NL orchestration layer. See docs/openclaw-integration-analysis.md
+[x] #B-37 — OpenClaw integration: beef user on VPS, 8 skills (4 read + 4 write), POST API endpoints with auth, @BeefAdminBot on port 19001. Shipped 2026-03-27
 
 ## Backlog: Visuals (high priority)
 
