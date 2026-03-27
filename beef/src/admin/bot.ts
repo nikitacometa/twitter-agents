@@ -351,10 +351,12 @@ export function createBot(opts: {
           : '';
         const header = `✅ <b>${escapeHtml(o.target)}</b> — ${String(output.variants.length)} variants, ${String(elapsed)}s${researchNote}`;
         const result = formatRoastOutput(o.target, output, o.evaluationMode);
+        const advisor = buildPostingAdvisor();
+        const body = advisor ? header + '\n\n' + result + '\n' + advisor : header + '\n\n' + result;
         await api.editMessageText(
           chatId,
           statusMsg.message_id,
-          header + '\n\n' + result,
+          body,
           { parse_mode: 'HTML' },
         );
       } catch (error) {
@@ -485,11 +487,13 @@ export function createBot(opts: {
 
         updateStatus('👤 Enriching author profile...');
         let enrichmentContext: string | undefined;
+        let enrichedFollowers: number | null = null;
         if (opts.twitterEnricher) {
           try {
             const enrichment = await opts.twitterEnricher.enrich(targetName);
             if (enrichment?.hasData) {
               enrichmentContext = enrichment.profileContext;
+              enrichedFollowers = enrichment.followersCount;
             }
           } catch (err) {
             logger.warn({ err, target: targetName }, 'Author enrichment failed — continuing without');
@@ -598,6 +602,9 @@ export function createBot(opts: {
           headerLines.push('');
         }
 
+        const advisor = buildPostingAdvisor(enrichedFollowers);
+        if (advisor) headerLines.push(advisor);
+
         const keyboard = new InlineKeyboard()
           .text('🔄 Regen', `rt-regen:${ctxKey}`);
 
@@ -651,11 +658,13 @@ export function createBot(opts: {
       );
 
       let enrichmentContext: string | undefined;
+      let enrichedFollowers: number | null = null;
       if (opts.twitterEnricher) {
         try {
           const enrichment = await opts.twitterEnricher.enrich(handle);
           if (enrichment?.hasData) {
             enrichmentContext = enrichment.profileContext;
+            enrichedFollowers = enrichment.followersCount;
           }
         } catch (err) {
           logger.warn({ err, target: handle }, 'Person enrichment failed — continuing without');
@@ -689,10 +698,12 @@ export function createBot(opts: {
           : '';
         const header = `✅ <b>@${escapeHtml(handle)}</b> — ${String(output.variants.length)} variants, ${String(totalElapsed)}s${researchNote}`;
         const result = formatRoastOutput(handle, output, evalMode);
+        const advisor = buildPostingAdvisor(enrichedFollowers);
+        const body = advisor ? header + '\n\n' + result + '\n' + advisor : header + '\n\n' + result;
         await api.editMessageText(
           chatId,
           statusMsg.message_id,
-          header + '\n\n' + result,
+          body,
           { parse_mode: 'HTML' },
         );
       } catch (error) {
@@ -1015,6 +1026,8 @@ export function createBot(opts: {
         captionLines.push('');
         captionLines.push(`<code>${escapeHtml(result.tweetText)}</code>`);
       }
+      const memeAdvisor = buildPostingAdvisor();
+      if (memeAdvisor) captionLines.push(memeAdvisor);
 
       // Send photo BEFORE deleting status — if sendPhoto fails, user still sees status
       try {
@@ -1034,8 +1047,62 @@ export function createBot(opts: {
         '',
         `<code>${escapeHtml(result.tweetText)}</code>`,
       ];
+      const textAdvisor = buildPostingAdvisor();
+      if (textAdvisor) lines.push(textAdvisor);
       await api.editMessageText(chatId, statusMsgId, lines.join('\n'), { parse_mode: 'HTML' });
     }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Posting advisor — appended to roast/meme outputs as a footer
+  // ---------------------------------------------------------------------------
+
+  function buildPostingAdvisor(targetFollowers?: number | null): string {
+    if (!roastRepo) return '';
+
+    const mentionCount = roastRepo.getTodayCount('mention');
+    const casualCount = roastRepo.getTodayCount('casual_reply');
+    const autoCount = roastRepo.getTodayCount('autonomous');
+    const replyGuyCount = roastRepo.getTodayCount('reply_guy');
+    const totalPosted = mentionCount + casualCount + autoCount + replyGuyCount;
+
+    const maxRecommended = 15;
+    const remaining = Math.max(0, maxRecommended - totalPosted);
+
+    // BKK time (UTC+7) — same timezone as Vietnam
+    const now = new Date();
+    const bkkHour = (now.getUTCHours() + 7) % 24;
+    const bkkMin = String(now.getUTCMinutes()).padStart(2, '0');
+
+    // Time quality based on metrics data
+    // Best: 19:00–05:00 BKK (12:00–22:00 UTC) — ER 7-14%
+    // Dead: 14:00–17:00 BKK (07:00–10:00 UTC) — ER <1%
+    const isPrime = bkkHour >= 19 || bkkHour <= 5;
+    const isDead = bkkHour >= 14 && bkkHour <= 17;
+    const timeEmoji = isPrime ? '🟢' : isDead ? '🔴' : '🟡';
+    const timeLabel = isPrime ? 'прайм-тайм' : isDead ? 'мёртвая зона' : 'нормально';
+
+    const lines: string[] = ['─────────────────'];
+
+    if (targetFollowers != null && targetFollowers > 0) {
+      const tier = targetFollowers >= 100_000 ? '🔥 отличный reach'
+        : targetFollowers >= 10_000 ? '✅ хороший reach'
+        : targetFollowers >= 1_000 ? '👌 средний'
+        : targetFollowers >= 250 ? '📉 малый' : '⚠️ <250 фолловеров';
+      lines.push(`<i>🎯 ${targetFollowers.toLocaleString()} followers — ${tier}</i>`);
+    }
+
+    lines.push(`<i>📊 Сегодня: ${String(totalPosted)}/15 постов (осталось ${String(remaining)})</i>`);
+    lines.push(`<i>⏰ ${String(bkkHour)}:${bkkMin} BKK ${timeEmoji} ${timeLabel}</i>`);
+    lines.push(`<i>Лучшие часы: 19:00–05:00 BKK · Мёртвая зона: 14:00–17:00</i>`);
+
+    if (remaining <= 3 && remaining > 0) {
+      lines.push(`<i>⚠️ Лимит почти достигнут — выбирай только топ-таргеты</i>`);
+    } else if (remaining === 0) {
+      lines.push(`<i>🛑 Дневной лимит достигнут — рекомендуем не постить</i>`);
+    }
+
+    return lines.join('\n');
   }
 
   // ---------------------------------------------------------------------------

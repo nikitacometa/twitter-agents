@@ -301,6 +301,7 @@ if (provider) {
     logger,
     dailyLimit: config.ROASTS_PER_DAY,
     mentionReplyLimit: config.MENTION_REPLIES_PER_DAY,
+    minFollowerThreshold: config.MIN_FOLLOWER_THRESHOLD,
     enableMentionReplies: config.ENABLE_MENTION_REPLIES,
     activityLogger,
   });

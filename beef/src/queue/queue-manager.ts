@@ -65,6 +65,7 @@ export class QueueManager {
   private readonly enableMentionReplies: boolean;
   private readonly casualReplyLimit: number;
   private readonly evaluationThreshold: number;
+  private readonly minFollowerThreshold: number;
   private readonly twitterEnricher?: TwitterEnricher;
   private readonly activityLogger?: ActivityLogger;
   private cachedRoastEngine: RoastEngine | null = null;
@@ -94,6 +95,7 @@ export class QueueManager {
     casualReplyLimit?: number;
     enableMentionReplies: boolean;
     evaluationThreshold?: number;
+    minFollowerThreshold?: number;
     activityLogger?: ActivityLogger;
   }) {
     this.queueRepo = opts.queueRepo;
@@ -115,6 +117,7 @@ export class QueueManager {
     this.mentionReplyLimit = opts.mentionReplyLimit ?? 20;
     this.casualReplyLimit = opts.casualReplyLimit ?? 40;
     this.evaluationThreshold = opts.evaluationThreshold ?? 3.5;
+    this.minFollowerThreshold = opts.minFollowerThreshold ?? 0;
     this.enableMentionReplies = opts.enableMentionReplies;
     this.activityLogger = opts.activityLogger;
   }
@@ -400,6 +403,7 @@ export class QueueManager {
 
       // Profile enrichment for all scenarios — prefer TwitterEnricher (richer data) over basic profileFetcher
       let profileContext: string | undefined;
+      let targetFollowers: number | null = null;
       const handle = extractHandleFromContext(item.context);
       const parentAuthor = extractParentAuthorFromTarget(item.targetName);
       const targetHandle = extractHandleFromTarget(item.targetName);
@@ -408,10 +412,24 @@ export class QueueManager {
         if (this.twitterEnricher?.isConfigured) {
           const enriched = await this.twitterEnricher.enrich(username);
           profileContext = enriched?.profileContext;
+          targetFollowers = enriched?.followersCount ?? null;
         }
         if (!profileContext && this.profileFetcher) {
           profileContext = await this.buildProfileContext(username);
+          if (targetFollowers === null) {
+            targetFollowers = await this.getTargetFollowers(username);
+          }
         }
+      }
+
+      // Skip targets below follower threshold (mentions/reply_guy only — autonomous targets are pre-vetted)
+      if (this.minFollowerThreshold > 0 && item.source !== 'autonomous' && targetFollowers !== null && targetFollowers < this.minFollowerThreshold) {
+        this.logger.info(
+          { queueId: item.id, target: item.targetName, followers: targetFollowers, threshold: this.minFollowerThreshold },
+          'Skipping — target below follower threshold',
+        );
+        this.queueRepo.complete(item.id);
+        return { dequeued: true, posted: false, target: item.targetName, error: `Below follower threshold (${targetFollowers} < ${this.minFollowerThreshold})` };
       }
 
       // Mention context enrichment — look up original mention and parent tweet from DB
@@ -790,10 +808,29 @@ export class QueueManager {
     const triggerText = extractTriggerText(item.context);
     const authorUsername = item.targetName.replace(/^@/, '');
 
-    // Optional profile enrichment
+    // Profile enrichment — prefer TwitterEnricher for richer data + follower count
     let profileContext: string | undefined;
-    if (this.profileFetcher) {
+    let authorFollowers: number | null = null;
+    if (this.twitterEnricher?.isConfigured) {
+      const enriched = await this.twitterEnricher.enrich(authorUsername);
+      profileContext = enriched?.profileContext;
+      authorFollowers = enriched?.followersCount ?? null;
+    }
+    if (!profileContext && this.profileFetcher) {
       profileContext = await this.buildProfileContext(authorUsername);
+      if (authorFollowers === null) {
+        authorFollowers = await this.getTargetFollowers(authorUsername);
+      }
+    }
+
+    // Skip authors below follower threshold
+    if (this.minFollowerThreshold > 0 && authorFollowers !== null && authorFollowers < this.minFollowerThreshold) {
+      this.logger.info(
+        { queueId: item.id, target: item.targetName, followers: authorFollowers, threshold: this.minFollowerThreshold },
+        'Casual reply skipped — author below follower threshold',
+      );
+      this.queueRepo.complete(item.id);
+      return { dequeued: true, posted: false, target: item.targetName, error: `Below follower threshold (${authorFollowers})` };
     }
 
     // Mention context enrichment — get full mention text from DB
@@ -1208,6 +1245,15 @@ export class QueueManager {
     }
 
     return lines.length > 0 ? lines.join('\n') : undefined;
+  }
+
+  private async getTargetFollowers(username: string): Promise<number | null> {
+    try {
+      const profile = await this.profileFetcher?.getProfile(username);
+      return profile?.followersCount ?? null;
+    } catch {
+      return null;
+    }
   }
 
   private async buildProfileContext(username: string): Promise<string | undefined> {
