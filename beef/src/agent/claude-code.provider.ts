@@ -69,8 +69,8 @@ export class ClaudeCodeProvider implements LLMProvider {
       '--no-session-persistence',
     ];
 
-    this.logger.info(
-      { taskId, toolSetLen: toolSet.length, toolsStr: tools || '(empty)', hasTools: !!tools, profile: task.profile },
+    this.logger.debug(
+      { taskId, toolSetLen: toolSet.length, toolsStr: tools || '(empty)', profile: task.profile },
       'Tool configuration',
     );
     if (tools) {

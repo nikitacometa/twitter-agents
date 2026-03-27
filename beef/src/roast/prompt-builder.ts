@@ -209,14 +209,20 @@ Do NOT cite general market stats unless directly comparing to the target's speci
   return '';
 }
 
-function buildVisualContextSection(imagePaths?: string[]): string {
+function buildVisualContextSection(imagePaths?: string[], toolsAvailable = true): string {
   if (!imagePaths?.length) return '';
 
-  const fileList = imagePaths.map((p) => `  - ${p}`).join('\n');
-  return `\n## VISUAL CONTEXT
+  if (toolsAvailable) {
+    const fileList = imagePaths.map((p) => `  - ${p}`).join('\n');
+    return `\n## VISUAL CONTEXT
 The target tweet includes images. Read each file below for additional roast material (charts, screenshots, memes — all fair game):
 ${fileList}
 Use the Read tool to view these images. Reference what you see in your roast if it adds bite.
+`;
+  }
+
+  return `\n## VISUAL CONTEXT
+The target tweet includes ${String(imagePaths.length)} image(s). You cannot view them directly, but the research notes above may describe their content. If available, use those visual details as roast ammunition.
 `;
 }
 
@@ -917,7 +923,8 @@ export function buildFastGenPrompt(
     : '';
   const techniquesLine = buildTechniquesSection(memory?.learnedTechniques ?? []);
   const profileContext = buildProfileContextSection(memory);
-  const visualContext = buildVisualContextSection(imagePaths);
+  // Gen calls have no tools — pass toolsAvailable=false so prompt doesn't instruct "use Read tool"
+  const visualContext = buildVisualContextSection(imagePaths, false);
   const userContext = buildUserContextSection(memory);
   const recentClosers = buildRecentClosersSection(memory);
   const angleList = angles.map((a) => `  - ${a}`).join('\n');

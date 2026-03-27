@@ -345,9 +345,11 @@ export class RoastEngine {
       imagePaths,
     );
 
+    // Gen calls are 1-turn no-tool calls — do NOT pass imagePaths (it would add Read tool, breaking maxTurns=1).
+    // Image context reaches gen calls via research notes text or prompt visual section.
     const call0Promise = this.provider.run<AgentRoastOutput>(
       `${taskId}-gen-0-${call0Config.codename}`,
-      { prompt: call0Prompt, profile: 'roast-fast-gen', requiresResearch: false, imagePaths, skipDegradedTracking: true },
+      { prompt: call0Prompt, profile: 'roast-fast-gen', requiresResearch: false, skipDegradedTracking: true },
     );
     // Prevent unhandled rejection if call0 fails while we await research.
     // The rejection will be properly handled by Promise.allSettled below.
@@ -388,7 +390,7 @@ export class RoastEngine {
 
       return this.provider.run<AgentRoastOutput>(
         `${taskId}-gen-${String(callIndex)}-${config.codename}`,
-        { prompt, profile: 'roast-fast-gen', requiresResearch: false, imagePaths, skipDegradedTracking: true },
+        { prompt, profile: 'roast-fast-gen', requiresResearch: false, skipDegradedTracking: true },
       );
     });
 
