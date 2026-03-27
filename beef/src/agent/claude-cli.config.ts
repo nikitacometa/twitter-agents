@@ -140,6 +140,22 @@ const DEFAULT_PRESETS: Record<TaskProfile, TaskPreset> = {
     timeoutMs: 45_000,
     fallbackModel: 'haiku',
   },
+  'roast-fast-research': {
+    model: 'sonnet',
+    effort: 'medium',
+    tools: RESEARCH_TOOLS,
+    maxTurns: 5,
+    timeoutMs: 120_000,
+    fallbackModel: 'haiku',
+  },
+  'roast-fast-gen': {
+    model: 'sonnet',
+    effort: 'medium',
+    tools: [],
+    maxTurns: 1,
+    timeoutMs: 60_000,
+    fallbackModel: 'haiku',
+  },
 };
 
 // --- Environment for all CLI subprocesses ---

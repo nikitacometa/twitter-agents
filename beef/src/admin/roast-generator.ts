@@ -8,7 +8,7 @@ import type { RoastPatternRepository } from '@storage/repositories/roast-pattern
 import type { StockpileRepository } from '@storage/repositories/stockpile.repository.js';
 import type { FarmAttemptRepository } from '@storage/repositories/farm-attempt.repository.js';
 import { RoastEngine } from '@roast/roast-engine.js';
-import type { EvaluationMode } from '@roast/roast-engine.js';
+import type { EvaluationMode, FastRoastResult } from '@roast/roast-engine.js';
 import { buildCreativeMemory } from '@roast/creative-memory.js';
 import type { EvaluationOutput } from '@evaluation/evaluator.js';
 
@@ -128,6 +128,75 @@ export async function generateRoasts(
     evaluation: result.evaluation,
     diaryThought: result.diaryThought,
   };
+}
+
+export async function generateRoastsFast(
+  targetName: string,
+  provider: ProviderManager,
+  logger: Logger,
+  feedbackRepo?: FeedbackRepository,
+  configRepo?: ConfigRepository,
+  exampleRepo?: ExternalExampleRepository,
+  patternRepo?: RoastPatternRepository,
+  stockpileRepo?: StockpileRepository,
+  farmAttemptRepo?: FarmAttemptRepository,
+  imagePaths?: string[],
+  profileContext?: string,
+  tweetMode?: boolean,
+  userContext?: string,
+): Promise<FastRoastResult> {
+  const engine = getEngine(provider, logger, 'none');
+
+  let memory = buildCreativeMemory({
+    targetName,
+    logger,
+    feedbackRepo,
+    configRepo,
+    exampleRepo,
+    patternRepo,
+    stockpileRepo,
+    farmAttemptRepo,
+  });
+
+  const hasAugmentation = profileContext || userContext || tweetMode;
+  if (hasAugmentation && !memory) {
+    memory = { fireExamples: [] };
+  }
+  if (memory) {
+    if (profileContext) memory = { ...memory, profileContext };
+    if (userContext) memory = { ...memory, userContext };
+    if (tweetMode !== undefined) memory = { ...memory, tweetMode };
+  }
+
+  const result = await engine.generateRoastFast(
+    targetName,
+    'telegram',
+    memory,
+    imagePaths,
+    tweetMode,
+  );
+
+  // Record variants as farm_attempts
+  if (farmAttemptRepo) {
+    for (const variant of result.variants) {
+      try {
+        farmAttemptRepo.insert({
+          targetName,
+          targetType: 'project',
+          tweetText: variant.text,
+          angle: variant.angle,
+          strategy: 'fast-gen',
+          llmSelfScore: variant.selfScore,
+          researchNotes: result.researchNotes ?? undefined,
+          factCheckPassed: true,
+        });
+      } catch (err) {
+        logger.warn({ err, target: targetName }, 'Failed to record fast farm attempt');
+      }
+    }
+  }
+
+  return result;
 }
 
 export function generateRoastsSync(

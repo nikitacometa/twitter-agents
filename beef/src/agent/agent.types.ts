@@ -12,7 +12,9 @@ export type TaskProfile =
   | 'farm-evaluate'
   | 'farm-generate'
   | 'farm-discover'
-  | 'meme-generate';
+  | 'meme-generate'
+  | 'roast-fast-research'
+  | 'roast-fast-gen';
 
 export interface AgentTask {
   prompt: string;
@@ -104,4 +106,22 @@ export interface AgentAuditOutput {
   topPerformers: string[];
   underperformers: string[];
   recommendations: string[];
+}
+
+export interface AgentFastResearchOutput {
+  researchNotes: string;
+  keyFindings: string[];
+  quotableAmmo: string[];
+  factCheckPassed: boolean;
+}
+
+export interface AgentRankingOutput {
+  rankings: Array<{
+    index: number;
+    score: number;
+    funny: number;
+    impact: number;
+    original: number;
+    reason: string;
+  }>;
 }

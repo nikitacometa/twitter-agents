@@ -15,8 +15,9 @@ import type { ExternalExampleRepository } from '@storage/repositories/external-e
 import type { RoastPatternRepository } from '@storage/repositories/roast-pattern.repository.js';
 import type { StockpileRepository } from '@storage/repositories/stockpile.repository.js';
 import type { FarmAttemptRepository } from '@storage/repositories/farm-attempt.repository.js';
-import { generateRoasts } from './roast-generator.js';
+import { generateRoasts, generateRoastsFast } from './roast-generator.js';
 import type { GenerateRoastsResult } from './roast-generator.js';
+import type { FastRoastResult } from '@roast/roast-engine.js';
 import type { EvaluationMode } from '@roast/roast-engine.js';
 import type { PollResult } from '@twitter/mention-handler.js';
 import type { JobInfo } from '@scheduler/scheduler.js';
@@ -878,6 +879,318 @@ export function createBot(opts: {
       return;
     }
     handleTweetRoast(ctx, tweetUrl, userContext);
+  });
+
+  // ---------------------------------------------------------------------------
+  // /roast_fast — volume pipeline: 5 parallel Sonnet calls → rank → top 3
+  // ---------------------------------------------------------------------------
+
+  function formatFastRoastOutput(_target: string, result: FastRoastResult): string {
+    const top = result.variants.slice(0, 3);
+    const lines: string[] = [];
+
+    for (let i = 0; i < top.length; i++) {
+      const v = top[i]!;
+      lines.push(`<b>${String(i + 1)}.</b> <i>${escapeHtml(v.angle)}</i>  ★ ${v.judgeScore.toFixed(1)}  <i>(${escapeHtml(v.callCodename)})</i>`);
+      lines.push(`<pre>${escapeHtml(v.text)}</pre>`);
+      lines.push('');
+    }
+
+    const s = result.stats;
+    lines.push(`📊 ${String(s.callResults.filter((c) => c.status === 'ok').length)} calls · ${String(s.generated)} gen · ${String(s.passedFilter)} passed · ${String(s.afterDedup)} dedup · ${String(Math.min(3, s.ranked))} selected`);
+
+    return lines.join('\n');
+  }
+
+  function handleFastTweetRoast(ctx: Context, tweetUrl: string, userContext?: string): void {
+    if (!provider) {
+      void ctx.reply('⚠️ LLM provider not configured.');
+      return;
+    }
+    const twitterClient = opts.twitterClient;
+    if (!twitterClient?.getTweet) {
+      void ctx.reply('⚠️ Twitter client not configured.');
+      return;
+    }
+    const chatId = ctx.chat?.id;
+    if (!chatId) return;
+    const api = ctx.api;
+
+    void (async () => {
+      const startTime = Date.now();
+      const statusMsg = await api.sendMessage(chatId, '🔍 Fetching tweet...');
+
+      const updateStatus = (stage: string): void => {
+        const elapsed = Math.round((Date.now() - startTime) / 1000);
+        api.editMessageText(chatId, statusMsg.message_id, `${stage} <i>(${String(elapsed)}s)</i>`, { parse_mode: 'HTML' }).catch(() => {});
+      };
+
+      let mediaCleanup: (() => Promise<void>) | undefined;
+
+      try {
+        const tweetId = parseTweetUrl(tweetUrl);
+        if (!tweetId) {
+          await api.editMessageText(chatId, statusMsg.message_id, '❌ Invalid tweet URL.');
+          return;
+        }
+
+        const tweet = await twitterClient.getTweet!(tweetId);
+        if (!tweet) {
+          await api.editMessageText(chatId, statusMsg.message_id, '❌ Could not fetch tweet.');
+          return;
+        }
+
+        const targetName = tweet.authorName;
+
+        let imagePaths: string[] = [];
+        if (tweet.mediaUrls && tweet.mediaUrls.length > 0) {
+          try {
+            const media = await downloadTweetMedia(tweet.mediaUrls, logger);
+            imagePaths = media.paths;
+            mediaCleanup = media.cleanup;
+          } catch (err) {
+            logger.warn({ err, tweetId: tweet.tweetId }, 'Media download failed');
+          }
+        }
+
+        let enrichmentContext: string | undefined;
+        if (opts.twitterEnricher) {
+          try {
+            const enrichment = await opts.twitterEnricher.enrich(targetName);
+            if (enrichment?.hasData) enrichmentContext = enrichment.profileContext;
+          } catch (err) {
+            logger.warn({ err, target: targetName }, 'Enrichment failed');
+          }
+        }
+
+        let parentTweet: { text: string; author: string } | undefined;
+        let quotedTweet: { text: string; author: string } | undefined;
+        const refTweetId = tweet.inReplyToTweetId ?? tweet.quotedTweetId;
+        if (refTweetId && twitterClient.getTweet) {
+          try {
+            const refTweet = await twitterClient.getTweet(refTweetId);
+            if (refTweet) {
+              const ref = { text: refTweet.text, author: refTweet.authorName };
+              if (tweet.inReplyToTweetId) parentTweet = ref;
+              else quotedTweet = ref;
+            }
+          } catch (err) {
+            logger.warn({ err, refTweetId }, 'Referenced tweet fetch failed');
+          }
+        }
+
+        const tweetAgeDays = tweet.createdAt
+          ? Math.floor((Date.now() - new Date(tweet.createdAt).getTime()) / 86_400_000)
+          : undefined;
+
+        const contextInput: TweetRoastContextInput = {
+          tweetText: tweet.text,
+          tweetAuthor: targetName,
+          enrichmentContext,
+          imagePaths: imagePaths.length > 0 ? imagePaths : undefined,
+          metrics: tweet.likes != null ? {
+            likes: tweet.likes ?? 0,
+            retweets: tweet.retweets ?? 0,
+            replies: tweet.replies ?? 0,
+            views: tweet.views,
+          } : undefined,
+          tweetAgeDays,
+          parentTweet,
+          quotedTweet,
+        };
+
+        const profileContext = buildTweetRoastContext(contextInput);
+
+        updateStatus(`⚡ Fast pipeline for <b>${escapeHtml(targetName)}</b>...`);
+
+        const result = await generateRoastsFast(
+          targetName, provider, logger, feedbackRepo,
+          configRepo, exampleRepo, patternRepo,
+          stockpileRepo, farmAttemptRepo,
+          imagePaths.length > 0 ? imagePaths : undefined,
+          profileContext, true, userContext,
+        );
+
+        const elapsed = Math.round((Date.now() - startTime) / 1000);
+        const normalizedUrl = tweetUrl.startsWith('http') ? tweetUrl : `https://${tweetUrl}`;
+
+        const headerLines = [
+          `⚡ <b>${escapeHtml(targetName)}</b> — ${String(result.stats.generated)}→${String(result.stats.afterDedup)}→${String(Math.min(3, result.variants.length))}, ${String(elapsed)}s`,
+          `<a href="${escapeHtml(normalizedUrl)}">Original tweet</a>`,
+          '',
+        ];
+
+        const body = headerLines.join('\n') + formatFastRoastOutput(targetName, result);
+
+        await api.deleteMessage(chatId, statusMsg.message_id).catch(() => {});
+        await api.sendMessage(chatId, body, {
+          parse_mode: 'HTML',
+          link_preview_options: { is_disabled: true },
+        });
+      } catch (error) {
+        const elapsed = Math.round((Date.now() - startTime) / 1000);
+        logger.error({ err: error, url: tweetUrl, elapsedSec: elapsed }, 'Fast tweet roast failed');
+        await api.editMessageText(
+          chatId, statusMsg.message_id,
+          `❌ Failed after ${String(elapsed)}s: ${escapeHtml(getErrorMessage(error).slice(0, 200))}`,
+          { parse_mode: 'HTML' },
+        ).catch(() => {});
+      } finally {
+        if (mediaCleanup) mediaCleanup().catch(() => {});
+      }
+    })();
+  }
+
+  function handleFastPersonRoast(ctx: Context, handle: string, userContext?: string): void {
+    if (!provider) {
+      void ctx.reply('⚠️ LLM provider not configured.');
+      return;
+    }
+    const chatId = ctx.chat?.id;
+    if (!chatId) return;
+    const api = ctx.api;
+
+    void (async () => {
+      const startTime = Date.now();
+      const statusMsg = await api.sendMessage(
+        chatId,
+        `⚡ Fast pipeline for <b>@${escapeHtml(handle)}</b>...`,
+        { parse_mode: 'HTML' },
+      );
+
+      let enrichmentContext: string | undefined;
+      if (opts.twitterEnricher) {
+        try {
+          const enrichment = await opts.twitterEnricher.enrich(handle);
+          if (enrichment?.hasData) enrichmentContext = enrichment.profileContext;
+        } catch (err) {
+          logger.warn({ err, target: handle }, 'Person enrichment failed');
+        }
+      }
+
+      try {
+        const result = await generateRoastsFast(
+          handle, provider, logger, feedbackRepo,
+          configRepo, exampleRepo, patternRepo,
+          stockpileRepo, farmAttemptRepo,
+          undefined, enrichmentContext, false, userContext,
+        );
+
+        const elapsed = Math.round((Date.now() - startTime) / 1000);
+
+        const header = `⚡ <b>@${escapeHtml(handle)}</b> — ${String(result.stats.generated)}→${String(result.stats.afterDedup)}→${String(Math.min(3, result.variants.length))}, ${String(elapsed)}s\n`;
+        const body = header + '\n' + formatFastRoastOutput(handle, result);
+
+        await api.editMessageText(chatId, statusMsg.message_id, body, { parse_mode: 'HTML' });
+      } catch (error) {
+        const elapsed = Math.round((Date.now() - startTime) / 1000);
+        logger.error({ err: error, target: handle, elapsedSec: elapsed }, 'Fast person roast failed');
+        await api.editMessageText(
+          chatId, statusMsg.message_id,
+          `❌ Failed after ${String(elapsed)}s: ${escapeHtml(getErrorMessage(error).slice(0, 200))}`,
+          { parse_mode: 'HTML' },
+        ).catch(() => {});
+      }
+    })();
+  }
+
+  function handleFastFreeformRoast(ctx: Context, target: string, userContext?: string): void {
+    if (!provider) {
+      void ctx.reply('⚠️ LLM provider not configured.');
+      return;
+    }
+    const chatId = ctx.chat?.id;
+    if (!chatId) return;
+    const api = ctx.api;
+
+    void (async () => {
+      const startTime = Date.now();
+      const statusMsg = await api.sendMessage(
+        chatId,
+        `⚡ Fast pipeline for <b>${escapeHtml(target)}</b>...`,
+        { parse_mode: 'HTML' },
+      );
+
+      try {
+        const result = await generateRoastsFast(
+          target, provider, logger, feedbackRepo,
+          configRepo, exampleRepo, patternRepo,
+          stockpileRepo, farmAttemptRepo,
+          undefined, undefined, false, userContext,
+        );
+
+        const elapsed = Math.round((Date.now() - startTime) / 1000);
+        const header = `⚡ <b>${escapeHtml(target)}</b> — ${String(result.stats.generated)}→${String(result.stats.afterDedup)}→${String(Math.min(3, result.variants.length))}, ${String(elapsed)}s\n`;
+        const body = header + '\n' + formatFastRoastOutput(target, result);
+
+        await api.editMessageText(chatId, statusMsg.message_id, body, { parse_mode: 'HTML' });
+      } catch (error) {
+        const elapsed = Math.round((Date.now() - startTime) / 1000);
+        logger.error({ err: error, target, elapsedSec: elapsed }, 'Fast freeform roast failed');
+        await api.editMessageText(
+          chatId, statusMsg.message_id,
+          `❌ Failed after ${String(elapsed)}s: ${escapeHtml(getErrorMessage(error).slice(0, 200))}`,
+          { parse_mode: 'HTML' },
+        ).catch(() => {});
+      }
+    })();
+  }
+
+  bot.command('roast_fast', async (ctx) => {
+    const raw = ctx.match?.trim();
+    if (!raw) {
+      await ctx.reply(
+        [
+          'Usage: /roast_fast &lt;target&gt;',
+          '',
+          'Volume pipeline: 5 parallel Sonnet calls × 5 variants → rank → top 3',
+          '',
+          'Target types:',
+          '  <code>/roast_fast https://x.com/.../status/...</code> — tweet',
+          '  <code>/roast_fast @handle</code> — person',
+          '  <code>/roast_fast hyperliquid</code> — freeform',
+          '',
+          'Context (second line):',
+          '  <code>/roast_fast @handle</code>',
+          '  <code>focus on his rug pulls</code>',
+        ].join('\n'),
+        { parse_mode: 'HTML' },
+      );
+      return;
+    }
+
+    if (!provider) {
+      await ctx.reply('⚠️ LLM provider not configured.');
+      return;
+    }
+
+    const lines = raw.split('\n');
+    const target = lines[0]!.trim();
+    const userContext = lines.slice(1).join('\n').trim() || undefined;
+
+    // Tweet URL
+    if (isTweetUrl(target)) {
+      handleFastTweetRoast(ctx, target, userContext);
+      return;
+    }
+
+    // @handle
+    if (isTwitterHandle(target)) {
+      handleFastPersonRoast(ctx, target.slice(1), userContext);
+      return;
+    }
+
+    // Profile URL
+    if (isTwitterProfileUrl(target)) {
+      const handle = extractTwitterHandle(target);
+      if (handle) {
+        handleFastPersonRoast(ctx, handle, userContext);
+        return;
+      }
+    }
+
+    // Freeform
+    handleFastFreeformRoast(ctx, target, userContext);
   });
 
   // ---------------------------------------------------------------------------

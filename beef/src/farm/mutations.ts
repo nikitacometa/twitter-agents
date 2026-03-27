@@ -24,6 +24,14 @@ export const MUTATIONS: Mutation[] = [
   { id: 'no-name', type: 'wildcard', text: 'WILDCARD: The roast must work even if you remove the project name. It should be recognizable from the description alone.' },
   { id: 'one-word', type: 'wildcard', text: 'WILDCARD: The punchline must be a single word. Build to it.' },
   { id: 'yelp-review', type: 'wildcard', text: 'WILDCARD: Write as a deadpan 1-star Yelp review of this protocol/project/person. Treat the blockchain product like a restaurant or service. Rate the experience.' },
+
+  // --- Trash-tier mutations (designed for fast pipeline chaos calls) ---
+  { id: 'breakdown', type: 'wildcard', text: 'WILDCARD: Write as a crypto community manager having a public mental breakdown about this. Not satire — genuine emotional collapse. The unhinged sincerity IS the comedy.' },
+  { id: 'copypasta', type: 'wildcard', text: 'WILDCARD: Write a crypto copypasta destined for quote tweets. The kind of text people screenshot and send with "💀💀💀". Absurd escalation is key.' },
+  { id: 'obituary', type: 'voice', text: 'VOICE OVERRIDE: Write a deadpan 2-line obituary for this project/take/career. Clinical. Final. The brevity is the knife.' },
+  { id: 'investor-call', type: 'perspective', text: 'PERSPECTIVE: Write the devastating one-liner a VC would say in a partner meeting after reviewing this. Boardroom energy — the silence after the sentence is the point.' },
+  { id: '3am-take', type: 'wildcard', text: 'WILDCARD: The 3am delirious take that somehow has more insight than any sober analysis. Stream-of-consciousness energy that accidentally lands a kill shot.' },
+  { id: 'anime-villain', type: 'voice', text: 'VOICE OVERRIDE: Deliver the roast like an anime villain who finds their opponent disappointing. The condescension IS the comedy. "I expected more from you."' },
 ];
 
 const TYPE_WEIGHTS: Record<MutationType, number> = {
@@ -64,6 +72,16 @@ export function pickMutations(count: number = 2): Mutation[] {
   }
 
   return picked;
+}
+
+/**
+ * Pick one random mutation of a specific type.
+ * Used by fast pipeline to assign targeted mutations per call.
+ */
+export function pickMutationByType(type: MutationType): Mutation | null {
+  const candidates = MUTATIONS.filter((m) => m.type === type);
+  if (candidates.length === 0) return null;
+  return candidates[Math.floor(Math.random() * candidates.length)]!;
 }
 
 /**

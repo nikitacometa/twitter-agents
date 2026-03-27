@@ -1,5 +1,6 @@
 import type { Logger } from 'pino';
 import type { ProviderManager } from '@agent/provider-manager.js';
+import type { AgentRankingOutput } from '@agent/agent.types.js';
 import type { EvaluationResult, EvaluationScores, JudgeEvaluation } from './types.js';
 import {
   pickJudges,
@@ -439,6 +440,55 @@ export class RoastEvaluator {
     return results;
   }
 
+  // -------------------------------------------------------------------------
+  // Batch ranking — 1 LLM call ranks all candidates comparatively
+  // -------------------------------------------------------------------------
+
+  /**
+   * Rank all candidates in a single LLM call. Returns rankings sorted best→worst.
+   * Used by fast pipeline: cheaper and produces better comparative judgments
+   * than individual evaluate() calls (judge sees all candidates side-by-side).
+   */
+  async rankBatch(inputs: RankInput[]): Promise<AgentRankingOutput> {
+    if (inputs.length === 0) return { rankings: [] };
+
+    const prompt = buildRankingPrompt(inputs);
+    const taskId = `rank-batch-${Date.now()}`;
+
+    this.logger.info(
+      { candidateCount: inputs.length },
+      'Batch ranking candidates in single call',
+    );
+
+    try {
+      const result = await this.provider.run<{ text: string }>(taskId, {
+        prompt,
+        profile: 'farm-evaluate',
+        requiresResearch: false,
+      });
+
+      const rawText = typeof result.data === 'string'
+        ? result.data
+        : (result.data as Record<string, unknown>)['text'] as string
+          ?? JSON.stringify(result.data);
+
+      const output = parseRankingOutput(rawText, inputs.length);
+
+      this.logger.info(
+        { candidateCount: inputs.length, rankedCount: output.rankings.length },
+        'Batch ranking complete',
+      );
+
+      return output;
+    } catch (error) {
+      this.logger.error(
+        { taskId, err: error, candidateCount: inputs.length },
+        `Batch ranking failed: ${getErrorMessage(error)}`,
+      );
+      throw error;
+    }
+  }
+
   private async runSingleJudge(
     judge: JudgePersonaConfig,
     input: EvaluateInput,
@@ -474,4 +524,108 @@ export class RoastEvaluator {
       throw error;
     }
   }
+}
+
+// ---------------------------------------------------------------------------
+// Batch ranking — prompt + parser for single-call comparative ranking
+// ---------------------------------------------------------------------------
+
+export interface RankInput {
+  index: number;
+  text: string;
+  angle: string;
+  selfScore: number;
+}
+
+function buildRankingPrompt(inputs: RankInput[]): string {
+  const candidates = inputs
+    .map((c) => `[${String(c.index)}] (${c.angle}, self-score ${String(c.selfScore)})\n"${c.text}"`)
+    .join('\n\n');
+
+  return `You are a comedy writer who has written for Wendy's Twitter and SNL Weekend Update. You judge by craft — setup, misdirection, surprise.
+
+You are ranking ${String(inputs.length)} crypto roast candidates. Your job: rank them from best to worst based on which ones would make someone STOP SCROLLING and laugh out loud.
+
+## Candidates
+
+${candidates}
+
+## Scoring Criteria
+
+For each candidate, score 3 dimensions (1-5):
+
+**FUNNY**: Does the setup→punchline genuinely land? Misdirection, surprise, bathos.
+- 5: you physically laughed, devastating
+- 4: genuinely funny, would screenshot
+- 3: solid, competent
+- 2: meh, seen this before
+- 1: not a joke, just commentary
+
+**IMPACT**: Would someone stop scrolling to read this twice?
+- 5: quote-tweet with "absolutely destroyed"
+- 4: screenshot and send to group chat
+- 3: like and maybe bookmark
+- 2: acknowledgment nod
+- 1: scroll past
+
+**ORIGINAL**: Has CT seen this take/angle/framing before?
+- 5: never seen anything like this
+- 4: fresh angle on known target
+- 3: decent variation
+- 2: template-tier
+- 1: copy-paste energy
+
+## Rules
+- Score INDEPENDENTLY per dimension, then composite = (FUNNY × 0.5) + (IMPACT × 0.3) + (ORIGINAL × 0.2)
+- Self-scores are the LLM's self-rating — ignore them. Judge independently
+- Brevity bonus: 1-sentence devastation gets +0.5 to FUNNY
+- If the punchline is visible from the setup, cap FUNNY at 3
+
+## Output
+
+Respond with ONLY valid JSON (no markdown, no code fences):
+{"rankings":[{"index":N,"score":X.X,"funny":N,"impact":N,"original":N,"reason":"≤15 words why this rank"}]}
+
+Sort by score descending (best first). Include ALL ${String(inputs.length)} candidates.`;
+}
+
+function parseRankingOutput(raw: string, expectedCount: number): AgentRankingOutput {
+  const cleaned = raw.replace(/^```(?:json)?\s*\n?/m, '').replace(/\n?```\s*$/m, '').trim();
+
+  const jsonMatch = cleaned.match(/\{[\s\S]*\}/);
+  if (!jsonMatch) {
+    throw new Error('No JSON object found in ranking output');
+  }
+
+  const parsed = JSON.parse(jsonMatch[0]) as Record<string, unknown>;
+  const rankings = parsed['rankings'];
+
+  if (!Array.isArray(rankings)) {
+    throw new Error('Missing or invalid rankings array');
+  }
+
+  const result: AgentRankingOutput['rankings'] = [];
+
+  for (const entry of rankings) {
+    const r = entry as Record<string, unknown>;
+    const index = typeof r['index'] === 'number' ? r['index'] : -1;
+    const score = typeof r['score'] === 'number' ? Math.round(r['score'] * 10) / 10 : 0;
+    const funny = typeof r['funny'] === 'number' ? r['funny'] : 0;
+    const impact = typeof r['impact'] === 'number' ? r['impact'] : 0;
+    const original = typeof r['original'] === 'number' ? r['original'] : 0;
+    const reason = typeof r['reason'] === 'string' ? r['reason'] : '';
+
+    if (index >= 0) {
+      result.push({ index, score, funny, impact, original, reason });
+    }
+  }
+
+  if (result.length === 0) {
+    throw new Error(`Ranking returned 0 valid entries (expected ${String(expectedCount)})`);
+  }
+
+  // Sort by score descending
+  result.sort((a, b) => b.score - a.score);
+
+  return { rankings: result };
 }

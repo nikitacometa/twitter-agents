@@ -29,7 +29,7 @@ export interface InsertFarmTarget {
 
 // --- Farm attempt (raw generation output) ---
 
-export type PromptStrategy = 'unified' | 'rubric' | 'persona' | 'adversarial';
+export type PromptStrategy = 'unified' | 'rubric' | 'persona' | 'adversarial' | 'fast-gen';
 
 export interface FarmAttempt {
   id: number;

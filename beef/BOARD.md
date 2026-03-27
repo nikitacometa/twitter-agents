@@ -68,6 +68,10 @@ Status: `[ ]` pending, `[~]` in progress, `[x]` done, `[!]` blocked
 [ ] #B-35 — Smart reply autonomy: stratify by follower count (<1K auto, 1-10K auto if eval ≥ 4.0, >10K require approval)
 [ ] #B-36 — Closed learning loop: high-engagement → auto few-shot, low-engagement → negative examples, weekly report
 [x] #B-37 — OpenClaw integration: beef user on VPS, 8 skills (4 read + 4 write), POST API endpoints with auth, @BeefAdminBot on port 19001. Shipped 2026-03-27
+[x] #B-38 — OpenClaw voice message support: Whisper STT, echoTranscript, OpenAI API key. Shipped 2026-03-27
+[x] #B-39 — OpenClaw Twitter API skills: twitter-search, twitter-user, twitter-tweet, twitter-timeline (bearer token, read-only). Shipped 2026-03-27
+[x] #B-40 — OpenClaw model switch: Anthropic → OpenAI GPT-5.4 (primary), Anthropic Sonnet (fallback). 2026-03-27
+[x] #B-41 — OpenClaw personality tuning: degen voice from beef-bot.json DNA, lowercase, sarcasm, CT slang, мат. 2026-03-28
 
 ## Backlog: Visuals (high priority)
 

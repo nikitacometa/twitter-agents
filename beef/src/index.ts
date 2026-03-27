@@ -133,7 +133,7 @@ if (config.ACTIVITY_FEED_ENABLED) {
 // --- LLM Providers (optional — bot works without them for manual eval) ---
 let provider: ProviderManager | null = null;
 try {
-  const primary = new ClaudeCodeProvider(logger, llmLogRepo);
+  const primary = new ClaudeCodeProvider(logger, llmLogRepo, { maxConcurrent: 3 });
 
   const fallbacks: LLMProvider[] = [];
   if (config.CODEX_ENABLED) {
