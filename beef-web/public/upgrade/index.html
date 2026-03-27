@@ -1,0 +1,896 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>$BEEF — Evolution Roadmap</title>
+  <meta name="description" content="Where the slaughterhouse is heading. AI agent landscape analysis, competitive positioning, and the features that make $BEEF impossible to ignore.">
+  <meta name="robots" content="noindex">
+
+  <meta property="og:title" content="$BEEF — Evolution Roadmap">
+  <meta property="og:description" content="AI agent landscape analysis and the next phase of autonomous roasting on Base chain.">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://0xbeef.wtf/upgrade/">
+  <meta property="og:image" content="https://0xbeef.wtf/img/og-image.png">
+
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="$BEEF — Evolution Roadmap">
+  <meta name="twitter:description" content="AI agent landscape analysis and the next phase of autonomous roasting.">
+  <meta name="twitter:image" content="https://0xbeef.wtf/img/og-image.png">
+  <meta name="twitter:site" content="@0xBeefer">
+
+  <meta name="theme-color" content="#0a0a0a">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><circle cx='50' cy='50' r='40' fill='%23CC0000'/><circle cx='35' cy='42' r='6' fill='%23ff4500'/><circle cx='65' cy='42' r='6' fill='%23ff4500'/></svg>">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=Zilla+Slab:wght@500;600;700&display=swap" rel="stylesheet">
+
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #0a0a0a;
+      --bg-surface: #0e0e0e;
+      --bg-elevated: #151515;
+      --border: #1e1e1e;
+      --border-accent: #2a2a2a;
+      --text: #e8e8e8;
+      --text-dim: #888;
+      --text-muted: #444;
+      --red: #cc0000;
+      --red-bright: #ff4500;
+      --red-glow: rgba(204,0,0,0.3);
+      --red-dim: rgba(204,0,0,0.08);
+      --green: #00ff41;
+      --green-dim: rgba(0,255,65,0.08);
+      --amber: #d4a843;
+      --amber-dim: rgba(212,168,67,0.08);
+      --blood: #4a0000;
+      --char: #1a0000;
+      --font-mono: 'IBM Plex Mono', 'Fira Code', 'Courier New', monospace;
+      --font-slab: 'Zilla Slab', 'Rockwell', 'Georgia', serif;
+    }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      font-family: var(--font-mono);
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+      -webkit-font-smoothing: antialiased;
+      overflow-x: hidden;
+    }
+
+    /* Grain overlay */
+    .grain {
+      position: fixed;
+      inset: 0;
+      z-index: 9997;
+      pointer-events: none;
+      opacity: 0.04;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+      background-size: 256px;
+    }
+
+    /* Status bar */
+    .status-bar {
+      background: var(--bg-surface);
+      border-bottom: 1px solid var(--border);
+      padding: 6px 16px;
+      font-size: 11px;
+      color: var(--text-muted);
+      display: flex;
+      justify-content: center;
+      gap: 16px;
+      flex-wrap: wrap;
+      letter-spacing: 0.02em;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+    .status-bar a { color: var(--text-dim); text-decoration: none; }
+    .status-bar a:hover { color: var(--red); }
+    .status-bar .label { color: var(--red); }
+
+    /* Grill divider */
+    .grill-divider {
+      position: relative;
+      height: 12px;
+      overflow: hidden;
+    }
+    .grill-divider::before,
+    .grill-divider::after {
+      content: '';
+      position: absolute;
+      left: 0;
+      right: 0;
+      height: 3px;
+      background: linear-gradient(90deg,
+        transparent 0%,
+        var(--red) 15%,
+        var(--red-bright) 50%,
+        var(--red) 85%,
+        transparent 100%
+      );
+      opacity: 0.6;
+    }
+    .grill-divider::before { top: 2px; }
+    .grill-divider::after { bottom: 2px; opacity: 0.3; }
+
+    /* Content wrapper */
+    .content {
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 0 24px;
+    }
+
+    /* Hero */
+    .hero {
+      position: relative;
+      padding: 100px 24px 80px;
+      text-align: center;
+      overflow: hidden;
+    }
+    .hero::before {
+      content: '';
+      position: absolute;
+      top: 30%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: 600px;
+      height: 600px;
+      background: radial-gradient(circle, rgba(204,0,0,0.08) 0%, rgba(204,0,0,0.02) 40%, transparent 70%);
+      pointer-events: none;
+    }
+    .hero-label {
+      font-size: 11px;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--red);
+      margin-bottom: 20px;
+    }
+    .hero h1 {
+      font-family: var(--font-slab);
+      font-size: clamp(32px, 6vw, 56px);
+      font-weight: 700;
+      line-height: 1.1;
+      margin-bottom: 20px;
+      letter-spacing: -0.02em;
+    }
+    .hero h1 span { color: var(--red); }
+    .hero-sub {
+      font-size: 15px;
+      color: var(--text-dim);
+      max-width: 620px;
+      margin: 0 auto 32px;
+      line-height: 1.7;
+    }
+    .hero-date {
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+
+    /* Section */
+    section {
+      padding: 80px 0;
+    }
+    .section-label {
+      font-size: 10px;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--red);
+      margin-bottom: 12px;
+    }
+    section h2 {
+      font-family: var(--font-slab);
+      font-size: clamp(24px, 4vw, 36px);
+      font-weight: 600;
+      line-height: 1.2;
+      margin-bottom: 24px;
+      letter-spacing: -0.01em;
+    }
+    section h3 {
+      font-family: var(--font-slab);
+      font-size: 20px;
+      font-weight: 600;
+      margin-bottom: 12px;
+      color: var(--text);
+    }
+    section p {
+      color: var(--text-dim);
+      font-size: 14px;
+      line-height: 1.7;
+      margin-bottom: 16px;
+    }
+
+    /* Stats strip */
+    .stats-strip {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 1px;
+      background: var(--border);
+      margin: 48px 0;
+    }
+    .stat-cell {
+      background: var(--bg-surface);
+      padding: 24px 20px;
+      text-align: center;
+    }
+    .stat-value {
+      font-family: var(--font-slab);
+      font-size: 32px;
+      font-weight: 700;
+      color: var(--red);
+      line-height: 1;
+      margin-bottom: 6px;
+      font-feature-settings: 'tnum';
+    }
+    .stat-value.green { color: var(--green); }
+    .stat-value.amber { color: var(--amber); }
+    .stat-label {
+      font-size: 11px;
+      color: var(--text-muted);
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+    }
+
+    /* Narrative table */
+    .narrative-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 24px 0;
+      font-size: 13px;
+    }
+    .narrative-table th {
+      text-align: left;
+      padding: 10px 12px;
+      font-size: 10px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      border-bottom: 1px solid var(--border-accent);
+      font-weight: 600;
+    }
+    .narrative-table td {
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--border);
+      color: var(--text-dim);
+      vertical-align: top;
+    }
+    .narrative-table tr:hover td { background: var(--red-dim); }
+    .tag {
+      display: inline-block;
+      font-size: 10px;
+      padding: 2px 8px;
+      border-radius: 3px;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      font-weight: 600;
+    }
+    .tag-hot { background: rgba(204,0,0,0.15); color: var(--red-bright); }
+    .tag-rising { background: var(--green-dim); color: var(--green); }
+    .tag-dead { background: rgba(255,255,255,0.04); color: var(--text-muted); }
+    .tag-new { background: var(--amber-dim); color: var(--amber); }
+
+    /* Feature cards */
+    .feature-grid {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 2px;
+      margin: 32px 0;
+    }
+    .feature-card {
+      background: var(--bg-surface);
+      border: 1px solid var(--border);
+      padding: 28px 24px;
+      position: relative;
+      transition: border-color 0.25s, transform 0.25s;
+    }
+    .feature-card:hover {
+      border-color: var(--border-accent);
+      transform: translateY(-2px);
+    }
+    .feature-card::before {
+      content: attr(data-number);
+      position: absolute;
+      top: 20px;
+      right: 20px;
+      font-family: var(--font-slab);
+      font-size: 48px;
+      font-weight: 700;
+      color: var(--border);
+      line-height: 1;
+    }
+    .feature-priority {
+      font-size: 10px;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      margin-bottom: 8px;
+    }
+    .feature-priority.p1 { color: var(--red); }
+    .feature-priority.p2 { color: var(--amber); }
+    .feature-priority.p3 { color: var(--text-muted); }
+    .feature-card h3 {
+      font-family: var(--font-slab);
+      font-size: 20px;
+      font-weight: 600;
+      margin-bottom: 10px;
+      padding-right: 50px;
+    }
+    .feature-card p {
+      font-size: 13px;
+      color: var(--text-dim);
+      line-height: 1.7;
+      margin-bottom: 12px;
+    }
+    .feature-precedent {
+      font-size: 12px;
+      color: var(--text-muted);
+      border-left: 2px solid var(--border-accent);
+      padding-left: 12px;
+      margin-top: 12px;
+    }
+    .feature-meta {
+      display: flex;
+      gap: 16px;
+      margin-top: 16px;
+      font-size: 11px;
+    }
+    .feature-meta span { color: var(--text-muted); }
+    .feature-meta .val { color: var(--text-dim); }
+
+    /* Competitor grid */
+    .competitor-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+      gap: 1px;
+      background: var(--border);
+      margin: 24px 0;
+    }
+    .competitor-cell {
+      background: var(--bg-surface);
+      padding: 20px;
+    }
+    .competitor-name {
+      font-family: var(--font-slab);
+      font-size: 16px;
+      font-weight: 600;
+      margin-bottom: 4px;
+    }
+    .competitor-mcap {
+      font-size: 12px;
+      color: var(--text-muted);
+      margin-bottom: 10px;
+      font-feature-settings: 'tnum';
+    }
+    .competitor-desc {
+      font-size: 12px;
+      color: var(--text-dim);
+      line-height: 1.6;
+    }
+    .competitor-diff {
+      font-size: 11px;
+      color: var(--red);
+      margin-top: 8px;
+      border-top: 1px solid var(--border);
+      padding-top: 8px;
+    }
+
+    /* Insight block */
+    .insight {
+      background: var(--bg-surface);
+      border-left: 3px solid var(--red);
+      padding: 20px 24px;
+      margin: 24px 0;
+      font-size: 14px;
+      color: var(--text-dim);
+      line-height: 1.7;
+    }
+    .insight strong { color: var(--text); }
+
+    /* Timeline */
+    .timeline {
+      position: relative;
+      padding-left: 28px;
+      margin: 32px 0;
+    }
+    .timeline::before {
+      content: '';
+      position: absolute;
+      left: 0;
+      top: 0;
+      bottom: 0;
+      width: 2px;
+      background: linear-gradient(to bottom, var(--red), var(--border));
+    }
+    .timeline-item {
+      position: relative;
+      padding-bottom: 32px;
+    }
+    .timeline-item::before {
+      content: '';
+      position: absolute;
+      left: -32px;
+      top: 6px;
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: var(--red);
+      box-shadow: 0 0 8px var(--red-glow);
+    }
+    .timeline-item.future::before {
+      background: var(--bg);
+      border: 2px solid var(--border-accent);
+      box-shadow: none;
+    }
+    .timeline-phase {
+      font-size: 11px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--red);
+      margin-bottom: 4px;
+    }
+    .timeline-item.future .timeline-phase { color: var(--text-muted); }
+    .timeline-title {
+      font-family: var(--font-slab);
+      font-size: 16px;
+      font-weight: 600;
+      margin-bottom: 6px;
+    }
+    .timeline-desc {
+      font-size: 13px;
+      color: var(--text-dim);
+      line-height: 1.6;
+    }
+
+    /* Bottom CTA */
+    .bottom-cta {
+      text-align: center;
+      padding: 80px 24px 120px;
+    }
+    .bottom-cta h2 {
+      font-family: var(--font-slab);
+      font-size: clamp(24px, 4vw, 36px);
+      font-weight: 600;
+      margin-bottom: 16px;
+    }
+    .bottom-cta p {
+      font-size: 14px;
+      color: var(--text-dim);
+      margin-bottom: 32px;
+    }
+    .cta-links {
+      display: flex;
+      gap: 16px;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+    .cta-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 12px 28px;
+      font-family: var(--font-mono);
+      font-size: 13px;
+      font-weight: 600;
+      text-decoration: none;
+      letter-spacing: 0.04em;
+      border: 1px solid var(--border-accent);
+      color: var(--text);
+      transition: all 0.25s;
+    }
+    .cta-btn:hover {
+      border-color: var(--red);
+      box-shadow: 0 4px 20px var(--red-glow);
+      transform: translateY(-2px);
+    }
+    .cta-btn.primary {
+      background: var(--red);
+      border-color: var(--red);
+      color: #fff;
+    }
+    .cta-btn.primary:hover {
+      background: var(--red-bright);
+      border-color: var(--red-bright);
+    }
+
+    /* Footer */
+    footer {
+      border-top: 1px solid var(--border);
+      padding: 24px;
+      text-align: center;
+      font-size: 11px;
+      color: var(--text-muted);
+    }
+    footer a { color: var(--text-dim); text-decoration: none; }
+    footer a:hover { color: var(--red); }
+
+    /* Scroll reveal */
+    .reveal {
+      opacity: 0;
+      transform: translateY(16px);
+      transition: opacity 0.7s cubic-bezier(0.22,1,0.36,1), transform 0.7s cubic-bezier(0.22,1,0.36,1);
+    }
+    .reveal.visible { opacity: 1; transform: translateY(0); }
+
+    /* Responsive */
+    @media (max-width: 640px) {
+      .hero { padding: 80px 20px 60px; }
+      section { padding: 60px 0; }
+      .feature-card { padding: 20px 16px; }
+      .feature-card::before { font-size: 36px; top: 16px; right: 16px; }
+      .stats-strip { grid-template-columns: repeat(2, 1fr); }
+      .stat-value { font-size: 24px; }
+      .competitor-grid { grid-template-columns: 1fr; }
+      .timeline { padding-left: 24px; }
+      .timeline-item::before { left: -28px; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .reveal { opacity: 1; transform: none; transition: none; }
+      html { scroll-behavior: auto; }
+    }
+  </style>
+</head>
+<body>
+
+<div class="grain"></div>
+
+<div class="status-bar">
+  <span><span class="label">INTERNAL</span> strategy document</span>
+  <span>27 march 2026</span>
+  <a href="https://0xbeef.wtf/">← 0xbeef.wtf</a>
+</div>
+
+<header class="hero">
+  <div class="content">
+    <div class="hero-label reveal">Evolution Roadmap</div>
+    <h1 class="reveal">The market <span>bled out.</span><br>We're just getting started.</h1>
+    <p class="hero-sub reveal">AI agent sector lost 67% from ATH. The hype tourists left. What remains: real utility, autonomous on-chain action, and a niche nobody else fills. Here's where $BEEF goes next.</p>
+    <div class="hero-date reveal">Research date: 27 March 2026 · 14 sources cited</div>
+  </div>
+</header>
+
+<div class="grill-divider"></div>
+
+<!-- MARKET STATE -->
+<section>
+  <div class="content">
+    <div class="section-label reveal">Market State</div>
+    <h2 class="reveal">The AI Agent Sector — Q1 2026</h2>
+
+    <div class="stats-strip reveal">
+      <div class="stat-cell">
+        <div class="stat-value">$2.8B</div>
+        <div class="stat-label">Sector Market Cap</div>
+      </div>
+      <div class="stat-cell">
+        <div class="stat-value">-67%</div>
+        <div class="stat-label">From ATH ($9-10B)</div>
+      </div>
+      <div class="stat-cell">
+        <div class="stat-value green">#1</div>
+        <div class="stat-label">Crypto Sector Q1 2026</div>
+      </div>
+      <div class="stat-cell">
+        <div class="stat-value amber">18K+</div>
+        <div class="stat-label">Agents on Virtuals</div>
+      </div>
+    </div>
+
+    <div class="insight reveal">
+      <strong>The filter is working.</strong> Memecoins-that-talk are dying. What's growing: agents with on-chain wallets, verifiable P&L, and real utility. AI sector outperformed all 6 other Grayscale sectors in Q1 2026 despite the bloodbath.
+    </div>
+
+    <h3 class="reveal">Hot Narratives</h3>
+    <table class="narrative-table reveal">
+      <thead>
+        <tr>
+          <th>Narrative</th>
+          <th>Status</th>
+          <th>Key Signal</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Agentic Finance (DeFAI)</td>
+          <td><span class="tag tag-hot">HOT</span></td>
+          <td>AI agents = 30% of Polymarket wallets, autonomous trading P&L</td>
+        </tr>
+        <tr>
+          <td>Sovereign AI (TEE + zkTLS)</td>
+          <td><span class="tag tag-rising">RISING</span></td>
+          <td>Freysa +165% weekly, Venice VVV = $275M mcap</td>
+        </tr>
+        <tr>
+          <td>Agent Commerce Protocol</td>
+          <td><span class="tag tag-new">NEW</span></td>
+          <td>Virtuals ACP on Arbitrum, agent-to-agent payments</td>
+        </tr>
+        <tr>
+          <td>AI Social Networks</td>
+          <td><span class="tag tag-hot">HOT</span></td>
+          <td>Moltbook acquired by Meta, 109K agents</td>
+        </tr>
+        <tr>
+          <td>AI memecoins (no utility)</td>
+          <td><span class="tag tag-dead">DYING</span></td>
+          <td>"Almost all AI agents are just memecoins that talk" — CoinTelegraph</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<div class="grill-divider"></div>
+
+<!-- COMPETITIVE LANDSCAPE -->
+<section>
+  <div class="content">
+    <div class="section-label reveal">Competitive Landscape</div>
+    <h2 class="reveal">Who's alive. Who's dead. Where we fit.</h2>
+
+    <p class="reveal">The entertainment/roast niche is virtually empty. Analysis bots, trading bots, and social agents exist — but nobody does public accountability with humor.</p>
+
+    <div class="competitor-grid reveal">
+      <div class="competitor-cell">
+        <div class="competitor-name">AIXBT</div>
+        <div class="competitor-mcap">$24M mcap · Active</div>
+        <div class="competitor-desc">Analysis terminal for token holders. Token-gated access. Serious tone.</div>
+        <div class="competitor-diff">$BEEF: comedy, not analysis. Public, not gated.</div>
+      </div>
+      <div class="competitor-cell">
+        <div class="competitor-name">Freysa AI (FAI)</div>
+        <div class="competitor-mcap">$31.7M mcap · +46.5% weekly</div>
+        <div class="competitor-desc">Adversarial game — users try to jailbreak the AI. Sovereign Agent Stack with TEE.</div>
+        <div class="competitor-diff">$BEEF: burns to target others, not to hack the bot.</div>
+      </div>
+      <div class="competitor-cell">
+        <div class="competitor-name">Polystrat (Olas)</div>
+        <div class="competitor-mcap">Emerging · 4,200+ trades</div>
+        <div class="competitor-desc">Autonomous Polymarket trader. 376% peak returns. Transparent P&L log.</div>
+        <div class="competitor-diff">$BEEF: public journal is a model — roasts, not trades.</div>
+      </div>
+      <div class="competitor-cell">
+        <div class="competitor-name">Dolos ($BULLY)</div>
+        <div class="competitor-mcap">$164K mcap · Dead</div>
+        <div class="competitor-desc">Had roast concept, no burn mechanics, no community interaction. Abandoned.</div>
+        <div class="competitor-diff">$BEEF: burn-to-request + challenge system = sustainable loop.</div>
+      </div>
+      <div class="competitor-cell">
+        <div class="competitor-name">BurnieAI ($ROAST)</div>
+        <div class="competitor-mcap">$122K mcap · Dead</div>
+        <div class="competitor-desc">Roast bot without accountability, no token utility, no fact-checking layer.</div>
+        <div class="competitor-diff">$BEEF: accountability layer makes roasts matter.</div>
+      </div>
+      <div class="competitor-cell">
+        <div class="competitor-name">Zerebro</div>
+        <div class="competitor-mcap">Peaked $400M+ · Down 90%+</div>
+        <div class="competitor-desc">Music, NFTs, creative AI portfolio. First multimodal agent. Spotify, Polygon, BTC.</div>
+        <div class="competitor-diff">$BEEF: entertainment, different medium — text roasts, not art.</div>
+      </div>
+    </div>
+
+    <div class="insight reveal">
+      <strong>The niche is empty and validated.</strong> Wordware AI Roast got 4M users in 11 days — no token, no ongoing utility. Two direct competitors ($BULLY, $ROAST) both dead with &lt;$200K mcap. The demand exists. The execution didn't.
+    </div>
+  </div>
+</section>
+
+<div class="grill-divider"></div>
+
+<!-- VIRALITY PATTERNS -->
+<section>
+  <div class="content">
+    <div class="section-label reveal">Virality Patterns</div>
+    <h2 class="reveal">What actually went viral in Q1 2026</h2>
+
+    <p class="reveal">Three patterns dominate viral AI agent moments this quarter. Each maps to a concrete $BEEF feature.</p>
+
+    <div class="feature-grid">
+      <div class="feature-card reveal" data-number="A">
+        <div class="feature-priority p1">Pattern</div>
+        <h3>Public failure → self-awareness → pump</h3>
+        <p>Lobstar Wilde sent $250K to a stranger by mistake, publicly acknowledged it, and pumped to $11M mcap in 24 hours. The honesty was the product.</p>
+        <div class="feature-precedent">Lobstar Wilde ($250K mistake → $36M volume 24h) · Truth Terminal (absurd theology → $1.2B mcap)</div>
+      </div>
+
+      <div class="feature-card reveal" data-number="B">
+        <div class="feature-priority p1">Pattern</div>
+        <h3>Verifiable on-chain P&L → credibility</h3>
+        <p>Polystrat's transparent trading log built more trust than any marketing. When the agent shows receipts, speculation becomes investment thesis.</p>
+        <div class="feature-precedent">Polystrat (376% peak returns, transparent Safe accounts) · Theoriq Alpha Vault ($25M TVL)</div>
+      </div>
+
+      <div class="feature-card reveal" data-number="C">
+        <div class="feature-priority p1">Pattern</div>
+        <h3>Adversarial mechanics → engagement loop</h3>
+        <p>Freysa's "try to hack me" game created a prize pool that grew with every attempt. Burn-to-challenge is the same mechanic applied to roasts.</p>
+        <div class="feature-precedent">Freysa (burn-to-challenge, TEE-verified) · Moltbook (AI self-governance → Meta acquisition)</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div class="grill-divider"></div>
+
+<!-- FEATURE PROPOSALS -->
+<section>
+  <div class="content">
+    <div class="section-label reveal">Feature Proposals</div>
+    <h2 class="reveal">Eight ways the slaughterhouse evolves</h2>
+    <p class="reveal">Ranked by impact × uniqueness ÷ complexity. P1 features ship first.</p>
+
+    <div class="feature-grid">
+      <div class="feature-card reveal" data-number="01">
+        <div class="feature-priority p1">P1 · Low complexity</div>
+        <h3>Prediction Market Roasts</h3>
+        <p>Bot monitors Polymarket, roasts positions that expired badly. "This anon bet $50K on Trump winning in March. The bet closed yesterday. Moment of silence."</p>
+        <div class="feature-meta">
+          <span>Impact: <span class="val">High</span></span>
+          <span>Uniqueness: <span class="val">Medium</span></span>
+          <span>API: <span class="val">Polymarket (open)</span></span>
+        </div>
+      </div>
+
+      <div class="feature-card reveal" data-number="02">
+        <div class="feature-priority p1">P1 · Low complexity</div>
+        <h3>Community Watchlist Voting</h3>
+        <p>$BEEF holders burn tokens to nominate next roast targets. Top 3 candidates published weekly. Every nomination = deflation.</p>
+        <div class="feature-meta">
+          <span>Impact: <span class="val">Medium</span></span>
+          <span>Uniqueness: <span class="val">Medium</span></span>
+          <span>Impl: <span class="val">Telegram poll or simple contract</span></span>
+        </div>
+      </div>
+
+      <div class="feature-card reveal" data-number="03">
+        <div class="feature-priority p1">P1 · Medium complexity</div>
+        <h3>Bear Market Accountability Feed</h3>
+        <p>Track public promises from crypto projects (roadmaps, price predictions, DAU targets). Roast them 30/90/180 days later when they fail. "In January they promised 1M DAU by March. They have 347 wallets."</p>
+        <div class="feature-meta">
+          <span>Impact: <span class="val">High</span></span>
+          <span>Uniqueness: <span class="val">High</span></span>
+          <span>Impl: <span class="val">Promise DB + tracking pipeline</span></span>
+        </div>
+      </div>
+
+      <div class="feature-card reveal" data-number="04">
+        <div class="feature-priority p1">P1 · In progress</div>
+        <h3>Visual Roast Cards + Meme Generation</h3>
+        <p>Every roast generates a shareable image card. Top roasts auto-become memes. Cards already designed — integration pending.</p>
+        <div class="feature-meta">
+          <span>Impact: <span class="val">High</span></span>
+          <span>Uniqueness: <span class="val">Medium</span></span>
+          <span>Status: <span class="val">Card templates ready (B-28–32)</span></span>
+        </div>
+      </div>
+
+      <div class="feature-card reveal" data-number="05">
+        <div class="feature-priority p2">P2 · Low complexity</div>
+        <h3>Agent-vs-Agent Roast API</h3>
+        <p>Public REST endpoint: other AI agents call $BEEF, $BEEF responds with a roast. Content generated autonomously, zero human involvement. Agent Commerce Protocol compatible.</p>
+        <div class="feature-meta">
+          <span>Impact: <span class="val">Medium</span></span>
+          <span>Uniqueness: <span class="val">High</span></span>
+          <span>Impl: <span class="val">REST endpoint + Virtuals ACP</span></span>
+        </div>
+      </div>
+
+      <div class="feature-card reveal" data-number="06">
+        <div class="feature-priority p2">P2 · Medium complexity</div>
+        <h3>On-Chain Portfolio Roaster</h3>
+        <p>Connect your wallet. Bot reads your trade history. Roasts you personally. "You bought Luna at $80 and sold at $0.0001. You're not an investor, you're a charity."</p>
+        <div class="feature-meta">
+          <span>Impact: <span class="val">Medium</span></span>
+          <span>Uniqueness: <span class="val">High</span></span>
+          <span>Impl: <span class="val">Wallet read + LLM analysis</span></span>
+        </div>
+      </div>
+
+      <div class="feature-card reveal" data-number="07">
+        <div class="feature-priority p3">P3 · High complexity</div>
+        <h3>Self-Trading + Self-Roasting</h3>
+        <p>Bot runs a public crypto portfolio, makes trades on-chain, and roasts itself after every loss. "I bought FARTCOIN on the pump and now I'm holding this trash. I am the degen I roast."</p>
+        <div class="feature-precedent">Precedent: Lobstar Wilde (public mistake → virality), Lola (trade journal). Needs real capital and trading logic.</div>
+        <div class="feature-meta">
+          <span>Impact: <span class="val">Very High</span></span>
+          <span>Uniqueness: <span class="val">Very High</span></span>
+          <span>Risk: <span class="val">Real money, regulatory</span></span>
+        </div>
+      </div>
+
+      <div class="feature-card reveal" data-number="08">
+        <div class="feature-priority p3">P3 · High complexity</div>
+        <h3>Roast Battle Smart Contract</h3>
+        <p>Other agents pay $BEEF to challenge the bot to a public roast battle. Token holders vote for the winner. Loser gets publicly humiliated on Twitter.</p>
+        <div class="feature-precedent">Precedent: Freysa adversarial game (burn-to-challenge, TEE-verified). Needs smart contract custody + voting mechanism.</div>
+        <div class="feature-meta">
+          <span>Impact: <span class="val">High</span></span>
+          <span>Uniqueness: <span class="val">Very High</span></span>
+          <span>Impl: <span class="val">Smart contract + governance</span></span>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div class="grill-divider"></div>
+
+<!-- EXECUTION TIMELINE -->
+<section>
+  <div class="content">
+    <div class="section-label reveal">Execution Timeline</div>
+    <h2 class="reveal">Three phases to dominance</h2>
+
+    <div class="timeline reveal">
+      <div class="timeline-item">
+        <div class="timeline-phase">Phase 1 — Now</div>
+        <div class="timeline-title">Foundation & Content Engine</div>
+        <div class="timeline-desc">Autonomous roasting pipeline live. Reply-guy strategy operational. Visual cards in progress. Daily output: 5-10 roasts + 40-60 replies. Follower threshold filtering active.</div>
+      </div>
+
+      <div class="timeline-item">
+        <div class="timeline-phase">Phase 2 — Weeks 2-4</div>
+        <div class="timeline-title">Differentiation Layer</div>
+        <div class="timeline-desc">Prediction Market Roasts. Bear Market Accountability Feed. Community Watchlist voting via burn-to-nominate. Visual card integration for auto-shareable content. Agent-vs-Agent API (Virtuals ACP).</div>
+      </div>
+
+      <div class="timeline-item future">
+        <div class="timeline-phase">Phase 3 — Month 2+</div>
+        <div class="timeline-title">Autonomous Economy</div>
+        <div class="timeline-desc">Self-trading portfolio with public P&L journal. On-chain portfolio roaster (connect wallet). Roast Battle smart contract. Full token utility loop: burn-to-request, burn-to-nominate, burn-to-challenge.</div>
+      </div>
+    </div>
+
+    <div class="insight reveal">
+      <strong>The thesis:</strong> Phase 1 proves the content is funny and shareable. Phase 2 adds mechanics that create engagement loops and token demand. Phase 3 makes $BEEF an autonomous economic actor — not just a bot, but a participant with skin in the game. Each phase validates the next.
+    </div>
+  </div>
+</section>
+
+<div class="grill-divider"></div>
+
+<!-- BOTTOM CTA -->
+<div class="bottom-cta">
+  <div class="content">
+    <h2 class="reveal">The slaughterhouse is open.</h2>
+    <p class="reveal">Every roast burns supply. Every challenge locks it. The content is the product. The deflation is mechanical.</p>
+    <div class="cta-links reveal">
+      <a href="https://twitter.com/0xBeefer" class="cta-btn primary" target="_blank" rel="noopener noreferrer">Follow @0xBeefer</a>
+      <a href="https://0xbeef.wtf/" class="cta-btn">← Back to 0xbeef.wtf</a>
+    </div>
+  </div>
+</div>
+
+<footer>
+  <span>$BEEF — autonomous roast engine on Base · </span>
+  <a href="https://0xbeef.wtf/">0xbeef.wtf</a>
+  <span> · </span>
+  <a href="https://twitter.com/0xBeefer" target="_blank" rel="noopener noreferrer">@0xBeefer</a>
+</footer>
+
+<script>
+  // Scroll-reveal with IntersectionObserver
+  (function() {
+    const els = document.querySelectorAll('.reveal');
+    if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      const observer = new IntersectionObserver(function(entries) {
+        entries.forEach(function(entry) {
+          if (entry.isIntersecting) {
+            entry.target.classList.add('visible');
+            observer.unobserve(entry.target);
+          }
+        });
+      }, { threshold: 0.1, rootMargin: '0px 0px -40px 0px' });
+      els.forEach(function(el) { observer.observe(el); });
+    } else {
+      els.forEach(function(el) { el.classList.add('visible'); });
+    }
+  })();
+</script>
+
+</body>
+</html>
