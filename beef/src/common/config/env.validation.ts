@@ -11,8 +11,14 @@ const envSchema = z
     TWITTER_ACCESS_TOKEN: z.string().optional(),
     TWITTER_ACCESS_SECRET: z.string().optional(),
 
-    // Twitter client mode
-    TWITTER_CLIENT_MODE: z.enum(['api', 'scraper']).default('api'),
+    // Twitter client mode: api (API v2), scraper (cookie auth), hybrid (API reads + Playwright writes)
+    TWITTER_CLIENT_MODE: z.enum(['api', 'scraper', 'hybrid']).default('api'),
+
+    // Proxy (ISP residential SOCKS5 for anti-detection)
+    PROXY_URL: z.string().optional(),
+
+    // Playwright browser automation
+    CHROME_PROFILE_PATH: z.string().optional(),
 
     // Twitter bot handle (without @) — used for mention filtering in API mode
     TWITTER_BOT_USERNAME: z.string().optional(),
@@ -101,6 +107,35 @@ const envSchema = z
     API_PORT: z.coerce.number().int().min(1024).max(65535).default(3001),
     API_AUTH_TOKEN: z.string().optional(),
 
+    // Autonomy
+    ENABLE_AUTO_FARM: z
+      .enum(['true', 'false'])
+      .default('false')
+      .transform((v) => v === 'true'),
+    AUTO_FARM_INTERVAL_HOURS: z.coerce.number().int().min(1).max(24).default(6),
+    AUTO_FARM_TARGET_COUNT: z.coerce.number().int().min(1).max(10).default(5),
+
+    ENABLE_AUTO_POST: z
+      .enum(['true', 'false'])
+      .default('false')
+      .transform((v) => v === 'true'),
+    AUTO_POST_INTERVAL_HOURS: z.coerce.number().int().min(1).max(12).default(3),
+    MAX_AUTO_POSTS_PER_DAY: z.coerce.number().int().min(1).max(10).default(3),
+    AUTO_POST_MIN_SCORE: z.coerce.number().min(1).max(5).default(4.0),
+    AUTO_POST_MIN_BUFFER: z.coerce.number().int().min(1).max(20).default(5),
+
+    ENABLE_REPLY_GUY: z
+      .enum(['true', 'false'])
+      .default('false')
+      .transform((v) => v === 'true'),
+    REPLY_GUY_INTERVAL_MINUTES: z.coerce.number().int().min(5).max(60).default(15),
+    REPLY_GUY_DAILY_CAP: z.coerce.number().int().min(5).max(100).default(50),
+
+    ENABLE_LEARNING_LOOP: z
+      .enum(['true', 'false'])
+      .default('false')
+      .transform((v) => v === 'true'),
+
     // Environment
     NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
     LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace']).default('info'),
@@ -112,6 +147,22 @@ const envSchema = z
           code: z.ZodIssueCode.custom,
           message: 'TELEGRAM_BOT_TOKEN is required in production',
           path: ['TELEGRAM_BOT_TOKEN'],
+        });
+      }
+    }
+    if (data.TWITTER_CLIENT_MODE === 'hybrid') {
+      if (!data.PROXY_URL) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: 'PROXY_URL is required in hybrid mode (Playwright needs residential proxy)',
+          path: ['PROXY_URL'],
+        });
+      }
+      if (!data.CHROME_PROFILE_PATH) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: 'CHROME_PROFILE_PATH is required in hybrid mode (Playwright persistent profile)',
+          path: ['CHROME_PROFILE_PATH'],
         });
       }
     }

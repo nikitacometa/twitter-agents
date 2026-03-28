@@ -9,6 +9,9 @@ module.exports = {
       env: {
         BEEF_ENV: 'production',
         DRY_RUN: 'false',
+        DISPLAY: ':99',
+        REBROWSER_PATCHES_RUNTIME_FIX_MODE: 'addBinding',
+        REBROWSER_PATCHES_SOURCE_URL: 'app.js',
       },
       env_test: {
         BEEF_ENV: 'test',
