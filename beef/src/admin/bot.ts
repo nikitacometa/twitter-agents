@@ -3577,15 +3577,10 @@ If no contradictions found, return {"contradictions":[]}`;
         // Send each top-K meme as a photo
         for (const r of topK) {
           const meme = r.meme.output.meme!;
-          const captionLines = [
-            `<b>#${String(r.rank)}</b> — ${r.meme.strategy.name}`,
-            `Template: ${meme.templateName}`,
-            `Boxes: ${meme.boxes.map((b) => `"${b}"`).join(' | ')}`,
-          ];
+          const captionLines = [`<b>#${String(r.rank)}</b>`];
           if (r.score) {
             captionLines.push(
-              `Score: <tg-spoiler>P=${String(r.score.punch)} S=${String(r.score.specificity)} C=${String(r.score.clarity)} F=${String(r.score.templateFit)} = <b>${String(r.score.composite)}</b></tg-spoiler>`,
-              r.score.reasoning,
+              `<tg-spoiler>P=${String(r.score.punch)} S=${String(r.score.specificity)} C=${String(r.score.clarity)} F=${String(r.score.templateFit)} = <b>${String(r.score.composite)}</b>\n${r.score.reasoning}</tg-spoiler>`,
             );
           }
 
@@ -3600,19 +3595,7 @@ If no contradictions found, return {"contradictions":[]}`;
           }
         }
 
-        // Send remaining memes as text summary
-        if (ranked.length > top) {
-          const rest = ranked.slice(top).map((r) => {
-            const meme = r.meme.output.meme!;
-            const scoreTag = r.score ? `<tg-spoiler>${String(r.score.composite)}</tg-spoiler>` : '—';
-            return `#${String(r.rank)} ${scoreTag} ${r.meme.strategy.id} — ${meme.templateName}: ${meme.boxes.map((b) => `"${b}"`).join(' | ')}`;
-          });
-          const restMsg = `<b>Remaining (${String(ranked.length - top)}):</b>\n${rest.join('\n')}`;
-          // Chunk if too long
-          if (restMsg.length <= 4096) {
-            await api.sendMessage(chatId, restMsg, { parse_mode: 'HTML' }).catch(() => {});
-          }
-        }
+        // Remaining memes: no summary message (user only cares about top-K)
 
         const totalElapsed = Math.round((Date.now() - startTime) / 1000);
         logger.info(
