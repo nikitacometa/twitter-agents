@@ -22,6 +22,8 @@ const NAVIGATION_TIMEOUT = 30_000;
 const SELECTOR_TIMEOUT = 10_000;
 /** How often to check session health (ms). */
 const HEALTH_CHECK_INTERVAL = 5 * 60 * 1000;
+/** Timeout for CreateTweet response interception (ms). */
+const CREATE_TWEET_RESPONSE_TIMEOUT = 15_000;
 
 export interface PlaywrightClientConfig {
   profilePath: string;
@@ -45,6 +47,8 @@ export class PlaywrightTwitterClient implements ITwitterClient {
   private healthCheckTimer: ReturnType<typeof setInterval> | null = null;
   private dailyPostCount = 0;
   private dailyPostDate = '';
+  private busy = false;
+  private _isLoggedIn = false;
 
   constructor(config: PlaywrightClientConfig) {
     this.config = config;
@@ -52,7 +56,7 @@ export class PlaywrightTwitterClient implements ITwitterClient {
   }
 
   get isConfigured(): boolean {
-    return this.context !== null && this.page !== null;
+    return this.context !== null && this.page !== null && this._isLoggedIn;
   }
 
   /**
@@ -60,42 +64,59 @@ export class PlaywrightTwitterClient implements ITwitterClient {
    * Call once at startup — browser stays alive for the session.
    */
   async initialize(): Promise<void> {
-    this.logger.info({ profilePath: this.config.profilePath }, 'Launching Playwright browser');
-
-    this.context = await chromium.launchPersistentContext(
-      this.config.profilePath,
-      {
-        headless: false,
-        viewport: { width: 1440, height: 900 },
-        proxy: { server: this.config.proxyUrl },
-        args: [
-          '--no-sandbox',
-          '--disable-setuid-sandbox',
-          '--disable-blink-features=AutomationControlled',
-          '--disable-dev-shm-usage',
-        ],
-        locale: 'en-US',
-        timezoneId: 'America/New_York',
-      },
-    );
-
-    this.page = this.context.pages()[0] ?? await this.context.newPage();
-    await this.page.addInitScript({ path: STEALTH_INIT_PATH });
-    this.page.setDefaultTimeout(SELECTOR_TIMEOUT);
-    this.page.setDefaultNavigationTimeout(NAVIGATION_TIMEOUT);
-
-    // Verify session is alive
-    const loggedIn = await this.checkLoggedIn();
-    if (!loggedIn) {
-      this.logger.error('Playwright browser launched but NOT logged into Twitter — manual login required');
-    } else {
-      this.logger.info('Playwright Twitter client initialized — session active');
+    if (this.context) {
+      this.logger.warn('initialize() called on already-initialized client — ignoring');
+      return;
     }
 
-    // Periodic health check
-    this.healthCheckTimer = setInterval(() => {
-      void this.healthCheck();
-    }, HEALTH_CHECK_INTERVAL);
+    this.logger.info({ profilePath: this.config.profilePath }, 'Launching Playwright browser');
+
+    let context: BrowserContext | null = null;
+    try {
+      context = await chromium.launchPersistentContext(
+        this.config.profilePath,
+        {
+          headless: false,
+          viewport: { width: 1440, height: 900 },
+          proxy: { server: this.config.proxyUrl },
+          args: [
+            '--no-sandbox',
+            '--disable-setuid-sandbox',
+            '--disable-blink-features=AutomationControlled',
+            '--disable-dev-shm-usage',
+          ],
+          locale: 'en-US',
+          timezoneId: 'America/New_York',
+        },
+      );
+
+      this.context = context;
+      this.page = context.pages()[0] ?? await context.newPage();
+      await this.page.addInitScript({ path: STEALTH_INIT_PATH });
+      this.page.setDefaultTimeout(SELECTOR_TIMEOUT);
+      this.page.setDefaultNavigationTimeout(NAVIGATION_TIMEOUT);
+
+      // Verify session is alive
+      this._isLoggedIn = await this.checkLoggedIn();
+      if (!this._isLoggedIn) {
+        this.logger.error('Playwright browser launched but NOT logged into Twitter — manual login required');
+      } else {
+        this.logger.info('Playwright Twitter client initialized — session active');
+      }
+
+      // Periodic health check
+      this.healthCheckTimer = setInterval(() => {
+        void this.healthCheck();
+      }, HEALTH_CHECK_INTERVAL);
+    } catch (error) {
+      // Clean up on init failure
+      if (context) {
+        await context.close().catch(() => {});
+      }
+      this.context = null;
+      this.page = null;
+      throw error;
+    }
   }
 
   async postTweet(text: string): Promise<PostResult | null> {
@@ -114,6 +135,7 @@ export class PlaywrightTwitterClient implements ITwitterClient {
       return null;
     }
 
+    this.busy = true;
     try {
       await this.page.goto('https://x.com/compose/post', {
         waitUntil: 'domcontentloaded',
@@ -123,16 +145,19 @@ export class PlaywrightTwitterClient implements ITwitterClient {
       // Type the tweet
       const textarea = this.page.locator('[data-testid="tweetTextarea_0"]');
       await textarea.waitFor({ state: 'visible' });
-      await textarea.click();
+      await this.hoverAndClick(textarea);
       await this.humanDelay(300, 800);
       await textarea.pressSequentially(text, { delay: TYPING_DELAY_MS });
       await this.humanDelay(1000, 2500);
 
-      // Click post button
-      await this.page.locator('[data-testid="tweetButton"]').click();
+      // Intercept CreateTweet response before clicking
+      const responsePromise = this.waitForCreateTweetResponse();
+
+      // Click post button (with fallback)
+      await this.clickPostButton();
       await this.humanDelay(2000, 4000);
 
-      const tweetId = await this.extractPostedTweetId();
+      const tweetId = await this.extractTweetIdFromResponse(responsePromise);
       this.trackPost();
       this.logger.info(
         { tweetId, charCount: text.length, dailyPosts: this.dailyPostCount },
@@ -142,6 +167,8 @@ export class PlaywrightTwitterClient implements ITwitterClient {
     } catch (error) {
       this.logger.error({ err: error }, 'Failed to post tweet via Playwright');
       return null;
+    } finally {
+      this.busy = false;
     }
   }
 
@@ -164,6 +191,7 @@ export class PlaywrightTwitterClient implements ITwitterClient {
       return null;
     }
 
+    this.busy = true;
     try {
       // Navigate to the target tweet
       await this.page.goto(`https://x.com/i/status/${replyToId}`, {
@@ -174,7 +202,7 @@ export class PlaywrightTwitterClient implements ITwitterClient {
       // Click reply button on the tweet
       const replyButton = this.page.locator('[data-testid="reply"]').first();
       await replyButton.waitFor({ state: 'visible' });
-      await replyButton.click();
+      await this.hoverAndClick(replyButton);
       await this.humanDelay(500, 1500);
 
       // Type the reply (character by character for realism)
@@ -183,11 +211,14 @@ export class PlaywrightTwitterClient implements ITwitterClient {
       await textarea.pressSequentially(text, { delay: TYPING_DELAY_MS });
       await this.humanDelay(1000, 3000);
 
-      // Post the reply
-      await this.page.locator('[data-testid="tweetButtonInline"]').click();
+      // Intercept CreateTweet response before clicking
+      const responsePromise = this.waitForCreateTweetResponse();
+
+      // Post the reply (with fallback)
+      await this.clickReplyButton();
       await this.humanDelay(2000, 4000);
 
-      const tweetId = await this.extractPostedTweetId();
+      const tweetId = await this.extractTweetIdFromResponse(responsePromise);
       this.trackPost();
       this.logger.info(
         { tweetId, replyToId, charCount: text.length, dailyPosts: this.dailyPostCount },
@@ -197,6 +228,8 @@ export class PlaywrightTwitterClient implements ITwitterClient {
     } catch (error) {
       this.logger.error({ err: error, replyToId }, 'Failed to reply via Playwright');
       return null;
+    } finally {
+      this.busy = false;
     }
   }
 
@@ -221,6 +254,7 @@ export class PlaywrightTwitterClient implements ITwitterClient {
       await this.context.close();
       this.context = null;
       this.page = null;
+      this._isLoggedIn = false;
       this.logger.info('Playwright browser closed');
     }
   }
@@ -233,7 +267,6 @@ export class PlaywrightTwitterClient implements ITwitterClient {
       await this.page.goto('https://x.com/home', { waitUntil: 'domcontentloaded' });
       await this.page.waitForTimeout(3000);
       const url = this.page.url();
-      // If redirected to login page, session is expired
       return !url.includes('/login') && !url.includes('/i/flow/login');
     } catch (error) {
       this.logger.error({ err: error }, 'Session check failed');
@@ -242,47 +275,118 @@ export class PlaywrightTwitterClient implements ITwitterClient {
   }
 
   private async healthCheck(): Promise<void> {
-    const loggedIn = await this.checkLoggedIn();
-    if (!loggedIn) {
-      this.logger.error('Twitter session expired — manual re-login required');
-      // TODO: send Telegram alert via admin bot
+    // Skip if a posting operation is in progress
+    if (this.busy) {
+      this.logger.debug('Health check skipped — posting operation in progress');
+      return;
+    }
+
+    this.busy = true;
+    try {
+      this._isLoggedIn = await this.checkLoggedIn();
+      if (!this._isLoggedIn) {
+        this.logger.error('Twitter session expired — manual re-login required');
+        // TODO: send Telegram alert via admin bot
+      }
+    } finally {
+      this.busy = false;
     }
   }
 
   /**
-   * Extract the tweet ID after posting.
-   * Waits for navigation to the posted tweet URL or looks for the snackbar.
+   * Set up response interception for Twitter's CreateTweet GraphQL mutation.
+   * Must be called BEFORE clicking the post/reply button.
    */
-  private async extractPostedTweetId(): Promise<string> {
-    if (!this.page) return `pw_unknown_${Date.now()}`;
+  private waitForCreateTweetResponse(): Promise<unknown> {
+    if (!this.page) return Promise.resolve(null);
+    return this.page.waitForResponse(
+      (resp) => resp.url().includes('CreateTweet') && resp.status() === 200,
+      { timeout: CREATE_TWEET_RESPONSE_TIMEOUT },
+    ).then(async (resp) => {
+      try {
+        return await resp.json() as unknown;
+      } catch {
+        return null;
+      }
+    }).catch((error) => {
+      this.logger.warn({ err: error }, 'CreateTweet response interception timed out');
+      return null;
+    });
+  }
 
-    try {
-      // Wait for the tweet to be posted — Twitter usually shows a toast or navigates
-      await this.page.waitForTimeout(2000);
+  /**
+   * Extract tweet ID from intercepted CreateTweet GraphQL response.
+   * Falls back to timestamp-based ID if interception fails.
+   */
+  private async extractTweetIdFromResponse(responsePromise: Promise<unknown>): Promise<string> {
+    const json = await responsePromise;
 
-      // Try to find the tweet ID from the current URL
-      // After posting a reply, Twitter often updates the URL or shows the reply inline
-      const url = this.page.url();
-      const statusMatch = url.match(/\/status\/(\d+)/);
-      if (statusMatch?.[1]) {
-        return statusMatch[1];
+    if (json && typeof json === 'object') {
+      // Navigate nested GraphQL response: data.create_tweet.tweet_results.result.rest_id
+      const data = json as Record<string, unknown>;
+      const createTweet = (data['data'] as Record<string, unknown> | undefined);
+      const tweetResults = (createTweet?.['create_tweet'] as Record<string, unknown> | undefined);
+      const result = (tweetResults?.['tweet_results'] as Record<string, unknown> | undefined);
+      const restId = (result?.['result'] as Record<string, unknown> | undefined)?.['rest_id'];
+
+      if (typeof restId === 'string' && restId.length > 0) {
+        return restId;
       }
 
-      // Fallback: look for the most recent tweet by the bot in the visible timeline
-      // This isn't perfect but provides a reasonable fallback
-      const tweetLinks = await this.page.locator('a[href*="/status/"]').all();
-      for (const link of tweetLinks.reverse()) {
-        const href = await link.getAttribute('href');
-        const match = href?.match(/\/status\/(\d+)/);
-        if (match?.[1]) {
-          return match[1];
-        }
-      }
-    } catch (error) {
-      this.logger.warn({ err: error }, 'Could not extract posted tweet ID');
+      this.logger.warn({ responseKeys: Object.keys(data) }, 'CreateTweet response missing rest_id');
     }
 
     return `pw_${Date.now()}`;
+  }
+
+  /**
+   * Click the post button with fallback selectors.
+   * Primary: tweetButton (compose page). Fallback: tweetButtonInline.
+   */
+  private async clickPostButton(): Promise<void> {
+    if (!this.page) return;
+
+    const primary = this.page.locator('[data-testid="tweetButton"]');
+    const fallback = this.page.locator('[data-testid="tweetButtonInline"]');
+
+    if (await primary.isVisible({ timeout: 2000 }).catch(() => false)) {
+      await this.hoverAndClick(primary);
+    } else if (await fallback.isVisible({ timeout: 2000 }).catch(() => false)) {
+      this.logger.debug('tweetButton not found, using tweetButtonInline fallback');
+      await this.hoverAndClick(fallback);
+    } else {
+      throw new Error('No post button found — Twitter UI may have changed');
+    }
+  }
+
+  /**
+   * Click the reply button with fallback selectors.
+   * Primary: tweetButtonInline (reply dialog). Fallback: tweetButton.
+   */
+  private async clickReplyButton(): Promise<void> {
+    if (!this.page) return;
+
+    const primary = this.page.locator('[data-testid="tweetButtonInline"]');
+    const fallback = this.page.locator('[data-testid="tweetButton"]');
+
+    if (await primary.isVisible({ timeout: 2000 }).catch(() => false)) {
+      await this.hoverAndClick(primary);
+    } else if (await fallback.isVisible({ timeout: 2000 }).catch(() => false)) {
+      this.logger.debug('tweetButtonInline not found, using tweetButton fallback');
+      await this.hoverAndClick(fallback);
+    } else {
+      throw new Error('No reply button found — Twitter UI may have changed');
+    }
+  }
+
+  /**
+   * Hover over an element before clicking to simulate human mouse movement.
+   * Twitter tracks mouse events — instant teleport clicks are a detection signal.
+   */
+  private async hoverAndClick(locator: ReturnType<Page['locator']>): Promise<void> {
+    await locator.hover();
+    await this.humanDelay(100, 400);
+    await locator.click();
   }
 
   private async humanDelay(min: number, max: number): Promise<void> {
