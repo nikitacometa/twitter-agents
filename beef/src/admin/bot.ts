@@ -16,9 +16,9 @@ import type { ExternalExampleRepository } from '@storage/repositories/external-e
 import type { RoastPatternRepository } from '@storage/repositories/roast-pattern.repository.js';
 import type { StockpileRepository } from '@storage/repositories/stockpile.repository.js';
 import type { FarmAttemptRepository } from '@storage/repositories/farm-attempt.repository.js';
-import { generateRoasts, generateRoastsFast } from './roast-generator.js';
+import { generateRoasts, generateRoastsLightning } from './roast-generator.js';
 import type { GenerateRoastsResult } from './roast-generator.js';
-import type { FastRoastResult } from '@roast/roast-engine.js';
+import type { LightningRoastResult } from '@roast/roast-engine.js';
 import type { EvaluationMode } from '@roast/roast-engine.js';
 import type { PollResult } from '@twitter/mention-handler.js';
 import type { JobInfo } from '@scheduler/scheduler.js';
@@ -893,24 +893,24 @@ export function createBot(opts: {
   // /roast_fast — volume pipeline: 5 parallel Sonnet calls → rank → top 3
   // ---------------------------------------------------------------------------
 
-  function formatFastRoastOutput(_target: string, result: FastRoastResult): string {
+  function formatLightningOutput(_target: string, result: LightningRoastResult): string {
     const top = result.variants.slice(0, 3);
     const lines: string[] = [];
 
     for (let i = 0; i < top.length; i++) {
       const v = top[i]!;
-      lines.push(`<b>${String(i + 1)}.</b> <i>${escapeHtml(v.angle)}</i>  ★ ${v.judgeScore.toFixed(1)}  <i>(${escapeHtml(v.callCodename)})</i>`);
+      lines.push(`<b>${String(i + 1)}.</b> <i>${escapeHtml(v.angle)}</i>  ★ ${v.score.toFixed(1)}`);
       lines.push(`<pre>${escapeHtml(v.text)}</pre>`);
       lines.push('');
     }
 
     const s = result.stats;
-    lines.push(`📊 ${String(s.callResults.filter((c) => c.status === 'ok').length)} calls · ${String(s.generated)} gen · ${String(s.passedFilter)} passed · ${String(s.afterDedup)} dedup · ${String(Math.min(3, s.ranked))} selected`);
+    lines.push(`📊 1 call · ${String(s.generated)} gen · ${String(s.passedPreFilter)} pre-filter · ${String(s.passedContentFilter)} passed · ${String(Math.min(3, result.variants.length))} selected`);
 
     return lines.join('\n');
   }
 
-  function handleFastTweetRoast(ctx: Context, tweetUrl: string, userContext?: string): void {
+  function handleLightningTweetRoast(ctx: Context, tweetUrl: string, userContext?: string): void {
     if (!provider) {
       void ctx.reply('⚠️ LLM provider not configured.');
       return;
@@ -1009,9 +1009,9 @@ export function createBot(opts: {
 
         const profileContext = buildTweetRoastContext(contextInput);
 
-        updateStatus(`⚡ Fast pipeline for <b>${escapeHtml(targetName)}</b>...`);
+        updateStatus(`⚡ Lightning for <b>${escapeHtml(targetName)}</b>...`);
 
-        const result = await generateRoastsFast(
+        const result = await generateRoastsLightning(
           targetName, provider, logger, feedbackRepo,
           configRepo, exampleRepo, patternRepo,
           stockpileRepo, farmAttemptRepo,
@@ -1023,12 +1023,12 @@ export function createBot(opts: {
         const normalizedUrl = tweetUrl.startsWith('http') ? tweetUrl : `https://${tweetUrl}`;
 
         const headerLines = [
-          `⚡ <b>${escapeHtml(targetName)}</b> — ${String(result.stats.generated)}→${String(result.stats.afterDedup)}→${String(Math.min(3, result.variants.length))}, ${String(elapsed)}s`,
+          `⚡ <b>${escapeHtml(targetName)}</b> — ${String(result.stats.generated)}→${String(result.stats.passedContentFilter)}→${String(Math.min(3, result.variants.length))}, ${String(elapsed)}s`,
           `<a href="${escapeHtml(normalizedUrl)}">Original tweet</a>`,
           '',
         ];
 
-        const body = headerLines.join('\n') + formatFastRoastOutput(targetName, result);
+        const body = headerLines.join('\n') + formatLightningOutput(targetName, result);
 
         await api.deleteMessage(chatId, statusMsg.message_id).catch(() => {});
         await api.sendMessage(chatId, body, {
@@ -1037,7 +1037,7 @@ export function createBot(opts: {
         });
       } catch (error) {
         const elapsed = Math.round((Date.now() - startTime) / 1000);
-        logger.error({ err: error, url: tweetUrl, elapsedSec: elapsed }, 'Fast tweet roast failed');
+        logger.error({ err: error, url: tweetUrl, elapsedSec: elapsed }, 'Lightning tweet roast failed');
         await api.editMessageText(
           chatId, statusMsg.message_id,
           `❌ Failed after ${String(elapsed)}s: ${escapeHtml(getErrorMessage(error).slice(0, 200))}`,
@@ -1049,7 +1049,7 @@ export function createBot(opts: {
     })();
   }
 
-  function handleFastPersonRoast(ctx: Context, handle: string, userContext?: string): void {
+  function handleLightningPersonRoast(ctx: Context, handle: string, userContext?: string): void {
     if (!provider) {
       void ctx.reply('⚠️ LLM provider not configured.');
       return;
@@ -1062,7 +1062,7 @@ export function createBot(opts: {
       const startTime = Date.now();
       const statusMsg = await api.sendMessage(
         chatId,
-        `⚡ Fast pipeline for <b>@${escapeHtml(handle)}</b>...`,
+        `⚡ Lightning for <b>@${escapeHtml(handle)}</b>...`,
         { parse_mode: 'HTML' },
       );
 
@@ -1077,7 +1077,7 @@ export function createBot(opts: {
       }
 
       try {
-        const result = await generateRoastsFast(
+        const result = await generateRoastsLightning(
           handle, provider, logger, feedbackRepo,
           configRepo, exampleRepo, patternRepo,
           stockpileRepo, farmAttemptRepo,
@@ -1086,13 +1086,13 @@ export function createBot(opts: {
 
         const elapsed = Math.round((Date.now() - startTime) / 1000);
 
-        const header = `⚡ <b>@${escapeHtml(handle)}</b> — ${String(result.stats.generated)}→${String(result.stats.afterDedup)}→${String(Math.min(3, result.variants.length))}, ${String(elapsed)}s\n`;
-        const body = header + '\n' + formatFastRoastOutput(handle, result);
+        const header = `⚡ <b>@${escapeHtml(handle)}</b> — ${String(result.stats.generated)}→${String(result.stats.passedContentFilter)}→${String(Math.min(3, result.variants.length))}, ${String(elapsed)}s\n`;
+        const body = header + '\n' + formatLightningOutput(handle, result);
 
         await api.editMessageText(chatId, statusMsg.message_id, body, { parse_mode: 'HTML' });
       } catch (error) {
         const elapsed = Math.round((Date.now() - startTime) / 1000);
-        logger.error({ err: error, target: handle, elapsedSec: elapsed }, 'Fast person roast failed');
+        logger.error({ err: error, target: handle, elapsedSec: elapsed }, 'Lightning person roast failed');
         await api.editMessageText(
           chatId, statusMsg.message_id,
           `❌ Failed after ${String(elapsed)}s: ${escapeHtml(getErrorMessage(error).slice(0, 200))}`,
@@ -1102,7 +1102,7 @@ export function createBot(opts: {
     })();
   }
 
-  function handleFastFreeformRoast(ctx: Context, target: string, userContext?: string): void {
+  function handleLightningFreeformRoast(ctx: Context, target: string, userContext?: string): void {
     if (!provider) {
       void ctx.reply('⚠️ LLM provider not configured.');
       return;
@@ -1115,12 +1115,12 @@ export function createBot(opts: {
       const startTime = Date.now();
       const statusMsg = await api.sendMessage(
         chatId,
-        `⚡ Fast pipeline for <b>${escapeHtml(target)}</b>...`,
+        `⚡ Lightning for <b>${escapeHtml(target)}</b>...`,
         { parse_mode: 'HTML' },
       );
 
       try {
-        const result = await generateRoastsFast(
+        const result = await generateRoastsLightning(
           target, provider, logger, feedbackRepo,
           configRepo, exampleRepo, patternRepo,
           stockpileRepo, farmAttemptRepo,
@@ -1128,13 +1128,13 @@ export function createBot(opts: {
         );
 
         const elapsed = Math.round((Date.now() - startTime) / 1000);
-        const header = `⚡ <b>${escapeHtml(target)}</b> — ${String(result.stats.generated)}→${String(result.stats.afterDedup)}→${String(Math.min(3, result.variants.length))}, ${String(elapsed)}s\n`;
-        const body = header + '\n' + formatFastRoastOutput(target, result);
+        const header = `⚡ <b>${escapeHtml(target)}</b> — ${String(result.stats.generated)}→${String(result.stats.passedContentFilter)}→${String(Math.min(3, result.variants.length))}, ${String(elapsed)}s\n`;
+        const body = header + '\n' + formatLightningOutput(target, result);
 
         await api.editMessageText(chatId, statusMsg.message_id, body, { parse_mode: 'HTML' });
       } catch (error) {
         const elapsed = Math.round((Date.now() - startTime) / 1000);
-        logger.error({ err: error, target, elapsedSec: elapsed }, 'Fast freeform roast failed');
+        logger.error({ err: error, target, elapsedSec: elapsed }, 'Lightning freeform roast failed');
         await api.editMessageText(
           chatId, statusMsg.message_id,
           `❌ Failed after ${String(elapsed)}s: ${escapeHtml(getErrorMessage(error).slice(0, 200))}`,
@@ -1151,7 +1151,7 @@ export function createBot(opts: {
         [
           'Usage: /roast_fast &lt;target&gt;',
           '',
-          'Volume pipeline: 5 parallel Sonnet calls × 5 variants → rank → top 3',
+          'Lightning pipeline: 1 Sonnet call × 10 variants → self-evaluate → top 3',
           '',
           'Target types:',
           '  <code>/roast_fast https://x.com/.../status/...</code> — tweet',
@@ -1178,13 +1178,13 @@ export function createBot(opts: {
 
     // Tweet URL
     if (isTweetUrl(target)) {
-      handleFastTweetRoast(ctx, target, userContext);
+      handleLightningTweetRoast(ctx, target, userContext);
       return;
     }
 
     // @handle
     if (isTwitterHandle(target)) {
-      handleFastPersonRoast(ctx, target.slice(1), userContext);
+      handleLightningPersonRoast(ctx, target.slice(1), userContext);
       return;
     }
 
@@ -1192,13 +1192,13 @@ export function createBot(opts: {
     if (isTwitterProfileUrl(target)) {
       const handle = extractTwitterHandle(target);
       if (handle) {
-        handleFastPersonRoast(ctx, handle, userContext);
+        handleLightningPersonRoast(ctx, handle, userContext);
         return;
       }
     }
 
     // Freeform
-    handleFastFreeformRoast(ctx, target, userContext);
+    handleLightningFreeformRoast(ctx, target, userContext);
   });
 
   // ---------------------------------------------------------------------------

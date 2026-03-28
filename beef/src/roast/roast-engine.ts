@@ -21,6 +21,7 @@ import {
   buildFastGenPrompt,
   FAST_CALL_CONFIGS,
   distributeFastAngles,
+  buildLightningPrompt,
 } from './prompt-builder.js';
 import type { PromptStrategy } from './prompt-builder.js';
 import { filterRoast } from '@content/content-filter.js';
@@ -82,6 +83,22 @@ export interface FastRoastResult {
     ranked: number;
     durationMs: number;
     callResults: Array<{ codename: string; status: 'ok' | 'failed'; variants: number }>;
+  };
+  diaryThought?: string;
+}
+
+export interface LightningRoastResult {
+  variants: Array<{
+    text: string;
+    angle: string;
+    score: number;
+  }>;
+  researchNotes: string | null;
+  stats: {
+    generated: number;
+    passedPreFilter: number;
+    passedContentFilter: number;
+    durationMs: number;
   };
   diaryThought?: string;
 }
@@ -587,6 +604,97 @@ export class RoastEngine {
         callResults,
       },
       diaryThought,
+    };
+  }
+
+  // -------------------------------------------------------------------------
+  // Lightning pipeline — single LLM call: generate 10 + self-evaluate → top 3
+  // -------------------------------------------------------------------------
+
+  async generateRoastLightning(
+    targetName: string,
+    source: string = 'engine',
+    memory?: CreativeMemory,
+    useResearch: boolean = false,
+    imagePaths?: string[],
+  ): Promise<LightningRoastResult> {
+    const taskId = `lightning-${source}-${Date.now()}`;
+    const start = Date.now();
+    const profile: TaskProfile = useResearch ? 'roast-lightning-research' : 'roast-lightning';
+
+    this.logger.info(
+      { taskId, target: targetName, profile, images: imagePaths?.length ?? 0 },
+      'Starting lightning roast generation',
+    );
+
+    const prompt = buildLightningPrompt(targetName, this.character, memory, imagePaths);
+
+    const result = await this.provider.run<AgentRoastOutput>(taskId, {
+      prompt,
+      profile,
+      requiresResearch: useResearch,
+      imagePaths: useResearch ? imagePaths : undefined,
+    });
+
+    const parsed = this.parseOutput(result.data, taskId);
+    this.validateOutput(parsed, taskId);
+
+    const generated = parsed.variants.length;
+
+    // Pre-filter (regex checks)
+    const afterPreFilter = parsed.variants.filter((v) => {
+      const pf = preFilter(v.text);
+      if (!pf.pass) {
+        this.logger.debug({ taskId, text: v.text, reason: pf.reason }, 'Lightning variant failed pre-filter');
+      }
+      return pf.pass;
+    });
+
+    // Content filter (TOS/safety)
+    const afterContentFilter = afterPreFilter.filter((v) => {
+      const cf = filterRoast(v.text);
+      if (!cf.passed) {
+        this.logger.warn({ taskId, text: v.text, reasons: cf.reasons }, 'Lightning variant failed content filter');
+      }
+      return cf.passed;
+    });
+
+    // Sort by self-score descending (LLM already returns top 3 sorted, but verify)
+    afterContentFilter.sort((a, b) => b.score - a.score);
+
+    const durationMs = Date.now() - start;
+
+    if (afterContentFilter.length === 0) {
+      throw new Error(`All ${String(generated)} lightning variants filtered out for "${targetName}"`);
+    }
+
+    this.logger.info(
+      {
+        taskId,
+        target: targetName,
+        generated,
+        passedPreFilter: afterPreFilter.length,
+        passedContentFilter: afterContentFilter.length,
+        top3: afterContentFilter.slice(0, 3).map((v) => ({ score: v.score, angle: v.angle })),
+        durationMs,
+      },
+      'Lightning roast pipeline complete',
+    );
+
+    return {
+      variants: afterContentFilter.map((v) => ({
+        text: v.text,
+        angle: v.angle,
+        score: v.score,
+      })),
+      researchNotes: parsed.researchNotes,
+      stats: {
+        generated,
+        passedPreFilter: afterPreFilter.length,
+        passedContentFilter: afterContentFilter.length,
+        durationMs,
+      },
+      diaryThought: parsed.diaryThought,
     };
   }
 

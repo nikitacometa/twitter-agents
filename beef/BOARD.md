@@ -51,6 +51,10 @@ Status: `[ ]` pending, `[~]` in progress, `[x]` done, `[!]` blocked
 [ ] #B-19 — Max 2 sentences too rigid (allow 3 for audit trail structure I)
 [ ] #B-20 — Enable Perplexity enrichment by default in TargetDiscoverer
 
+## Backlog: Migration
+
+[ ] #B-42 — Full migration from Twitter Scraper to API v2: remove ScraperTwitterClient, CookieStore, CycleTLS, `@the-convocation/twitter-scraper` dep. Switch TWITTER_CLIENT_MODE default to 'api'. Update TwitterEnricher to API-only. Update Farm CLI to use API. Remove scraper env vars (TWITTER_PASSWORD, TWITTER_2FA_SECRET, TWITTER_PHONE). Clean up index.ts initialization. Pay-per-use API — no rate limit concerns. See `docs/scraper-to-api-migration.md` for full analysis
+
 ## Backlog: Growth
 
 [ ] #B-21 — Runtime scraper→API fallback on Error 226

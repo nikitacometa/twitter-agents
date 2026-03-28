@@ -15,7 +15,9 @@ export type TaskProfile =
   | 'meme-generate'
   | 'meme-evaluate'
   | 'roast-fast-research'
-  | 'roast-fast-gen';
+  | 'roast-fast-gen'
+  | 'roast-lightning'
+  | 'roast-lightning-research';
 
 export interface AgentTask {
   prompt: string;

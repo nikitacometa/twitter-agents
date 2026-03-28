@@ -34,6 +34,7 @@ const RESEARCH_TOOLS = [
 ];
 
 const WEB_TOOLS = ['WebSearch', 'WebFetch', 'Bash(curl *)'];
+const LIGHT_RESEARCH_TOOLS = ['WebSearch', 'WebFetch'];
 
 // --- Task presets ---
 //
@@ -161,6 +162,22 @@ const DEFAULT_PRESETS: Record<TaskProfile, TaskPreset> = {
     tools: [],
     maxTurns: 1,
     timeoutMs: 90_000,
+    fallbackModel: 'haiku',
+  },
+  'roast-lightning': {
+    model: 'sonnet',
+    effort: 'medium',
+    tools: [],
+    maxTurns: 1,
+    timeoutMs: 45_000,
+    fallbackModel: 'haiku',
+  },
+  'roast-lightning-research': {
+    model: 'sonnet',
+    effort: 'medium',
+    tools: LIGHT_RESEARCH_TOOLS,
+    maxTurns: 3,
+    timeoutMs: 75_000,
     fallbackModel: 'haiku',
   },
 };
