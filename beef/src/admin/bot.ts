@@ -3578,9 +3578,12 @@ If no contradictions found, return {"contradictions":[]}`;
         for (const r of topK) {
           const meme = r.meme.output.meme!;
           const captionLines = [`<b>#${String(r.rank)}</b>`];
+          if (r.meme.output.tweetText) {
+            captionLines.push(`\n${escapeHtml(r.meme.output.tweetText)}`);
+          }
           if (r.score) {
             captionLines.push(
-              `<tg-spoiler>P=${String(r.score.punch)} S=${String(r.score.specificity)} C=${String(r.score.clarity)} F=${String(r.score.templateFit)} = <b>${String(r.score.composite)}</b>\n${r.score.reasoning}</tg-spoiler>`,
+              `\n<tg-spoiler>P=${String(r.score.punch)} S=${String(r.score.specificity)} C=${String(r.score.clarity)} F=${String(r.score.templateFit)} = <b>${String(r.score.composite)}</b>\n${r.score.reasoning}</tg-spoiler>`,
             );
           }
 
