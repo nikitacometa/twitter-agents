@@ -144,9 +144,10 @@ const DEFAULT_PRESETS: Record<TaskProfile, TaskPreset> = {
   'meme-evaluate': {
     model: 'sonnet',
     effort: 'medium',
-    tools: [],
-    maxTurns: 1,
-    timeoutMs: 45_000,
+    tools: ['Read'],
+    maxTurns: 2,
+    timeoutMs: 60_000,
+    fallbackModel: 'haiku',
   },
   'roast-fast-research': {
     model: 'sonnet',

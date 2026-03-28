@@ -628,7 +628,6 @@ if (config.TELEGRAM_BOT_TOKEN) {
     twitterEnricher,
     memeGenerator,
     memeHistoryRepo,
-    sdkProvider: sdk ?? undefined,
     metricsRepo,
     anthropicApiKey: config.ANTHROPIC_API_KEY,
     openaiApiKey: config.OPENAI_API_KEY,

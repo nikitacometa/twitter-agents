@@ -2,7 +2,7 @@
 // Uses AnthropicSDKProvider directly (the only provider supporting imagePaths).
 
 import type { Logger } from 'pino';
-import type { AnthropicSDKProvider } from '@agent/anthropic-sdk.provider.js';
+import type { LLMProvider } from '@agent/agent.types.js';
 import { getErrorMessage } from '@common/utils/error.util.js';
 import type { MemeStrategyId } from './meme-strategies.js';
 
@@ -58,6 +58,8 @@ function computeComposite(scores: { punch: number; specificity: number; clarity:
 function buildJudgePrompt(input: MemeJudgeInput): string {
   return `You are a HARSH meme quality judge for a crypto roast bot (@0xBeefer). Most memes are mediocre — your job is to identify the rare genuinely funny ones.
 
+IMPORTANT: First, read the meme image file at: ${input.localPath}
+
 CALIBRATION: A score of 7+ means you would personally screenshot and send this meme to a group chat. Most memes should score 4-6. An 8+ is exceptional — maybe 1 in 10 memes deserves it. Be brutally honest.
 
 Evaluate this rendered meme image.
@@ -102,17 +104,18 @@ Respond with ONLY valid JSON (no markdown, no code fences):
 
 export class MemeJudge {
   constructor(
-    private readonly sdkProvider: AnthropicSDKProvider,
+    private readonly provider: LLMProvider,
     private readonly logger: Logger,
   ) {}
 
   async evaluate(input: MemeJudgeInput): Promise<MemeJudgeScore> {
     const prompt = buildJudgePrompt(input);
 
-    const result = await this.sdkProvider.run<RawJudgeOutput>(
+    const result = await this.provider.run<RawJudgeOutput>(
       `meme-evaluate-${String(input.index)}`,
       {
         prompt,
+        profile: 'meme-evaluate',
         requiresResearch: false,
         imagePaths: [input.localPath],
       },

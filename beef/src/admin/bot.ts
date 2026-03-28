@@ -30,8 +30,8 @@ import type { TweetRoastContextInput } from '@roast/prompt-builder.js';
 import type { MemeGenerator, MemeOutput } from '@meme/meme-generator.js';
 import { ImgflipClient } from '@meme/imgflip-client.js';
 import type { MemeHistoryRepository } from '@meme/meme-history.repository.js';
-import type { AnthropicSDKProvider } from '@agent/anthropic-sdk.provider.js';
 import { MemeJudge } from '@meme/meme-judge.js';
+import type { MemeJudgeScore } from '@meme/meme-judge.js';
 import { pickStrategies } from '@meme/meme-strategies.js';
 import type { MemeStrategy } from '@meme/meme-strategies.js';
 import { InputFile } from 'grammy';
@@ -168,7 +168,6 @@ export function createBot(opts: {
   twitterEnricher?: TwitterEnricher;
   memeGenerator?: MemeGenerator;
   memeHistoryRepo?: MemeHistoryRepository;
-  sdkProvider?: AnthropicSDKProvider;
   metricsRepo?: MetricsRepository;
   anthropicApiKey?: string;
   openaiApiKey?: string;
@@ -3293,8 +3292,8 @@ export function createBot(opts: {
       void ctx.reply('⚠️ Meme generator not configured (IMGFLIP_USERNAME/PASSWORD missing or no LLM provider).');
       return;
     }
-    if (!opts.sdkProvider) {
-      void ctx.reply('⚠️ Anthropic SDK provider not configured (ANTHROPIC_API_KEY missing). Needed for vision evaluation.');
+    if (!provider) {
+      void ctx.reply('⚠️ LLM provider not configured.');
       return;
     }
     if (!opts.memeHistoryRepo) {
@@ -3326,7 +3325,7 @@ export function createBot(opts: {
       return;
     }
 
-    const sdkProvider = opts.sdkProvider;
+    const evalProvider = provider;
     const historyRepo = opts.memeHistoryRepo;
     const generator = memeGen;
 
@@ -3402,7 +3401,7 @@ Return ONLY valid JSON (no markdown, no code fences):
 
 If no contradictions found, return {"contradictions":[]}`;
 
-            const cResult = await sdkProvider.run<{ contradictions: string[] }>('contradiction-detect', {
+            const cResult = await evalProvider.run<{ contradictions: string[] }>('contradiction-detect', {
               prompt: contradictionPrompt,
               requiresResearch: false,
             });
@@ -3491,9 +3490,9 @@ If no contradictions found, return {"contradictions":[]}`;
           return;
         }
 
-        // 8. Evaluate ALL with vision
+        // 8. Evaluate ALL with vision (graceful — failures don't block delivery)
         updateStatus(`🧠 Vision-evaluating ${String(generated.length)} memes...`);
-        const judge = new MemeJudge(sdkProvider, logger);
+        const judge = new MemeJudge(evalProvider, logger);
         const judgeInputs = generated.map((g) => ({
           localPath: g.output.meme!.localPath,
           templateName: g.output.meme!.templateName,
@@ -3504,20 +3503,40 @@ If no contradictions found, return {"contradictions":[]}`;
           index: g.index,
         }));
 
-        const scores = await judge.evaluateBatch(judgeInputs);
+        let scores: MemeJudgeScore[] = [];
+        try {
+          scores = await judge.evaluateBatch(judgeInputs);
+        } catch (err) {
+          logger.error({ err: getErrorMessage(err) }, 'Meme farm: evaluateBatch threw');
+        }
 
-        // 9. Rank and merge
-        interface RankedMeme { rank: number; score: typeof scores[0]; meme: GeneratedMeme }
-        const ranked: RankedMeme[] = scores
-          .map((score) => {
-            const meme = generated.find((g) => g.index === score.index);
-            if (!meme) return null;
-            return { rank: 0, score, meme };
-          })
-          .filter((r): r is RankedMeme => r !== null);
+        const evalFailed = scores.length < generated.length;
+        const evalNone = scores.length === 0;
+
+        // 9. Rank and merge — include unevaluated memes with null scores
+        interface RankedMeme {
+          rank: number;
+          score: MemeJudgeScore | null;
+          meme: GeneratedMeme;
+        }
+
+        // Start with evaluated memes (sorted by composite)
+        const ranked: RankedMeme[] = [];
+        for (const score of scores) {
+          const meme = generated.find((g) => g.index === score.index);
+          if (meme) ranked.push({ rank: 0, score, meme });
+        }
+
+        // Append unevaluated memes at the end (no score)
+        const evaluatedIndices = new Set(scores.map((s) => s.index));
+        for (const g of generated) {
+          if (!evaluatedIndices.has(g.index)) {
+            ranked.push({ rank: 0, score: null, meme: g });
+          }
+        }
         ranked.forEach((r, i) => { r.rank = i + 1; });
 
-        // 10. Save ALL to meme_history with vision scores
+        // 10. Save ALL to meme_history
         for (const r of ranked) {
           try {
             historyRepo.insert({
@@ -3529,14 +3548,14 @@ If no contradictions found, return {"contradictions":[]}`;
               imageUrl: r.meme.output.meme!.imageUrl,
               rationale: r.meme.output.meme!.rationale,
               strategy: r.meme.strategy.id,
-              visionScore: r.score.composite,
+              visionScore: r.score?.composite ?? undefined,
             });
           } catch (err) {
             logger.warn({ err: getErrorMessage(err), index: r.meme.index }, 'Meme farm: history insert failed');
           }
         }
 
-        // 11. Send top-K as photos with hidden scores
+        // 11. Send top-K as photos
         const topK = ranked.slice(0, top);
         const elapsed = Math.round((Date.now() - startTime) / 1000);
 
@@ -3544,30 +3563,35 @@ If no contradictions found, return {"contradictions":[]}`;
         await api.deleteMessage(chatId, statusMsg.message_id).catch(() => {});
 
         // Summary header
-        const header = [
+        const headerLines = [
           `🎨 <b>Meme Farm</b> — @${escapeHtml(tweet.authorName)}`,
           `Tweet: <i>"${escapeHtml(tweet.text.slice(0, 80))}${tweet.text.length > 80 ? '...' : ''}"</i>`,
           `Generated: ${String(generated.length)} | Failed: ${String(failedCount)} | Degraded: ${String(degradedCount)} | Time: ${String(elapsed)}s`,
+          `Evaluated: ${String(scores.length)}/${String(generated.length)}${evalNone ? ' ⚠️ vision eval failed — showing unranked' : evalFailed ? ' ⚠️ partial eval' : ''}`,
           `Strategies: ${[...new Set(generated.map((g) => g.strategy.id))].join(', ')}`,
           contradictions.length > 0 ? `Contradictions: ${String(contradictions.length)} found` : '',
           enrichmentContext ? 'Enrichment: yes' : 'Enrichment: no',
-        ].filter(Boolean).join('\n');
-        await api.sendMessage(chatId, header, { parse_mode: 'HTML', link_preview_options: { is_disabled: true } });
+        ];
+        await api.sendMessage(chatId, headerLines.filter(Boolean).join('\n'), { parse_mode: 'HTML', link_preview_options: { is_disabled: true } });
 
         // Send each top-K meme as a photo
         for (const r of topK) {
           const meme = r.meme.output.meme!;
-          const caption = [
+          const captionLines = [
             `<b>#${String(r.rank)}</b> — ${r.meme.strategy.name}`,
             `Template: ${meme.templateName}`,
             `Boxes: ${meme.boxes.map((b) => `"${b}"`).join(' | ')}`,
-            `Score: <tg-spoiler>P=${String(r.score.punch)} S=${String(r.score.specificity)} C=${String(r.score.clarity)} F=${String(r.score.templateFit)} = <b>${String(r.score.composite)}</b></tg-spoiler>`,
-            `${r.score.reasoning}`,
-          ].join('\n');
+          ];
+          if (r.score) {
+            captionLines.push(
+              `Score: <tg-spoiler>P=${String(r.score.punch)} S=${String(r.score.specificity)} C=${String(r.score.clarity)} F=${String(r.score.templateFit)} = <b>${String(r.score.composite)}</b></tg-spoiler>`,
+              r.score.reasoning,
+            );
+          }
 
           try {
             await api.sendPhoto(chatId, new InputFile(meme.localPath), {
-              caption,
+              caption: captionLines.join('\n'),
               parse_mode: 'HTML',
             });
           } catch (err) {
@@ -3576,11 +3600,12 @@ If no contradictions found, return {"contradictions":[]}`;
           }
         }
 
-        // Send remaining ranked memes as text summary
+        // Send remaining memes as text summary
         if (ranked.length > top) {
           const rest = ranked.slice(top).map((r) => {
             const meme = r.meme.output.meme!;
-            return `#${String(r.rank)} <tg-spoiler>${String(r.score.composite)}</tg-spoiler> ${r.meme.strategy.id} — ${meme.templateName}: ${meme.boxes.map((b) => `"${b}"`).join(' | ')}`;
+            const scoreTag = r.score ? `<tg-spoiler>${String(r.score.composite)}</tg-spoiler>` : '—';
+            return `#${String(r.rank)} ${scoreTag} ${r.meme.strategy.id} — ${meme.templateName}: ${meme.boxes.map((b) => `"${b}"`).join(' | ')}`;
           });
           const restMsg = `<b>Remaining (${String(ranked.length - top)}):</b>\n${rest.join('\n')}`;
           // Chunk if too long
@@ -3591,7 +3616,7 @@ If no contradictions found, return {"contradictions":[]}`;
 
         const totalElapsed = Math.round((Date.now() - startTime) / 1000);
         logger.info(
-          { tweetId, author: tweet.authorName, count, generated: generated.length, evaluated: scores.length, topScore: topK[0]?.score.composite, elapsed: totalElapsed },
+          { tweetId, author: tweet.authorName, count, generated: generated.length, evaluated: scores.length, topScore: topK[0]?.score?.composite, elapsed: totalElapsed },
           'Meme farm completed via /memefarm',
         );
 
