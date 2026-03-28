@@ -23,6 +23,9 @@ const TOPIC_KEYWORDS = new Set([
   'tvl', 'liquidity', 'staking', 'farm', 'vault', 'protocol', 'swap',
   'bullish', 'bearish', 'scam', 'fraud', 'sec', 'regulation', 'whale',
   'listing', 'binance', 'coinbase', 'kraken', 'uniswap', 'breaking',
+  // AI agents & Base ecosystem
+  'agent', 'autonomous', 'virtuals', 'farcaster', 'warpcast', 'clanker',
+  'eliza', 'mindshare', 'agentic', 'onchain', 'buildonbase',
 ]);
 
 const OPINION_MARKERS = [

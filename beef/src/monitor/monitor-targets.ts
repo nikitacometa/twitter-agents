@@ -20,15 +20,18 @@ export const MONITOR_TARGETS: readonly MonitorTarget[] = [
   { handle: 'AerodromeFi', followersK: 127, tier: 'S', category: 'base' },
   { handle: 'virtuals_io', followersK: 281, tier: 'S', category: 'base' },
 
-  // A-tier Base — official accounts, major protocols
+  // A-tier Base — official accounts, major protocols, AI agent leaders
   { handle: 'base', followersK: 500, tier: 'A', category: 'base' },
   { handle: 'BuildOnBase', followersK: 200, tier: 'A', category: 'base' },
   { handle: 'aixbt_agent', followersK: 400, tier: 'A', category: 'base' },
   { handle: 'coinbase', followersK: 1500, tier: 'A', category: 'base' },
   { handle: 'MoonwellDeFi', followersK: 55, tier: 'A', category: 'base' },
   { handle: 'zaboronbase', followersK: 180, tier: 'A', category: 'base' },
+  { handle: 'KaitoAI', followersK: 418, tier: 'A', category: 'base' },
+  { handle: 'farcaster_xyz', followersK: 231, tier: 'A', category: 'base' },
+  { handle: 'elizaOS', followersK: 145, tier: 'A', category: 'base' },
 
-  // B-tier Base — social, memecoins, DeFi protocols
+  // B-tier Base — social, memecoins, DeFi, AI agents, KOLs
   { handle: 'faboronbase', followersK: 100, tier: 'B', category: 'base' },
   { handle: 'degentokenbase', followersK: 150, tier: 'B', category: 'base' },
   { handle: 'BasedBrett', followersK: 150, tier: 'B', category: 'base' },
@@ -36,13 +39,30 @@ export const MONITOR_TARGETS: readonly MonitorTarget[] = [
   { handle: 'MorphoLabs', followersK: 80, tier: 'B', category: 'base' },
   { handle: 'dwr', followersK: 80, tier: 'B', category: 'base' },
   { handle: 'brian_armstrong', followersK: 1700, tier: 'B', category: 'base' },
+  { handle: 'Bankless', followersK: 344, tier: 'B', category: 'base' },
+  { handle: 'zora', followersK: 280, tier: 'B', category: 'base' },
+  { handle: 'truth_terminal', followersK: 246, tier: 'B', category: 'base' },
+  { handle: 'DefiantNews', followersK: 211, tier: 'B', category: 'base' },
+  { handle: 'cookiedotfun', followersK: 194, tier: 'B', category: 'base' },
+  { handle: 'shawmakesmagic', followersK: 164, tier: 'B', category: 'base' },
+  { handle: 'Spectral_Labs', followersK: 163, tier: 'B', category: 'base' },
+  { handle: 'NousResearch', followersK: 100, tier: 'B', category: 'base' },
+  { handle: 'CoinbaseDev', followersK: 61, tier: 'B', category: 'base' },
+  { handle: 'luna_virtuals', followersK: 51, tier: 'B', category: 'base' },
+  { handle: 'dolos_diary', followersK: 37, tier: 'B', category: 'base' },
+  { handle: 'clanker_world', followersK: 34, tier: 'B', category: 'base' },
+  { handle: 'ethermage', followersK: 30, tier: 'B', category: 'base' },
 
-  // C-tier Base — niche protocols, smaller projects
+  // C-tier Base — niche protocols, smaller projects, researchers
   { handle: 'Toshi_base', followersK: 40, tier: 'C', category: 'base' },
   { handle: 'SeamlessFi', followersK: 30, tier: 'C', category: 'base' },
   { handle: 'AcrossProtocol', followersK: 50, tier: 'C', category: 'base' },
   { handle: 'PoolTogether', followersK: 40, tier: 'C', category: 'base' },
   { handle: 'BaseSwap_fi', followersK: 30, tier: 'C', category: 'base' },
+  { handle: 'goldfinch_fi', followersK: 73, tier: 'C', category: 'base' },
+  { handle: 'tengyanAI', followersK: 43, tier: 'C', category: 'base' },
+  { handle: 'HighCoinviction', followersK: 38, tier: 'C', category: 'base' },
+  { handle: 'BaseChain_News', followersK: 6, tier: 'C', category: 'base' },
 
   // ──────────────────────────────────────────────
   // GENERAL CRYPTO — news, KOLs, analysts
