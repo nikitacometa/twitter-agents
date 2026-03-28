@@ -170,7 +170,7 @@ const DEFAULT_PRESETS: Record<TaskProfile, TaskPreset> = {
     effort: 'medium',
     tools: [],
     maxTurns: 1,
-    timeoutMs: 45_000,
+    timeoutMs: 90_000,
     fallbackModel: 'haiku',
   },
   'roast-lightning-research': {
