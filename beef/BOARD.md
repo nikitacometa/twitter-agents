@@ -63,6 +63,7 @@ Status: `[ ]` pending, `[~]` in progress, `[x]` done, `[!]` blocked
 [ ] #B-24 — Auto-notify admins on autonomous posts (approve mode OFF)
 [ ] #B-25 — Stockpile low alert (available < 5 → Telegram notification)
 [ ] #B-26 — Farcaster cross-posting backup channel
+[ ] #B-43 — Monitor Phase 2: keyword search batches alongside from: queries for Base ecosystem discovery (see docs/base-ecosystem-expansion.md)
 [ ] #B-27 — Claude Code skills: /pre-launch-checklist, /deploy-verify, /roast-quality-check
 
 ## Backlog: Autonomy
