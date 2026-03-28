@@ -22,6 +22,7 @@ import {
   FAST_CALL_CONFIGS,
   distributeFastAngles,
   buildLightningPrompt,
+  LIGHTNING_VARIANT_COUNT,
 } from './prompt-builder.js';
 import type { PromptStrategy } from './prompt-builder.js';
 import { filterRoast } from '@content/content-filter.js';
@@ -96,8 +97,10 @@ export interface LightningRoastResult {
   researchNotes: string | null;
   stats: {
     generated: number;
+    returned: number;
     passedPreFilter: number;
     passedContentFilter: number;
+    afterDedup: number;
     durationMs: number;
   };
   diaryThought?: string;
@@ -627,7 +630,7 @@ export class RoastEngine {
       'Starting lightning roast generation',
     );
 
-    const prompt = buildLightningPrompt(targetName, this.character, memory, imagePaths);
+    const prompt = buildLightningPrompt(targetName, this.character, memory);
 
     const result = await this.provider.run<AgentRoastOutput>(taskId, {
       prompt,
@@ -639,7 +642,8 @@ export class RoastEngine {
     const parsed = this.parseOutput(result.data, taskId);
     this.validateOutput(parsed, taskId);
 
-    const generated = parsed.variants.length;
+    // LLM returns all variants (up to LIGHTNING_VARIANT_COUNT) — code does filtering
+    const returned = parsed.variants.length;
 
     // Pre-filter (regex checks)
     const afterPreFilter = parsed.variants.filter((v) => {
@@ -659,39 +663,44 @@ export class RoastEngine {
       return cf.passed;
     });
 
-    // Sort by self-score descending (LLM already returns top 3 sorted, but verify)
+    // Sort by self-score descending, then dedup similar variants
     afterContentFilter.sort((a, b) => b.score - a.score);
+    const deduped = jaccardDedup(afterContentFilter, 0.6);
 
     const durationMs = Date.now() - start;
 
-    if (afterContentFilter.length === 0) {
-      throw new Error(`All ${String(generated)} lightning variants filtered out for "${targetName}"`);
+    if (deduped.length === 0) {
+      throw new Error(`All ${String(returned)} lightning variants filtered out for "${targetName}"`);
     }
 
     this.logger.info(
       {
         taskId,
         target: targetName,
-        generated,
+        generated: LIGHTNING_VARIANT_COUNT,
+        returned,
         passedPreFilter: afterPreFilter.length,
         passedContentFilter: afterContentFilter.length,
-        top3: afterContentFilter.slice(0, 3).map((v) => ({ score: v.score, angle: v.angle })),
+        afterDedup: deduped.length,
+        top3: deduped.slice(0, 3).map((v) => ({ score: v.score, angle: v.angle })),
         durationMs,
       },
       'Lightning roast pipeline complete',
     );
 
     return {
-      variants: afterContentFilter.map((v) => ({
+      variants: deduped.map((v) => ({
         text: v.text,
         angle: v.angle,
         score: v.score,
       })),
       researchNotes: parsed.researchNotes,
       stats: {
-        generated,
+        generated: LIGHTNING_VARIANT_COUNT,
+        returned,
         passedPreFilter: afterPreFilter.length,
         passedContentFilter: afterContentFilter.length,
+        afterDedup: deduped.length,
         durationMs,
       },
       diaryThought: parsed.diaryThought,

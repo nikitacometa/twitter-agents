@@ -888,8 +888,18 @@ export function createBot(opts: {
     handleTweetRoast(ctx, tweetUrl, userContext);
   });
 
+  // Context cache for lightning regen — same pattern as roastTweetContexts
+  const lightningContexts = new Map<string, {
+    tweetUrl: string;
+    targetName: string;
+    profileContext: string;
+    imagePaths: string[];
+    cleanup?: () => Promise<void>;
+    userContext?: string;
+  }>();
+
   // ---------------------------------------------------------------------------
-  // /roast_fast — volume pipeline: 5 parallel Sonnet calls → rank → top 3
+  // /roast_fast — lightning pipeline: 1 Sonnet call × 10 variants → self-evaluate → code filter/dedup → top 3
   // ---------------------------------------------------------------------------
 
   function formatLightningOutput(_target: string, result: LightningRoastResult): string {
@@ -904,7 +914,7 @@ export function createBot(opts: {
     }
 
     const s = result.stats;
-    lines.push(`📊 1 call · ${String(s.generated)} gen · ${String(s.passedPreFilter)} pre-filter · ${String(s.passedContentFilter)} passed · ${String(Math.min(3, result.variants.length))} selected`);
+    lines.push(`📊 ${String(s.generated)}→${String(s.returned)} ret→${String(s.passedPreFilter)} pre→${String(s.passedContentFilter)} filter→${String(s.afterDedup)} dedup→${String(Math.min(3, result.variants.length))} top`);
 
     return lines.join('\n');
   }
@@ -1008,6 +1018,25 @@ export function createBot(opts: {
 
         const profileContext = buildTweetRoastContext(contextInput);
 
+        // Save context for regen
+        const ctxKey = `lt-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+        lightningContexts.set(ctxKey, {
+          tweetUrl,
+          targetName,
+          profileContext,
+          imagePaths,
+          cleanup: mediaCleanup,
+          userContext,
+        });
+
+        const scheduleCleanup = (delayMs: number): void => {
+          setTimeout(() => {
+            const stored = lightningContexts.get(ctxKey);
+            if (stored?.cleanup) stored.cleanup().catch(() => {});
+            lightningContexts.delete(ctxKey);
+          }, delayMs);
+        };
+
         updateStatus(`⚡ Lightning for <b>${escapeHtml(targetName)}</b>...`);
 
         const result = await generateRoastsLightning(
@@ -1022,18 +1051,26 @@ export function createBot(opts: {
         const normalizedUrl = tweetUrl.startsWith('http') ? tweetUrl : `https://${tweetUrl}`;
 
         const headerLines = [
-          `⚡ <b>${escapeHtml(targetName)}</b> — ${String(result.stats.generated)}→${String(result.stats.passedContentFilter)}→${String(Math.min(3, result.variants.length))}, ${String(elapsed)}s`,
+          `⚡ <b>${escapeHtml(targetName)}</b> — ${String(result.stats.generated)}→${String(result.stats.afterDedup)}→${String(Math.min(3, result.variants.length))} top, ${String(elapsed)}s`,
           `<a href="${escapeHtml(normalizedUrl)}">Original tweet</a>`,
           '',
         ];
 
         const body = headerLines.join('\n') + formatLightningOutput(targetName, result);
 
+        const keyboard = new InlineKeyboard()
+          .text('🔄 Regen', `lt-regen:${ctxKey}`);
+
         await api.deleteMessage(chatId, statusMsg.message_id).catch(() => {});
         await api.sendMessage(chatId, body, {
           parse_mode: 'HTML',
+          reply_markup: keyboard,
           link_preview_options: { is_disabled: true },
         });
+
+        // Keep context alive for 10 min for regen button
+        scheduleCleanup(600_000);
+        mediaCleanup = undefined; // Owned by scheduleCleanup now
       } catch (error) {
         const elapsed = Math.round((Date.now() - startTime) / 1000);
         logger.error({ err: error, url: tweetUrl, elapsedSec: elapsed }, 'Lightning tweet roast failed');
@@ -1085,7 +1122,7 @@ export function createBot(opts: {
 
         const elapsed = Math.round((Date.now() - startTime) / 1000);
 
-        const header = `⚡ <b>@${escapeHtml(handle)}</b> — ${String(result.stats.generated)}→${String(result.stats.passedContentFilter)}→${String(Math.min(3, result.variants.length))}, ${String(elapsed)}s\n`;
+        const header = `⚡ <b>@${escapeHtml(handle)}</b> — ${String(result.stats.generated)}→${String(result.stats.afterDedup)}→${String(Math.min(3, result.variants.length))} top, ${String(elapsed)}s\n`;
         const body = header + '\n' + formatLightningOutput(handle, result);
 
         await api.editMessageText(chatId, statusMsg.message_id, body, { parse_mode: 'HTML' });
@@ -1127,7 +1164,7 @@ export function createBot(opts: {
         );
 
         const elapsed = Math.round((Date.now() - startTime) / 1000);
-        const header = `⚡ <b>${escapeHtml(target)}</b> — ${String(result.stats.generated)}→${String(result.stats.passedContentFilter)}→${String(Math.min(3, result.variants.length))}, ${String(elapsed)}s\n`;
+        const header = `⚡ <b>${escapeHtml(target)}</b> — ${String(result.stats.generated)}→${String(result.stats.afterDedup)}→${String(Math.min(3, result.variants.length))} top, ${String(elapsed)}s\n`;
         const body = header + '\n' + formatLightningOutput(target, result);
 
         await api.editMessageText(chatId, statusMsg.message_id, body, { parse_mode: 'HTML' });
@@ -3216,6 +3253,69 @@ export function createBot(opts: {
           });
         } catch (error) {
           logger.error({ err: error, ctxKey }, 'rt-regen callback failed');
+          await ctx.editMessageText(
+            `❌ <b>Regen failed:</b> ${escapeHtml(getErrorMessage(error).slice(0, 200))}`,
+            { parse_mode: 'HTML' },
+          ).catch(() => {});
+        }
+      })();
+
+    // --- Lightning regen ---
+    } else if (data.startsWith('lt-regen:')) {
+      const ctxKey = data.slice(9);
+      const storedCtx = lightningContexts.get(ctxKey);
+      if (!storedCtx) {
+        await ctx.answerCallbackQuery({ text: 'Context expired — run /roast_fast again', show_alert: true });
+        return;
+      }
+
+      if (!provider) {
+        await ctx.answerCallbackQuery({ text: 'Provider not available', show_alert: true });
+        return;
+      }
+
+      await ctx.answerCallbackQuery({ text: 'Regenerating...' });
+      await ctx.editMessageText('⚡ <b>Regenerating...</b>', { parse_mode: 'HTML' });
+
+      const chatId = ctx.chat?.id;
+      if (!chatId) return;
+
+      void (async () => {
+        try {
+          const startTime = Date.now();
+          const result = await generateRoastsLightning(
+            storedCtx.targetName, provider, logger, feedbackRepo,
+            configRepo, exampleRepo, patternRepo,
+            stockpileRepo, farmAttemptRepo,
+            storedCtx.imagePaths.length > 0 ? storedCtx.imagePaths : undefined,
+            storedCtx.profileContext, true, storedCtx.userContext,
+          );
+
+          const elapsed = Math.round((Date.now() - startTime) / 1000);
+          const normalizedUrl = storedCtx.tweetUrl.startsWith('http') ? storedCtx.tweetUrl : `https://${storedCtx.tweetUrl}`;
+
+          const regenLines: string[] = [
+            `🔄 <b>${escapeHtml(storedCtx.targetName)}</b> — ${String(result.stats.generated)}→${String(result.stats.afterDedup)}→${String(Math.min(3, result.variants.length))} top, ${String(elapsed)}s`,
+            `<a href="${escapeHtml(normalizedUrl)}">Original tweet</a>`,
+            '',
+          ];
+
+          regenLines.push(formatLightningOutput(storedCtx.targetName, result));
+
+          const regenKeyboard = new InlineKeyboard()
+            .text('🔄 Regen', `lt-regen:${ctxKey}`);
+
+          const regenMsgId = ctx.callbackQuery?.message?.message_id;
+          if (chatId && regenMsgId) {
+            await bot.api.deleteMessage(chatId, regenMsgId).catch(() => {});
+          }
+          await ctx.reply(regenLines.join('\n'), {
+            parse_mode: 'HTML',
+            reply_markup: result.variants.length > 0 ? regenKeyboard : undefined,
+            link_preview_options: { is_disabled: true },
+          });
+        } catch (error) {
+          logger.error({ err: error, ctxKey }, 'lt-regen callback failed');
           await ctx.editMessageText(
             `❌ <b>Regen failed:</b> ${escapeHtml(getErrorMessage(error).slice(0, 200))}`,
             { parse_mode: 'HTML' },
