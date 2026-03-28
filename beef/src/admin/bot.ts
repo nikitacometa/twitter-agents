@@ -2967,8 +2967,11 @@ export function createBot(opts: {
     })();
   }
 
-  bot.on('message:text', (ctx) => {
-    if (!isGroupChat(ctx) || !provider || ctx.message.text.startsWith('/')) return;
+  bot.on('message:text', async (ctx, next) => {
+    if (!isGroupChat(ctx) || !provider || ctx.message.text.startsWith('/')) {
+      await next();
+      return;
+    }
 
     const chatId = ctx.chat.id;
     const history = banterHistory.get(chatId) ?? [];
