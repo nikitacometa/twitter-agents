@@ -1,3 +1,4 @@
+import { unlink } from 'node:fs/promises';
 import { Bot, InlineKeyboard } from 'grammy';
 import type { Context } from 'grammy';
 import type { Logger } from 'pino';
@@ -26,8 +27,13 @@ import type { TwitterEnricher } from '@farm/twitter-enricher.js';
 import { downloadTweetMedia } from '@common/utils/media-downloader.js';
 import { buildTweetRoastContext } from '@roast/prompt-builder.js';
 import type { TweetRoastContextInput } from '@roast/prompt-builder.js';
-import type { MemeGenerator } from '@meme/meme-generator.js';
+import type { MemeGenerator, MemeOutput } from '@meme/meme-generator.js';
 import { ImgflipClient } from '@meme/imgflip-client.js';
+import type { MemeHistoryRepository } from '@meme/meme-history.repository.js';
+import type { AnthropicSDKProvider } from '@agent/anthropic-sdk.provider.js';
+import { MemeJudge } from '@meme/meme-judge.js';
+import { pickStrategies } from '@meme/meme-strategies.js';
+import type { MemeStrategy } from '@meme/meme-strategies.js';
 import { InputFile } from 'grammy';
 import type { MetricsRepository } from '@metrics/metrics.repository.js';
 import {
@@ -161,6 +167,8 @@ export function createBot(opts: {
   twitterClient?: ITwitterClient;
   twitterEnricher?: TwitterEnricher;
   memeGenerator?: MemeGenerator;
+  memeHistoryRepo?: MemeHistoryRepository;
+  sdkProvider?: AnthropicSDKProvider;
   metricsRepo?: MetricsRepository;
   anthropicApiKey?: string;
   openaiApiKey?: string;
@@ -3262,6 +3270,342 @@ export function createBot(opts: {
         }
       })();
     }
+  });
+
+  // ─── /memefarm — Generate N diverse memes for a tweet, vision-evaluate ALL, rank ───
+
+  bot.command('memefarm', (ctx) => {
+    const raw = ctx.match?.toString().trim() ?? '';
+    if (!raw) {
+      void ctx.reply(
+        'Usage: /memefarm &lt;tweet_url&gt; [count] [top]\n'
+        + 'Example: /memefarm https://x.com/user/status/123 10 3\n\n'
+        + 'Defaults: count=10, top=3',
+        { parse_mode: 'HTML' },
+      );
+      return;
+    }
+
+    if (!memeGen) {
+      void ctx.reply('⚠️ Meme generator not configured (IMGFLIP_USERNAME/PASSWORD missing or no LLM provider).');
+      return;
+    }
+    if (!opts.sdkProvider) {
+      void ctx.reply('⚠️ Anthropic SDK provider not configured (ANTHROPIC_API_KEY missing). Needed for vision evaluation.');
+      return;
+    }
+    if (!opts.memeHistoryRepo) {
+      void ctx.reply('⚠️ Meme history repository not available.');
+      return;
+    }
+    const twitterClient = opts.twitterClient;
+    if (!twitterClient?.getTweet) {
+      void ctx.reply('⚠️ Twitter client not configured.');
+      return;
+    }
+
+    const chatId = ctx.chat?.id;
+    if (!chatId) return;
+    const api = ctx.api;
+
+    // Parse args: <url> [count] [top]
+    const parts = raw.split(/\s+/);
+    const tweetUrl = parts[0]!;
+    const count = parts[1] ? parseInt(parts[1], 10) : 10;
+    const top = parts[2] ? parseInt(parts[2], 10) : 3;
+
+    if (!isTweetUrl(tweetUrl)) {
+      void ctx.reply('❌ Invalid tweet URL. Provide a full x.com/twitter.com URL.');
+      return;
+    }
+    if (count < 1 || count > 30) {
+      void ctx.reply('❌ Count must be 1-30.');
+      return;
+    }
+
+    const sdkProvider = opts.sdkProvider;
+    const historyRepo = opts.memeHistoryRepo;
+    const generator = memeGen;
+
+    void (async () => {
+      const startTime = Date.now();
+      const statusMsg = await api.sendMessage(chatId, `🎨 Meme Farm — generating ${String(count)} variants...`);
+
+      const updateStatus = (stage: string): void => {
+        const elapsed = Math.round((Date.now() - startTime) / 1000);
+        api.editMessageText(chatId, statusMsg.message_id, `${stage} <i>(${String(elapsed)}s)</i>`, { parse_mode: 'HTML' }).catch(() => {});
+      };
+
+      const tmpPaths: string[] = [];
+
+      try {
+        // 1. Fetch tweet
+        updateStatus('🔍 Fetching tweet...');
+        const tweetId = parseTweetUrl(tweetUrl);
+        if (!tweetId) {
+          await api.editMessageText(chatId, statusMsg.message_id, '❌ Invalid tweet URL.');
+          return;
+        }
+
+        const tweet = await twitterClient.getTweet!(tweetId);
+        if (!tweet) {
+          await api.editMessageText(chatId, statusMsg.message_id, '❌ Could not fetch tweet.');
+          return;
+        }
+
+        // 2. Enrich author (non-fatal)
+        updateStatus('👤 Enriching author...');
+        let enrichmentContext: string | undefined;
+        if (opts.twitterEnricher) {
+          try {
+            const enrichment = await opts.twitterEnricher.enrich(tweet.authorName);
+            if (enrichment?.hasData) enrichmentContext = enrichment.profileContext;
+          } catch (err) {
+            logger.warn({ err: getErrorMessage(err), target: tweet.authorName }, 'Meme farm: enrichment failed');
+          }
+        }
+
+        // 3. Fetch parent/quoted tweet (non-fatal)
+        let parentTweet: { text: string; author: string } | undefined;
+        let quotedTweet: { text: string; author: string } | undefined;
+        const refTweetId = tweet.inReplyToTweetId ?? tweet.quotedTweetId;
+        if (refTweetId && twitterClient.getTweet) {
+          try {
+            const refTweet = await twitterClient.getTweet(refTweetId);
+            if (refTweet) {
+              const ref = { text: refTweet.text, author: refTweet.authorName };
+              if (tweet.inReplyToTweetId) parentTweet = ref;
+              else quotedTweet = ref;
+            }
+          } catch (err) {
+            logger.warn({ err: getErrorMessage(err), refTweetId }, 'Meme farm: ref tweet fetch failed');
+          }
+        }
+
+        // 4. Detect contradictions (non-fatal)
+        updateStatus('🔎 Analyzing contradictions...');
+        let contradictions: string[] = [];
+        if (enrichmentContext) {
+          try {
+            const contradictionPrompt = `Analyze this tweet and the author's recent activity. Find specific contradictions, hypocrisy, or ironic gaps between what they say in this tweet vs their behavior/past statements.
+
+TWEET: "${tweet.text}"
+
+AUTHOR CONTEXT:
+${enrichmentContext}
+
+Return ONLY valid JSON (no markdown, no code fences):
+{"contradictions":["contradiction 1","contradiction 2"]}
+
+If no contradictions found, return {"contradictions":[]}`;
+
+            const cResult = await sdkProvider.run<{ contradictions: string[] }>('contradiction-detect', {
+              prompt: contradictionPrompt,
+              requiresResearch: false,
+            });
+            contradictions = cResult.data.contradictions ?? [];
+          } catch (err) {
+            logger.warn({ err: getErrorMessage(err) }, 'Meme farm: contradiction detection failed');
+          }
+        }
+
+        // 5. Assemble context (contradictions first — most valuable)
+        const contextSections: string[] = [];
+        if (contradictions.length > 0) {
+          contextSections.push(`CONTRADICTIONS/HYPOCRISY FOUND (use these — they're meme gold):\n${contradictions.map((c, i) => `${String(i + 1)}. ${c}`).join('\n')}`);
+        }
+        contextSections.push(`TARGET TWEET by @${tweet.authorName}:\n"${tweet.text}"`);
+        const metrics = tweet.likes != null
+          ? `Metrics: ${String(tweet.likes ?? 0)} likes, ${String(tweet.retweets ?? 0)} RTs, ${String(tweet.replies ?? 0)} replies${tweet.views != null ? `, ${String(tweet.views)} views` : ''}`
+          : null;
+        if (metrics) contextSections.push(metrics);
+        if (parentTweet) contextSections.push(`REPLYING TO @${parentTweet.author}: "${parentTweet.text}"`);
+        if (quotedTweet) contextSections.push(`QUOTING @${quotedTweet.author}: "${quotedTweet.text}"`);
+        if (enrichmentContext) contextSections.push(enrichmentContext);
+        const context = contextSections.join('\n\n');
+
+        // 6. Pick strategies
+        const strategies = pickStrategies(count);
+
+        // 7. Generate all memes
+        updateStatus(`⚡ Generating ${String(count)} memes (${String(strategies.length)} strategies)...`);
+        const CHUNK_SIZE = 5;
+        const CHUNK_DELAY = 300;
+
+        interface GeneratedMeme {
+          index: number;
+          output: MemeOutput;
+          strategy: MemeStrategy;
+        }
+
+        const generated: GeneratedMeme[] = [];
+        const usedTemplateIds: string[] = [];
+        let failedCount = 0;
+        let degradedCount = 0;
+
+        for (let i = 0; i < strategies.length; i += CHUNK_SIZE) {
+          const chunk = strategies.slice(i, i + CHUNK_SIZE);
+
+          updateStatus(`⚡ Generating memes ${String(i + 1)}-${String(Math.min(i + CHUNK_SIZE, strategies.length))}/${String(strategies.length)}...`);
+
+          const settled = await Promise.allSettled(
+            chunk.map((strategy) => {
+              return generator.generate({
+                target: `@${tweet.authorName}`,
+                targetType: 'person',
+                context,
+                isTweetResponse: true,
+                strategy,
+                preferStandalone: true,
+                skipHistoryInsert: true,
+                excludeTemplateIds: [...usedTemplateIds],
+              });
+            }),
+          );
+
+          for (let j = 0; j < settled.length; j++) {
+            const r = settled[j]!;
+            const globalIdx = i + j;
+            if (r.status === 'fulfilled' && r.value.meme) {
+              generated.push({ index: globalIdx, output: r.value, strategy: chunk[j]! });
+              usedTemplateIds.push(r.value.meme.templateId);
+              tmpPaths.push(r.value.meme.localPath);
+            } else if (r.status === 'rejected') {
+              failedCount++;
+              logger.warn({ err: getErrorMessage(r.reason), index: globalIdx, strategy: chunk[j]!.id }, 'Meme farm: generation failed');
+            } else {
+              degradedCount++;
+            }
+          }
+
+          if (i + CHUNK_SIZE < strategies.length) {
+            await new Promise((resolve) => setTimeout(resolve, CHUNK_DELAY));
+          }
+        }
+
+        if (generated.length === 0) {
+          await api.editMessageText(chatId, statusMsg.message_id, `❌ All ${String(count)} meme generations failed.`, { parse_mode: 'HTML' });
+          return;
+        }
+
+        // 8. Evaluate ALL with vision
+        updateStatus(`🧠 Vision-evaluating ${String(generated.length)} memes...`);
+        const judge = new MemeJudge(sdkProvider, logger);
+        const judgeInputs = generated.map((g) => ({
+          localPath: g.output.meme!.localPath,
+          templateName: g.output.meme!.templateName,
+          tweetText: tweet.text,
+          tweetAuthor: tweet.authorName,
+          boxes: g.output.meme!.boxes,
+          strategy: g.strategy.id,
+          index: g.index,
+        }));
+
+        const scores = await judge.evaluateBatch(judgeInputs);
+
+        // 9. Rank and merge
+        interface RankedMeme { rank: number; score: typeof scores[0]; meme: GeneratedMeme }
+        const ranked: RankedMeme[] = scores
+          .map((score) => {
+            const meme = generated.find((g) => g.index === score.index);
+            if (!meme) return null;
+            return { rank: 0, score, meme };
+          })
+          .filter((r): r is RankedMeme => r !== null);
+        ranked.forEach((r, i) => { r.rank = i + 1; });
+
+        // 10. Save ALL to meme_history with vision scores
+        for (const r of ranked) {
+          try {
+            historyRepo.insert({
+              templateId: r.meme.output.meme!.templateId,
+              templateName: r.meme.output.meme!.templateName,
+              target: `@${tweet.authorName}`,
+              boxes: r.meme.output.meme!.boxes,
+              format: r.meme.output.format,
+              imageUrl: r.meme.output.meme!.imageUrl,
+              rationale: r.meme.output.meme!.rationale,
+              strategy: r.meme.strategy.id,
+              visionScore: r.score.composite,
+            });
+          } catch (err) {
+            logger.warn({ err: getErrorMessage(err), index: r.meme.index }, 'Meme farm: history insert failed');
+          }
+        }
+
+        // 11. Send top-K as photos with hidden scores
+        const topK = ranked.slice(0, top);
+        const elapsed = Math.round((Date.now() - startTime) / 1000);
+
+        // Delete status message before sending photos
+        await api.deleteMessage(chatId, statusMsg.message_id).catch(() => {});
+
+        // Summary header
+        const header = [
+          `🎨 <b>Meme Farm</b> — @${escapeHtml(tweet.authorName)}`,
+          `Tweet: <i>"${escapeHtml(tweet.text.slice(0, 80))}${tweet.text.length > 80 ? '...' : ''}"</i>`,
+          `Generated: ${String(generated.length)} | Failed: ${String(failedCount)} | Degraded: ${String(degradedCount)} | Time: ${String(elapsed)}s`,
+          `Strategies: ${[...new Set(generated.map((g) => g.strategy.id))].join(', ')}`,
+          contradictions.length > 0 ? `Contradictions: ${String(contradictions.length)} found` : '',
+          enrichmentContext ? 'Enrichment: yes' : 'Enrichment: no',
+        ].filter(Boolean).join('\n');
+        await api.sendMessage(chatId, header, { parse_mode: 'HTML', link_preview_options: { is_disabled: true } });
+
+        // Send each top-K meme as a photo
+        for (const r of topK) {
+          const meme = r.meme.output.meme!;
+          const caption = [
+            `<b>#${String(r.rank)}</b> — ${r.meme.strategy.name}`,
+            `Template: ${meme.templateName}`,
+            `Boxes: ${meme.boxes.map((b) => `"${b}"`).join(' | ')}`,
+            `Score: <tg-spoiler>P=${String(r.score.punch)} S=${String(r.score.specificity)} C=${String(r.score.clarity)} F=${String(r.score.templateFit)} = <b>${String(r.score.composite)}</b></tg-spoiler>`,
+            `${r.score.reasoning}`,
+          ].join('\n');
+
+          try {
+            await api.sendPhoto(chatId, new InputFile(meme.localPath), {
+              caption,
+              parse_mode: 'HTML',
+            });
+          } catch (err) {
+            logger.warn({ err: getErrorMessage(err), rank: r.rank }, 'Meme farm: sendPhoto failed');
+            await api.sendMessage(chatId, `❌ Photo #${String(r.rank)} send failed: ${meme.templateName}`, { parse_mode: 'HTML' }).catch(() => {});
+          }
+        }
+
+        // Send remaining ranked memes as text summary
+        if (ranked.length > top) {
+          const rest = ranked.slice(top).map((r) => {
+            const meme = r.meme.output.meme!;
+            return `#${String(r.rank)} <tg-spoiler>${String(r.score.composite)}</tg-spoiler> ${r.meme.strategy.id} — ${meme.templateName}: ${meme.boxes.map((b) => `"${b}"`).join(' | ')}`;
+          });
+          const restMsg = `<b>Remaining (${String(ranked.length - top)}):</b>\n${rest.join('\n')}`;
+          // Chunk if too long
+          if (restMsg.length <= 4096) {
+            await api.sendMessage(chatId, restMsg, { parse_mode: 'HTML' }).catch(() => {});
+          }
+        }
+
+        const totalElapsed = Math.round((Date.now() - startTime) / 1000);
+        logger.info(
+          { tweetId, author: tweet.authorName, count, generated: generated.length, evaluated: scores.length, topScore: topK[0]?.score.composite, elapsed: totalElapsed },
+          'Meme farm completed via /memefarm',
+        );
+
+      } catch (error) {
+        const elapsed = Math.round((Date.now() - startTime) / 1000);
+        logger.error({ err: error, url: tweetUrl, elapsed }, '/memefarm command failed');
+        await api.editMessageText(chatId, statusMsg.message_id,
+          `❌ Meme farm failed (${String(elapsed)}s): ${escapeHtml(getErrorMessage(error).slice(0, 300))}`,
+          { parse_mode: 'HTML' },
+        ).catch(() => {});
+      } finally {
+        // Cleanup all tmp files
+        for (const p of tmpPaths) {
+          try { await unlink(p); } catch { /* already cleaned */ }
+        }
+      }
+    })();
   });
 
   return bot;

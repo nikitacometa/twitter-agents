@@ -132,6 +132,7 @@ if (config.ACTIVITY_FEED_ENABLED) {
 
 // --- LLM Providers (optional — bot works without them for manual eval) ---
 let provider: ProviderManager | null = null;
+const sdk = createAnthropicSDKProvider(config.ANTHROPIC_API_KEY, logger, llmLogRepo);
 try {
   const primary = new ClaudeCodeProvider(logger, llmLogRepo, { maxConcurrent: 3 });
 
@@ -140,7 +141,6 @@ try {
     const codex = createCodexProvider(logger, llmLogRepo);
     if (codex) fallbacks.push(codex);
   }
-  const sdk = createAnthropicSDKProvider(config.ANTHROPIC_API_KEY, logger, llmLogRepo);
   if (sdk) fallbacks.push(sdk);
 
   const alerter = {
@@ -272,10 +272,10 @@ if (config.ENABLE_TWITTER) {
 }
 
 // --- Meme Generator (optional — needs Imgflip creds + LLM provider) ---
+const memeHistoryRepo = new MemeHistoryRepository(db);
 let memeGenerator: MemeGenerator | undefined;
 if (config.IMGFLIP_USERNAME && config.IMGFLIP_PASSWORD && provider) {
   const imgflipClient = new ImgflipClient(config.IMGFLIP_USERNAME, config.IMGFLIP_PASSWORD, logger);
-  const memeHistoryRepo = new MemeHistoryRepository(db);
   memeGenerator = new MemeGenerator(imgflipClient, provider, memeHistoryRepo, logger);
   logger.info('Meme generator initialized');
 }
@@ -627,6 +627,8 @@ if (config.TELEGRAM_BOT_TOKEN) {
     twitterClient: twitter,
     twitterEnricher,
     memeGenerator,
+    memeHistoryRepo,
+    sdkProvider: sdk ?? undefined,
     metricsRepo,
     anthropicApiKey: config.ANTHROPIC_API_KEY,
     openaiApiKey: config.OPENAI_API_KEY,
