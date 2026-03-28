@@ -12,6 +12,8 @@ export interface InsertMemeHistory {
   imageUrl?: string;
   rationale?: string;
   stockpileId?: number;
+  strategy?: string;
+  visionScore?: number;
 }
 
 interface MemeHistoryRow {
@@ -24,6 +26,8 @@ interface MemeHistoryRow {
   image_url: string | null;
   rationale: string | null;
   stockpile_id: number | null;
+  strategy: string | null;
+  vision_score: number | null;
   created_at: string;
 }
 
@@ -37,6 +41,8 @@ export interface MemeHistoryEntry {
   imageUrl: string | null;
   rationale: string | null;
   stockpileId: number | null;
+  strategy: string | null;
+  visionScore: number | null;
   createdAt: string;
 }
 
@@ -50,8 +56,8 @@ export class MemeHistoryRepository {
 
   constructor(db: Database.Database) {
     this.insertStmt = db.prepare(`
-      INSERT INTO meme_history (template_id, template_name, target, boxes, format, image_url, rationale, stockpile_id)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO meme_history (template_id, template_name, target, boxes, format, image_url, rationale, stockpile_id, strategy, vision_score)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
     this.recentTemplateNamesStmt = db.prepare(`
@@ -84,6 +90,8 @@ export class MemeHistoryRepository {
       entry.imageUrl ?? null,
       entry.rationale ?? null,
       entry.stockpileId ?? null,
+      entry.strategy ?? null,
+      entry.visionScore ?? null,
     );
     return Number(result.lastInsertRowid);
   }
@@ -115,6 +123,8 @@ function mapRow(row: MemeHistoryRow): MemeHistoryEntry {
     imageUrl: row.image_url,
     rationale: row.rationale,
     stockpileId: row.stockpile_id,
+    strategy: row.strategy,
+    visionScore: row.vision_score,
     createdAt: row.created_at,
   };
 }

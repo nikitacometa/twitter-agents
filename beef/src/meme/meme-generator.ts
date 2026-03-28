@@ -5,6 +5,7 @@ import { getErrorMessage } from '@common/utils/error.util.js';
 import type { ImgflipClient } from './imgflip-client.js';
 import { type MemeTemplate, MEME_TEMPLATES, getTemplateById } from './meme-templates.js';
 import type { MemeHistoryRepository } from './meme-history.repository.js';
+import type { MemeStrategy } from './meme-strategies.js';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -25,6 +26,12 @@ export interface MemeInput {
   isTweetResponse?: boolean;
   /** Stockpile entry ID — saved to meme_history for traceability. */
   stockpileId?: number;
+  /** Humor strategy — when provided, overrides angle-based template selection. */
+  strategy?: MemeStrategy;
+  /** When true, skip writing to meme_history (caller handles persistence). */
+  skipHistoryInsert?: boolean;
+  /** Extra template IDs to exclude (for cross-variant dedup in meme-farm). */
+  excludeTemplateIds?: string[];
 }
 
 export interface MemeOutput {
@@ -112,6 +119,18 @@ const ANGLE_TEMPLATE_MAP: Record<string, string[]> = {
   BETRAYAL: ['322841258', '155067746', '148909805'],
 };
 
+function filterTemplatesByIds(
+  allTemplates: MemeTemplate[],
+  ids: string[],
+  excludeIds?: string[],
+): MemeTemplate[] {
+  const idSet = new Set(ids);
+  const excludeSet = new Set(excludeIds ?? []);
+  const pool = allTemplates.filter((t) => idSet.has(t.id));
+  const filtered = pool.filter((t) => !excludeSet.has(t.id));
+  return filtered.length > 0 ? filtered : pool;
+}
+
 function filterTemplatesByAngle(
   allTemplates: MemeTemplate[],
   angle?: string,
@@ -169,10 +188,12 @@ function buildMemePrompt(
     ? `\n## RECENTLY USED TEMPLATES (avoid these unless PERFECT fit):\n${recentlyUsed.join(', ')}\n`
     : '';
 
-  // Truncate context — keep enough for specific numbers/facts (the core of good memes)
+  // Truncate context — keep enough for contradictions + numbers/facts (the core of good memes)
+  // Farm pipeline provides richer context (enrichment + contradictions) — 3500 chars accommodates it
+  const contextLimit = input.strategy ? 3500 : 1500;
   const truncatedContext = input.context
-    ? input.context.length > 1500
-      ? input.context.slice(0, 1500) + '...'
+    ? input.context.length > contextLimit
+      ? input.context.slice(0, contextLimit) + '...'
       : input.context
     : '';
 
@@ -186,7 +207,9 @@ function buildMemePrompt(
     ? `\n## KEY FACTS (use specific numbers/data in box text — numbers hit harder than words):\n${truncatedContext}\n`
     : '';
 
-  const tweetSection = input.isTweetResponse ? `
+  // When strategy is present, merge tweet-response instructions into strategy section
+  // to avoid conflicting template guidance from two separate sections
+  const tweetSection = (input.isTweetResponse && !input.strategy) ? `
 ## TWEET RESPONSE MODE:
 This meme is a REPLY to a specific tweet. The meme MUST respond to the tweet's content, claims, or absurdity.
 - Reference what the person actually said — not generic takes about them
@@ -194,12 +217,23 @@ This meme is a REPLY to a specific tweet. The meme MUST respond to the tweet's c
 - Pick a template that creates contrast with or commentary on the tweet's claim
 ` : '';
 
+  const strategySection = input.strategy ? `
+## HUMOR STRATEGY: ${input.strategy.name.toUpperCase()}
+${input.strategy.instruction}
+
+Example of this strategy applied: ${input.strategy.example}
+${input.isTweetResponse ? `
+This meme responds to a specific tweet. Apply this strategy TO THE TWEET — reference what they actually said, not generic takes.` : ''}
+
+You MUST apply this specific humor strategy. The template pool has been pre-filtered to templates compatible with this strategy.
+` : '';
+
   return `You are a meme generator for a crypto roast bot (@0xBeefer). Create the funniest, most savage meme possible.
 
 ## AVAILABLE TEMPLATES:
 
 ${templateList}
-${recentSection}${contextSection}${tweetSection}
+${recentSection}${contextSection}${tweetSection}${strategySection}
 ## TARGET:
 
 ${targetSection}
@@ -286,11 +320,11 @@ export class MemeGenerator {
 
   async generate(input: MemeInput): Promise<MemeOutput> {
     // Target-specific dedup: exclude templates already used for this target
-    let excludeIds: string[] = [];
+    let excludeIds: string[] = input.excludeTemplateIds ?? [];
     let recentlyUsed: string[] = [];
     try {
       const targetHistory = this.historyRepo.getByTarget(input.target, 5);
-      excludeIds = targetHistory.map((h) => h.templateId);
+      excludeIds = [...excludeIds, ...targetHistory.map((h) => h.templateId)];
       recentlyUsed = this.historyRepo.getRecentTemplateNames(15);
     } catch (error) {
       this.logger.warn(
@@ -299,8 +333,10 @@ export class MemeGenerator {
       );
     }
 
-    // Angle-based filtering: narrow 43 templates to 6-10
-    const filteredTemplates = filterTemplatesByAngle(this.templates, input.roastAngle, excludeIds);
+    // Template filtering: strategy-based (meme-farm) or angle-based (normal pipeline)
+    const filteredTemplates = input.strategy
+      ? filterTemplatesByIds(this.templates, input.strategy.compatibleTemplates, excludeIds)
+      : filterTemplatesByAngle(this.templates, input.roastAngle, excludeIds);
 
     const prompt = buildMemePrompt(input, filteredTemplates, recentlyUsed);
 
@@ -413,17 +449,20 @@ export class MemeGenerator {
       tweetText = llmOutput.roastText ?? input.roastText ?? '';
     }
 
-    // Save to history
-    this.historyRepo.insert({
-      templateId: template.id,
-      templateName: template.name,
-      target: input.target,
-      boxes,
-      format: llmOutput.format,
-      imageUrl,
-      rationale: llmOutput.meme.rationale,
-      stockpileId: input.stockpileId,
-    });
+    // Save to history (skip when caller handles persistence, e.g. meme-farm with visionScore)
+    if (!input.skipHistoryInsert) {
+      this.historyRepo.insert({
+        templateId: template.id,
+        templateName: template.name,
+        target: input.target,
+        boxes,
+        format: llmOutput.format,
+        imageUrl,
+        rationale: llmOutput.meme.rationale,
+        stockpileId: input.stockpileId,
+        strategy: input.strategy?.id,
+      });
+    }
 
     this.logger.info(
       {

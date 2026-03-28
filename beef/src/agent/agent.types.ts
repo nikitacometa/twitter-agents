@@ -13,6 +13,7 @@ export type TaskProfile =
   | 'farm-generate'
   | 'farm-discover'
   | 'meme-generate'
+  | 'meme-evaluate'
   | 'roast-fast-research'
   | 'roast-fast-gen';
 

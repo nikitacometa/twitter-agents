@@ -545,7 +545,7 @@ describe('MemeGenerator', () => {
       const dedupeRepo = mockHistoryRepo();
       // eslint-disable-next-line @typescript-eslint/unbound-method
       vi.mocked(dedupeRepo.getByTarget).mockReturnValue([
-        { id: 1, templateId: '181913649', templateName: 'Drake Hotline Bling', target: 'Solana', boxes: ['a', 'b'], format: 'meme_only' as const, imageUrl: null, rationale: null, stockpileId: null, createdAt: '2026-01-01' },
+        { id: 1, templateId: '181913649', templateName: 'Drake Hotline Bling', target: 'Solana', boxes: ['a', 'b'], format: 'meme_only' as const, imageUrl: null, rationale: null, stockpileId: null, strategy: null, visionScore: null, createdAt: '2026-01-01' },
       ]);
 
       const provider = mockProvider({
