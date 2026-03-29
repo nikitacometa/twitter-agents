@@ -12,6 +12,7 @@ export interface ScoredTweet {
   score: number;
   ageMinutes: number;
   tweetUrl: string;
+  isReply: boolean;
 }
 
 export const SCORE_THRESHOLD = 10;
@@ -45,6 +46,8 @@ export function scoreTweet(
   // Auto-skip: RTs and very short tweets
   if (text.startsWith('RT @')) return null;
   if (text.length < 30) return null;
+
+  const isReply = text.startsWith('@');
 
   const currentTime = now ?? new Date();
   const tweetTime = new Date(createdAt);
@@ -94,5 +97,6 @@ export function scoreTweet(
     score,
     ageMinutes: Math.round(ageMinutes),
     tweetUrl: `https://x.com/${authorHandle}/status/${tweetId}`,
+    isReply,
   };
 }

@@ -16,6 +16,7 @@ export interface MonitorPollResult {
 
 const DEFAULT_BUDGET_CEILING = 17_500;
 const SECTION_TOP_N = 7;
+const BASE_REPLIES_TOP_N = 5;
 
 export class TimelineMonitor {
   private readonly twitter: TwitterClient;
@@ -131,11 +132,12 @@ export class TimelineMonitor {
     // Sort by score desc, then freshness (lower age = better)
     allScored.sort((a, b) => b.score - a.score || a.ageMinutes - b.ageMinutes);
 
-    // Top N per category for digest
-    const baseTweets = allScored.filter((t) => t.category === 'base').slice(0, SECTION_TOP_N);
+    // Top N per section for digest: Base Posts (priority) → Base Replies (capped) → General
+    const basePosts = allScored.filter((t) => t.category === 'base' && !t.isReply).slice(0, SECTION_TOP_N);
+    const baseReplies = allScored.filter((t) => t.category === 'base' && t.isReply).slice(0, BASE_REPLIES_TOP_N);
     const generalTweets = allScored.filter((t) => t.category === 'general').slice(0, SECTION_TOP_N);
-    const digestSet = new Set([...baseTweets, ...generalTweets]);
-    const digest = [...baseTweets, ...generalTweets];
+    const digestSet = new Set([...basePosts, ...baseReplies, ...generalTweets]);
+    const digest = [...basePosts, ...baseReplies, ...generalTweets];
     const rest = allScored.filter((t) => !digestSet.has(t));
 
     // Mark all as seen

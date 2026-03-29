@@ -30,6 +30,7 @@ export const MONITOR_TARGETS: readonly MonitorTarget[] = [
   { handle: 'KaitoAI', followersK: 418, tier: 'A', category: 'base' },
   { handle: 'farcaster_xyz', followersK: 231, tier: 'A', category: 'base' },
   { handle: 'elizaOS', followersK: 145, tier: 'A', category: 'base' },
+  { handle: 'OndoFinance', followersK: 367, tier: 'A', category: 'base' },
 
   // B-tier Base — social, memecoins, DeFi, AI agents, KOLs
   { handle: 'faboronbase', followersK: 100, tier: 'B', category: 'base' },
@@ -52,6 +53,13 @@ export const MONITOR_TARGETS: readonly MonitorTarget[] = [
   { handle: 'dolos_diary', followersK: 37, tier: 'B', category: 'base' },
   { handle: 'clanker_world', followersK: 34, tier: 'B', category: 'base' },
   { handle: 'ethermage', followersK: 30, tier: 'B', category: 'base' },
+  { handle: 'GMX_IO', followersK: 225, tier: 'B', category: 'base' },
+  { handle: 'beefyfinance', followersK: 260, tier: 'B', category: 'base' },
+  { handle: 'pendle_fi', followersK: 160, tier: 'B', category: 'base' },
+  { handle: 'OriginProtocol', followersK: 166, tier: 'B', category: 'base' },
+  { handle: 'odosprotocol', followersK: 243, tier: 'B', category: 'base' },
+  { handle: 'trylimitless', followersK: 97, tier: 'B', category: 'base' },
+  { handle: 'jacek0x', followersK: 69, tier: 'B', category: 'base' },
 
   // C-tier Base — niche protocols, smaller projects, researchers
   { handle: 'Toshi_base', followersK: 40, tier: 'C', category: 'base' },
@@ -63,6 +71,11 @@ export const MONITOR_TARGETS: readonly MonitorTarget[] = [
   { handle: 'tengyanAI', followersK: 43, tier: 'C', category: 'base' },
   { handle: 'HighCoinviction', followersK: 38, tier: 'C', category: 'base' },
   { handle: 'BaseChain_News', followersK: 6, tier: 'C', category: 'base' },
+  { handle: '0xfluid', followersK: 40, tier: 'C', category: 'base' },
+  { handle: 'Vader_AI_', followersK: 39, tier: 'C', category: 'base' },
+  { handle: 'ExtraFi_io', followersK: 20, tier: 'C', category: 'base' },
+  { handle: 'overnight_fi', followersK: 20, tier: 'C', category: 'base' },
+  { handle: 'AlienBaseDex', followersK: 11, tier: 'C', category: 'base' },
 
   // ──────────────────────────────────────────────
   // GENERAL CRYPTO — news, KOLs, analysts
@@ -78,6 +91,8 @@ export const MONITOR_TARGETS: readonly MonitorTarget[] = [
   { handle: 'CryptoWizardd', followersK: 510, tier: 'A', category: 'general' },
   { handle: 'AltcoinGordon', followersK: 700, tier: 'A', category: 'general' },
   { handle: 'ZssBecker', followersK: 800, tier: 'A', category: 'general' },
+  { handle: 'arkham', followersK: 1529, tier: 'A', category: 'general' },
+  { handle: 'nansen_ai', followersK: 355, tier: 'A', category: 'general' },
 
   // B-tier General — solid crypto voices
   { handle: 'CryptoGodJohn', followersK: 1300, tier: 'B', category: 'general' },
