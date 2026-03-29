@@ -34,6 +34,8 @@ import { createBot } from './admin/bot.js';
 import type { ITwitterClient, IProfileFetcher } from './twitter/twitter-client.interface.js';
 import { TwitterClient } from './twitter/twitter-client.js';
 import { ScraperTwitterClient } from './twitter/scraper-twitter-client.js';
+import { PlaywrightTwitterClient } from './twitter/playwright-twitter-client.js';
+import { HybridTwitterClient } from './twitter/hybrid-twitter-client.js';
 import { MentionHandler } from './twitter/mention-handler.js';
 import { Scheduler } from './scheduler/scheduler.js';
 import { QueueManager } from './queue/queue-manager.js';
@@ -218,6 +220,49 @@ if (config.ENABLE_TWITTER) {
       twitter = fallbackClient;
       profileFetcher = new CachedProfileFetcher({
         inner: fallbackClient,
+        targetRepo,
+        logger,
+      });
+    }
+  } else if (config.TWITTER_CLIENT_MODE === 'hybrid' && config.PROXY_URL && config.CHROME_PROFILE_PATH) {
+    // Hybrid mode: API v2 for reads, Playwright for writes
+    const twitterCredentials =
+      config.TWITTER_API_KEY && config.TWITTER_API_SECRET && config.TWITTER_ACCESS_TOKEN && config.TWITTER_ACCESS_SECRET
+        ? {
+            apiKey: config.TWITTER_API_KEY,
+            apiSecret: config.TWITTER_API_SECRET,
+            accessToken: config.TWITTER_ACCESS_TOKEN,
+            accessSecret: config.TWITTER_ACCESS_SECRET,
+          }
+        : undefined;
+
+    const apiClient = new TwitterClient({
+      credentials: twitterCredentials,
+      dryRun: config.DRY_RUN,
+      logger,
+    });
+
+    const playwrightClient = new PlaywrightTwitterClient({
+      profilePath: config.CHROME_PROFILE_PATH,
+      proxyUrl: config.PROXY_URL,
+      dryRun: config.DRY_RUN,
+      logger,
+    });
+
+    try {
+      await playwrightClient.initialize();
+      twitter = new HybridTwitterClient({ apiClient, playwrightClient, logger });
+      profileFetcher = new CachedProfileFetcher({
+        inner: apiClient,
+        targetRepo,
+        logger,
+      });
+      logger.info('Twitter client: hybrid mode (API reads + Playwright writes)');
+    } catch (error) {
+      logger.error({ err: error }, 'Playwright init failed — falling back to API-only mode');
+      twitter = apiClient;
+      profileFetcher = new CachedProfileFetcher({
+        inner: apiClient,
         targetRepo,
         logger,
       });

@@ -172,12 +172,12 @@ const envSchema = z
         });
       }
     }
-    if (data.BEEF_ENV === 'production' && data.TWITTER_CLIENT_MODE === 'api') {
+    if (data.BEEF_ENV === 'production' && (data.TWITTER_CLIENT_MODE === 'api' || data.TWITTER_CLIENT_MODE === 'hybrid')) {
       const apiCreds = [data.TWITTER_API_KEY, data.TWITTER_API_SECRET, data.TWITTER_ACCESS_TOKEN, data.TWITTER_ACCESS_SECRET];
       if (apiCreds.some((c) => !c)) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
-          message: 'All Twitter API credentials required in production API mode (TWITTER_API_KEY, TWITTER_API_SECRET, TWITTER_ACCESS_TOKEN, TWITTER_ACCESS_SECRET)',
+          message: `All Twitter API credentials required in production ${data.TWITTER_CLIENT_MODE} mode (TWITTER_API_KEY, TWITTER_API_SECRET, TWITTER_ACCESS_TOKEN, TWITTER_ACCESS_SECRET)`,
           path: ['TWITTER_API_KEY'],
         });
       }

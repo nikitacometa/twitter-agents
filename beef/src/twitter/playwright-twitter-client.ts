@@ -77,7 +77,7 @@ export class PlaywrightTwitterClient implements ITwitterClient {
         {
           headless: false,
           viewport: { width: 1440, height: 900 },
-          proxy: { server: this.config.proxyUrl },
+          proxy: this.parseProxy(this.config.proxyUrl),
           args: [
             '--no-sandbox',
             '--disable-setuid-sandbox',
@@ -86,7 +86,7 @@ export class PlaywrightTwitterClient implements ITwitterClient {
             '--restore-last-session',
           ],
           locale: 'en-US',
-          timezoneId: 'America/New_York',
+          timezoneId: 'Asia/Singapore',
         },
       );
 
@@ -320,6 +320,21 @@ export class PlaywrightTwitterClient implements ITwitterClient {
       await new Promise<void>((r) => setTimeout(r, 300));
     }
     return !this.busy;
+  }
+
+  /** Parse proxy URL into Playwright's proxy config format (separate server/username/password). */
+  private parseProxy(proxyUrl: string): { server: string; username?: string; password?: string } {
+    try {
+      const url = new URL(proxyUrl);
+      const server = `${url.protocol}//${url.hostname}${url.port ? `:${url.port}` : ''}`;
+      if (url.username) {
+        return { server, username: decodeURIComponent(url.username), password: decodeURIComponent(url.password) };
+      }
+      return { server };
+    } catch {
+      // Fallback: pass as-is if URL parsing fails
+      return { server: proxyUrl };
+    }
   }
 
   private isLoginRedirect(): boolean {
@@ -577,7 +592,7 @@ export class PlaywrightTwitterClient implements ITwitterClient {
   }
 
   private trackPost(): void {
-    const today = new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
+    const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Singapore' });
     if (this.dailyPostDate !== today) {
       this.dailyPostCount = 0;
       this.dailyPostDate = today;
