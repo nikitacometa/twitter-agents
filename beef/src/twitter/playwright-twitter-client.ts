@@ -49,6 +49,7 @@ export class PlaywrightTwitterClient implements ITwitterClient {
   private dailyPostDate = '';
   private busy = false;
   private _isLoggedIn = false;
+  private _shuttingDown = false;
 
   constructor(config: PlaywrightClientConfig) {
     this.config = config;
@@ -84,6 +85,7 @@ export class PlaywrightTwitterClient implements ITwitterClient {
             '--disable-setuid-sandbox',
             '--disable-blink-features=AutomationControlled',
             '--disable-dev-shm-usage',
+            '--restore-last-session',
           ],
           locale: 'en-US',
           timezoneId: 'America/New_York',
@@ -91,8 +93,9 @@ export class PlaywrightTwitterClient implements ITwitterClient {
       );
 
       this.context = context;
+      this.context.on('close', () => this.handleContextClose());
+      await this.context.addInitScript({ path: STEALTH_INIT_PATH });
       this.page = context.pages()[0] ?? await context.newPage();
-      await this.page.addInitScript({ path: STEALTH_INIT_PATH });
       this.page.setDefaultTimeout(SELECTOR_TIMEOUT);
       this.page.setDefaultNavigationTimeout(NAVIGATION_TIMEOUT);
 
@@ -135,12 +138,25 @@ export class PlaywrightTwitterClient implements ITwitterClient {
       return null;
     }
 
+    if (this.busy) {
+      this.logger.debug('postTweet waiting — another operation in progress');
+      if (!(await this.waitForIdle())) {
+        this.logger.warn('postTweet skipped — busy timeout exceeded');
+        return null;
+      }
+    }
     this.busy = true;
     try {
       await this.page.goto('https://x.com/compose/post', {
         waitUntil: 'domcontentloaded',
       });
       await this.humanDelay(2000, 4000);
+
+      if (this.isLoginRedirect()) {
+        this.logger.error('Session expired — redirected to login during postTweet');
+        this._isLoggedIn = false;
+        return null;
+      }
 
       // Type the tweet
       const textarea = this.page.locator('[data-testid="tweetTextarea_0"]');
@@ -191,6 +207,13 @@ export class PlaywrightTwitterClient implements ITwitterClient {
       return null;
     }
 
+    if (this.busy) {
+      this.logger.debug('replyToTweet waiting — another operation in progress');
+      if (!(await this.waitForIdle())) {
+        this.logger.warn('replyToTweet skipped — busy timeout exceeded');
+        return null;
+      }
+    }
     this.busy = true;
     try {
       // Navigate to the target tweet
@@ -198,6 +221,12 @@ export class PlaywrightTwitterClient implements ITwitterClient {
         waitUntil: 'domcontentloaded',
       });
       await this.humanDelay(2000, 5000);
+
+      if (this.isLoginRedirect()) {
+        this.logger.error({ replyToId }, 'Session expired — redirected to login during replyToTweet');
+        this._isLoggedIn = false;
+        return null;
+      }
 
       // Click reply button on the tweet
       const replyButton = this.page.locator('[data-testid="reply"]').first();
@@ -246,10 +275,21 @@ export class PlaywrightTwitterClient implements ITwitterClient {
   }
 
   async shutdown(): Promise<void> {
+    this._shuttingDown = true;
     if (this.healthCheckTimer) {
       clearInterval(this.healthCheckTimer);
       this.healthCheckTimer = null;
     }
+
+    // Wait for active posting operation to finish (max 30s)
+    const deadline = Date.now() + 30_000;
+    while (this.busy && Date.now() < deadline) {
+      await new Promise<void>((r) => setTimeout(r, 200));
+    }
+    if (this.busy) {
+      this.logger.warn('Shutdown deadline reached — closing browser with active operation');
+    }
+
     if (this.context) {
       await this.context.close();
       this.context = null;
@@ -260,6 +300,34 @@ export class PlaywrightTwitterClient implements ITwitterClient {
   }
 
   // ─── Private ────────────────────────────────────────────
+
+  /** Wait for busy flag to clear (max 15s). Returns true if idle, false on timeout. */
+  private async waitForIdle(): Promise<boolean> {
+    const deadline = Date.now() + 15_000;
+    while (this.busy && Date.now() < deadline) {
+      await new Promise<void>((r) => setTimeout(r, 300));
+    }
+    return !this.busy;
+  }
+
+  private isLoginRedirect(): boolean {
+    if (!this.page) return false;
+    const url = this.page.url();
+    return url.includes('/login') || url.includes('/i/flow/login') || url.includes('/account/access');
+  }
+
+  private handleContextClose(): void {
+    if (this._shuttingDown) return;
+    this.logger.error('Browser context closed unexpectedly — resetting state');
+    if (this.healthCheckTimer) {
+      clearInterval(this.healthCheckTimer);
+      this.healthCheckTimer = null;
+    }
+    this.context = null;
+    this.page = null;
+    this._isLoggedIn = false;
+    this.busy = false;
+  }
 
   private async checkLoggedIn(): Promise<boolean> {
     if (!this.page) return false;
