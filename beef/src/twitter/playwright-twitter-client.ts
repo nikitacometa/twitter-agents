@@ -14,8 +14,6 @@ const __dirname = dirname(__filename);
 
 const STEALTH_INIT_PATH = resolve(__dirname, '../../scripts/stealth-init.js');
 
-/** Delay per character when typing (ms). */
-const TYPING_DELAY_MS = 45;
 /** Timeout for page navigation (ms). */
 const NAVIGATION_TIMEOUT = 30_000;
 /** Timeout for element selectors (ms). */
@@ -163,7 +161,7 @@ export class PlaywrightTwitterClient implements ITwitterClient {
       await textarea.waitFor({ state: 'visible' });
       await this.hoverAndClick(textarea);
       await this.humanDelay(300, 800);
-      await textarea.pressSequentially(text, { delay: TYPING_DELAY_MS });
+      await this.humanType(text);
       await this.humanDelay(1000, 2500);
 
       // Intercept CreateTweet response before clicking
@@ -174,9 +172,15 @@ export class PlaywrightTwitterClient implements ITwitterClient {
       await this.humanDelay(2000, 4000);
 
       const tweetId = await this.extractTweetIdFromResponse(responsePromise);
-      this.trackPost();
+      if (!tweetId) {
+        this.logger.error('Tweet posting failed — no confirmed tweet ID');
+        return null;
+      }
+      if (!tweetId.startsWith('pw_unconfirmed_')) {
+        this.trackPost();
+      }
       this.logger.info(
-        { tweetId, charCount: text.length, dailyPosts: this.dailyPostCount },
+        { tweetId, charCount: text.length, dailyPosts: this.dailyPostCount, confirmed: !tweetId.startsWith('pw_unconfirmed_') },
         'Tweet posted via Playwright',
       );
       return { tweetId };
@@ -237,7 +241,9 @@ export class PlaywrightTwitterClient implements ITwitterClient {
       // Type the reply (character by character for realism)
       const textarea = this.page.locator('[data-testid="tweetTextarea_0"]');
       await textarea.waitFor({ state: 'visible' });
-      await textarea.pressSequentially(text, { delay: TYPING_DELAY_MS });
+      await this.hoverAndClick(textarea);
+      await this.humanDelay(300, 800);
+      await this.humanType(text);
       await this.humanDelay(1000, 3000);
 
       // Intercept CreateTweet response before clicking
@@ -248,9 +254,15 @@ export class PlaywrightTwitterClient implements ITwitterClient {
       await this.humanDelay(2000, 4000);
 
       const tweetId = await this.extractTweetIdFromResponse(responsePromise);
-      this.trackPost();
+      if (!tweetId) {
+        this.logger.error({ replyToId }, 'Reply posting failed — no confirmed tweet ID');
+        return null;
+      }
+      if (!tweetId.startsWith('pw_unconfirmed_')) {
+        this.trackPost();
+      }
       this.logger.info(
-        { tweetId, replyToId, charCount: text.length, dailyPosts: this.dailyPostCount },
+        { tweetId, replyToId, charCount: text.length, dailyPosts: this.dailyPostCount, confirmed: !tweetId.startsWith('pw_unconfirmed_') },
         'Reply posted via Playwright',
       );
       return { tweetId };
@@ -363,18 +375,20 @@ export class PlaywrightTwitterClient implements ITwitterClient {
 
   /**
    * Set up response interception for Twitter's CreateTweet GraphQL mutation.
-   * Must be called BEFORE clicking the post/reply button.
+   * Intercepts ALL statuses (not just 200) so we can distinguish real failures
+   * from timeouts. Must be called BEFORE clicking the post/reply button.
    */
-  private waitForCreateTweetResponse(): Promise<unknown> {
+  private waitForCreateTweetResponse(): Promise<{ status: number; json: unknown } | null> {
     if (!this.page) return Promise.resolve(null);
     return this.page.waitForResponse(
-      (resp) => resp.url().includes('CreateTweet') && resp.status() === 200,
+      (resp) => resp.url().includes('CreateTweet'),
       { timeout: CREATE_TWEET_RESPONSE_TIMEOUT },
     ).then(async (resp) => {
       try {
-        return await resp.json() as unknown;
+        const json = await resp.json() as unknown;
+        return { status: resp.status(), json };
       } catch {
-        return null;
+        return { status: resp.status(), json: null };
       }
     }).catch((error) => {
       this.logger.warn({ err: error }, 'CreateTweet response interception timed out');
@@ -384,18 +398,48 @@ export class PlaywrightTwitterClient implements ITwitterClient {
 
   /**
    * Extract tweet ID from intercepted CreateTweet GraphQL response.
-   * Falls back to timestamp-based ID if interception fails.
+   * Returns null if the tweet was not posted (non-200, error in body, timeout).
+   * Only returns a real tweet ID on confirmed success.
    */
-  private async extractTweetIdFromResponse(responsePromise: Promise<unknown>): Promise<string> {
-    const json = await responsePromise;
+  private async extractTweetIdFromResponse(
+    responsePromise: Promise<{ status: number; json: unknown } | null>,
+  ): Promise<string | null> {
+    const result = await responsePromise;
 
-    if (json && typeof json === 'object') {
+    // Network timeout — tweet may or may not have been posted.
+    // Return synthetic ID so QueueManager doesn't permanently fail the item,
+    // but callers should NOT call trackPost() for unconfirmed posts.
+    if (!result) {
+      this.logger.warn('CreateTweet interception timed out — tweet status unknown');
+      return `pw_unconfirmed_${Date.now()}`;
+    }
+
+    // Non-200 status — tweet was NOT posted
+    if (result.status !== 200) {
+      this.logger.error(
+        { status: result.status },
+        'CreateTweet returned non-200 — tweet not posted',
+      );
+      return null;
+    }
+
+    // 200 but check for errors in JSON body (Twitter sometimes does this)
+    if (result.json && typeof result.json === 'object') {
+      const data = result.json as Record<string, unknown>;
+
+      if ('errors' in data && Array.isArray(data['errors']) && data['errors'].length > 0) {
+        this.logger.error(
+          { errors: data['errors'] },
+          'CreateTweet returned 200 with errors in body — tweet not posted',
+        );
+        return null;
+      }
+
       // Navigate nested GraphQL response: data.create_tweet.tweet_results.result.rest_id
-      const data = json as Record<string, unknown>;
       const createTweet = (data['data'] as Record<string, unknown> | undefined);
       const tweetResults = (createTweet?.['create_tweet'] as Record<string, unknown> | undefined);
-      const result = (tweetResults?.['tweet_results'] as Record<string, unknown> | undefined);
-      const restId = (result?.['result'] as Record<string, unknown> | undefined)?.['rest_id'];
+      const restResult = (tweetResults?.['tweet_results'] as Record<string, unknown> | undefined);
+      const restId = (restResult?.['result'] as Record<string, unknown> | undefined)?.['rest_id'];
 
       if (typeof restId === 'string' && restId.length > 0) {
         return restId;
@@ -404,7 +448,7 @@ export class PlaywrightTwitterClient implements ITwitterClient {
       this.logger.warn({ responseKeys: Object.keys(data) }, 'CreateTweet response missing rest_id');
     }
 
-    return `pw_${Date.now()}`;
+    return null;
   }
 
   /**
@@ -455,6 +499,76 @@ export class PlaywrightTwitterClient implements ITwitterClient {
     await locator.hover();
     await this.humanDelay(100, 400);
     await locator.click();
+  }
+
+  // ─── Keystroke Dynamics ──────────────────────────────────
+  // Log-normal IKI distribution matching real human typing data.
+  // Based on Aalto University dataset (136M keystrokes, CHI 2018):
+  //   Mean IKI: 238.7ms, σ: 111.6ms, distribution: log-normal/log-logistic.
+  //   Fastest typists: IKI ~120ms, σ ~11ms. Physical minimum: ~60ms.
+  // FCaptcha v1.3 checks: KS-test for log-normality, lag-1 autocorrelation,
+  // Shannon entropy, burst regularity — uniform random fails all of these.
+
+  /** Common bigram pairs typed faster due to motor memory. */
+  private static readonly FAST_BIGRAMS = new Set([
+    'th', 'he', 'in', 'er', 'an', 're', 'on', 'at', 'en', 'nd',
+    'ti', 'es', 'or', 'te', 'of', 'ed', 'is', 'it', 'al', 'ar',
+    'st', 'to', 'nt', 'ng', 'se', 'ha', 'ou', 'io', 'le', 've',
+  ]);
+
+  /**
+   * Generate a log-normal random value using Box-Muller transform.
+   * Returns delay in milliseconds, clamped to [55, 650].
+   */
+  private logNormalIKI(mu: number, sigma: number): number {
+    // Box-Muller: two uniform randoms → one normal variate
+    const u1 = Math.random();
+    const u2 = Math.random();
+    const z = Math.sqrt(-2 * Math.log(u1 || 1e-10)) * Math.cos(2 * Math.PI * u2);
+    const value = Math.exp(mu + sigma * z);
+    // Clamp to physiologically plausible range
+    return Math.max(55, Math.min(650, value));
+  }
+
+  /**
+   * Type text character-by-character with human-like inter-key intervals.
+   *
+   * - Base WPM 50-65 (log-normal distribution, not uniform)
+   * - Word boundary pauses: space adds 80-200ms (motor planning)
+   * - Bigram acceleration: common pairs typed 30-40% faster
+   * - IKI clamped to [55ms, 650ms] — outside is physiologically implausible
+   */
+  private async humanType(text: string): Promise<void> {
+    if (!this.page) return;
+
+    // Log-normal parameters for ~55-65 WPM casual typing
+    // ln(180) ≈ 5.19, σ ≈ 0.35 gives mean ~190ms with natural spread
+    const mu = 5.19;
+    const sigma = 0.35;
+
+    let prevChar = '';
+    for (const char of text) {
+      let delay = this.logNormalIKI(mu, sigma);
+
+      // Word boundary: space/punctuation adds motor planning pause
+      if (char === ' ') {
+        delay += 80 + Math.random() * 120; // +80-200ms
+      } else if ('.!?,;:'.includes(char)) {
+        delay += 50 + Math.random() * 100; // +50-150ms (punctuation pause)
+      }
+
+      // Bigram acceleration: common pairs are typed faster
+      if (prevChar && PlaywrightTwitterClient.FAST_BIGRAMS.has((prevChar + char).toLowerCase())) {
+        delay *= 0.65 + Math.random() * 0.1; // 30-35% faster
+      }
+
+      // Final clamp after all adjustments
+      delay = Math.max(55, Math.min(650, delay));
+
+      await new Promise<void>((r) => setTimeout(r, delay));
+      await this.page.keyboard.type(char);
+      prevChar = char;
+    }
   }
 
   private async humanDelay(min: number, max: number): Promise<void> {
