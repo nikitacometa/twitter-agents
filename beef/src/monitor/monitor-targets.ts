@@ -97,32 +97,48 @@ export const MONITOR_TARGETS: readonly MonitorTarget[] = [
 
 const MAX_QUERY_LENGTH = 512;
 
-export function buildSearchBatches(targets: readonly MonitorTarget[]): string[][] {
-  const batches: string[][] = [];
-  let currentBatch: string[] = [];
+export interface SearchBatch {
+  handles: string[];
+  category: MonitorCategory;
+}
+
+export function buildSearchBatches(targets: readonly MonitorTarget[]): SearchBatch[] {
+  const baseTargets = targets.filter((t) => t.category === 'base');
+  const generalTargets = targets.filter((t) => t.category === 'general');
+
+  return [
+    ...buildCategoryBatches(baseTargets, 'base'),
+    ...buildCategoryBatches(generalTargets, 'general'),
+  ];
+}
+
+function buildCategoryBatches(targets: readonly MonitorTarget[], category: MonitorCategory): SearchBatch[] {
+  const batches: SearchBatch[] = [];
+  let currentHandles: string[] = [];
 
   for (const target of targets) {
-    const testQuery = buildSearchQuery([...currentBatch, target.handle]);
-    if (testQuery.length > MAX_QUERY_LENGTH && currentBatch.length > 0) {
-      batches.push(currentBatch);
-      currentBatch = [target.handle];
+    const testQuery = buildSearchQuery([...currentHandles, target.handle], category);
+    if (testQuery.length > MAX_QUERY_LENGTH && currentHandles.length > 0) {
+      batches.push({ handles: currentHandles, category });
+      currentHandles = [target.handle];
     } else {
-      currentBatch.push(target.handle);
+      currentHandles.push(target.handle);
     }
   }
 
-  if (currentBatch.length > 0) {
-    batches.push(currentBatch);
+  if (currentHandles.length > 0) {
+    batches.push({ handles: currentHandles, category });
   }
 
   return batches;
 }
 
-const QUERY_FILTERS = '-is:reply -is:retweet';
-
-export function buildSearchQuery(handles: string[]): string {
+export function buildSearchQuery(handles: string[], category: MonitorCategory): string {
   const fromClauses = handles.map((h) => `from:${h}`).join(' OR ');
-  return `(${fromClauses}) ${QUERY_FILTERS}`;
+  // Base accounts engage primarily via replies — include them for richer content
+  // General accounts (news, KOLs) — filter replies to get headlines only
+  const filters = category === 'base' ? '-is:retweet' : '-is:reply -is:retweet';
+  return `(${fromClauses}) ${filters}`;
 }
 
 export function buildTargetMap(targets: readonly MonitorTarget[]): Map<string, MonitorTarget> {

@@ -2,6 +2,7 @@ import type { Logger } from 'pino';
 import type { TwitterClient } from '@twitter/twitter-client.js';
 import type { ConfigRepository } from '@storage/repositories/config.repository.js';
 import type { MonitorRepository } from './monitor.repository.js';
+import type { SearchBatch } from './monitor-targets.js';
 import { MONITOR_TARGETS, buildSearchBatches, buildSearchQuery, buildTargetMap } from './monitor-targets.js';
 import type { ScoredTweet } from './tweet-scorer.js';
 import { scoreTweet } from './tweet-scorer.js';
@@ -24,7 +25,7 @@ export class TimelineMonitor {
   private readonly monitorChatId: number | string;
   private readonly logger: Logger;
   private readonly budgetCeiling: number;
-  private readonly batches: string[][];
+  private readonly batches: SearchBatch[];
   private readonly targetMap: Map<string, (typeof MONITOR_TARGETS)[number]>;
   private isRunning = false;
 
@@ -78,8 +79,8 @@ export class TimelineMonitor {
     const allScored: ScoredTweet[] = [];
 
     for (let batchIdx = 0; batchIdx < this.batches.length; batchIdx++) {
-      const handles = this.batches[batchIdx]!;
-      const query = buildSearchQuery(handles);
+      const batch = this.batches[batchIdx]!;
+      const query = buildSearchQuery(batch.handles, batch.category);
       const sinceIdKey = `monitor_since_id_batch_${String(batchIdx)}`;
       const sinceId = this.configRepo.get(sinceIdKey);
 
