@@ -577,7 +577,7 @@ export class PlaywrightTwitterClient implements ITwitterClient {
   }
 
   private trackPost(): void {
-    const today = new Date().toISOString().slice(0, 10);
+    const today = new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
     if (this.dailyPostDate !== today) {
       this.dailyPostCount = 0;
       this.dailyPostDate = today;

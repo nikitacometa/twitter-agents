@@ -15,7 +15,13 @@ const envSchema = z
     TWITTER_CLIENT_MODE: z.enum(['api', 'scraper', 'hybrid']).default('api'),
 
     // Proxy (ISP residential SOCKS5 for anti-detection)
-    PROXY_URL: z.string().optional(),
+    PROXY_URL: z
+      .string()
+      .transform((val) => (val.trim() === '' ? undefined : val))
+      .refine((val) => val === undefined || /^(https?|socks[45]):\/\/.+/.test(val), {
+        message: 'PROXY_URL must start with http://, https://, socks4://, or socks5://',
+      })
+      .optional(),
 
     // Playwright browser automation
     CHROME_PROFILE_PATH: z.string().optional(),
