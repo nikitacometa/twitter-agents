@@ -28,6 +28,7 @@ export class TimelineMonitor {
   private readonly budgetCeiling: number;
   private readonly batches: SearchBatch[];
   private readonly targetMap: Map<string, (typeof MONITOR_TARGETS)[number]>;
+  private readonly onNewTweets?: (tweets: ScoredTweet[]) => void;
   private isRunning = false;
 
   constructor(opts: {
@@ -38,6 +39,7 @@ export class TimelineMonitor {
     monitorChatId: number | string;
     logger: Logger;
     budgetCeiling?: number;
+    onNewTweets?: (tweets: ScoredTweet[]) => void;
   }) {
     this.twitter = opts.twitter;
     this.configRepo = opts.configRepo;
@@ -46,6 +48,7 @@ export class TimelineMonitor {
     this.monitorChatId = opts.monitorChatId;
     this.logger = opts.logger;
     this.budgetCeiling = opts.budgetCeiling ?? DEFAULT_BUDGET_CEILING;
+    this.onNewTweets = opts.onNewTweets;
     this.batches = buildSearchBatches(MONITOR_TARGETS);
     this.targetMap = buildTargetMap(MONITOR_TARGETS);
 
@@ -160,6 +163,15 @@ export class TimelineMonitor {
         );
       } catch (error) {
         this.logger.warn({ err: error }, 'Failed to send monitor digest');
+      }
+    }
+
+    // Fire reply-guy callback (non-blocking)
+    if (allScored.length > 0 && this.onNewTweets) {
+      try {
+        this.onNewTweets(allScored);
+      } catch (error) {
+        this.logger.warn({ err: error }, 'onNewTweets callback threw synchronously');
       }
     }
 

@@ -23,6 +23,7 @@ import { FarmAttemptRepository } from './storage/repositories/farm-attempt.repos
 import { TweetRepository } from './storage/repositories/tweet.repository.js';
 import { MetricsRepository } from './metrics/metrics.repository.js';
 import { TargetRepository } from './storage/repositories/target.repository.js';
+import type { ScoredTweet } from './monitor/tweet-scorer.js';
 import { ClaudeCodeProvider } from './agent/claude-code.provider.js';
 import { createCodexProvider } from './agent/codex.provider.js';
 import {
@@ -614,12 +615,57 @@ if (activityLogger) {
   });
 }
 
-// --- Timeline Monitor ---
+// --- Timeline Monitor + Reply Guy ---
 const monitorChatId = config.TELEGRAM_MONITOR_CHAT_ID ?? config.TELEGRAM_CHAT_ID;
+const adminChatId = config.TELEGRAM_CHAT_ID ?? config.TELEGRAM_ADMIN_IDS[0];
 if (twitter && 'searchRecentTweets' in twitter && config.TELEGRAM_BOT_TOKEN && monitorChatId) {
   const { TimelineMonitor } = await import('./monitor/timeline-monitor.js');
   const { MonitorRepository } = await import('./monitor/monitor.repository.js');
   const monitorRepo = new MonitorRepository(db);
+
+  // Reply Guy pipeline (optional, fire-and-forget from monitor)
+  let onNewTweets: ((tweets: ScoredTweet[]) => void) | undefined;
+
+  if (config.ENABLE_REPLY_GUY && provider && adminChatId && config.TELEGRAM_BOT_TOKEN) {
+    const { ReplyGuyPipeline } = await import('./reply-guy/reply-guy-pipeline.js');
+    const { ReplyGuyCandidateRepository } = await import('./reply-guy/reply-guy-candidate.repository.js');
+    const candidateRepo = new ReplyGuyCandidateRepository(db);
+
+    const replyGuy = new ReplyGuyPipeline({
+      provider,
+      twitterClient: twitter,
+      candidateRepo,
+      logger,
+      telegramToken: config.TELEGRAM_BOT_TOKEN,
+      adminChatId,
+      dryRun: config.REPLY_GUY_DRY_RUN,
+      selectorConfig: {
+        minScore: 12,
+        maxAgeMinutes: config.REPLY_GUY_MAX_AGE_MINUTES,
+        dailyCap: config.REPLY_GUY_DAILY_CAP,
+        minRoastability: config.REPLY_GUY_MIN_ROASTABILITY,
+        maxPerCycle: config.REPLY_GUY_MAX_PER_CYCLE,
+      },
+      feedbackRepo,
+      configRepo,
+      exampleRepo,
+      patternRepo,
+      stockpileRepo,
+      farmAttemptRepo,
+    });
+
+    onNewTweets = (tweets) => {
+      void replyGuy.processCycle(tweets).catch((err) =>
+        logger.error({ err }, 'Reply guy cycle failed'),
+      );
+    };
+
+    logger.info(
+      { dryRun: config.REPLY_GUY_DRY_RUN, dailyCap: config.REPLY_GUY_DAILY_CAP, minRoastability: config.REPLY_GUY_MIN_ROASTABILITY },
+      'Reply guy pipeline enabled',
+    );
+  }
+
   const monitor = new TimelineMonitor({
     twitter: twitter as TwitterClient,
     configRepo,
@@ -627,6 +673,7 @@ if (twitter && 'searchRecentTweets' in twitter && config.TELEGRAM_BOT_TOKEN && m
     telegramToken: config.TELEGRAM_BOT_TOKEN,
     monitorChatId,
     logger,
+    onNewTweets,
   });
 
   scheduler.register({

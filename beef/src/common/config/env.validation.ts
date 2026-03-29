@@ -134,8 +134,14 @@ const envSchema = z
       .enum(['true', 'false'])
       .default('false')
       .transform((v) => v === 'true'),
-    REPLY_GUY_INTERVAL_MINUTES: z.coerce.number().int().min(5).max(60).default(15),
-    REPLY_GUY_DAILY_CAP: z.coerce.number().int().min(5).max(100).default(50),
+    REPLY_GUY_DRY_RUN: z
+      .enum(['true', 'false'])
+      .default('true')
+      .transform((v) => v === 'true'),
+    REPLY_GUY_DAILY_CAP: z.coerce.number().int().min(5).max(100).default(40),
+    REPLY_GUY_MIN_ROASTABILITY: z.coerce.number().int().min(1).max(10).default(5),
+    REPLY_GUY_MAX_AGE_MINUTES: z.coerce.number().int().min(10).max(180).default(60),
+    REPLY_GUY_MAX_PER_CYCLE: z.coerce.number().int().min(1).max(10).default(3),
 
     ENABLE_LEARNING_LOOP: z
       .enum(['true', 'false'])
