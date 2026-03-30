@@ -28,7 +28,21 @@ export interface PlaywrightClientConfig {
   proxyUrl: string;
   dryRun: boolean;
   logger: Logger;
+  telegramToken?: string;
+  adminChatId?: number | string;
 }
+
+/** Circuit breaker: disable posting after consecutive failures, auto-reset after cooldown. */
+interface CircuitBreakerState {
+  consecutiveFailures: number;
+  firstFailureAt: number | null;
+  disabledUntil: number | null;
+  resetTimer: ReturnType<typeof setTimeout> | null;
+}
+
+const CIRCUIT_BREAKER_THRESHOLD = 3;
+const CIRCUIT_BREAKER_WINDOW_MS = 60 * 60 * 1000; // 1 hour
+const CIRCUIT_BREAKER_COOLDOWN_MS = 6 * 60 * 60 * 1000; // 6 hours
 
 /**
  * Twitter client using rebrowser-playwright for browser automation.
@@ -48,6 +62,12 @@ export class PlaywrightTwitterClient implements ITwitterClient {
   private busy = false;
   private _isLoggedIn = false;
   private _shuttingDown = false;
+  private circuitBreaker: CircuitBreakerState = {
+    consecutiveFailures: 0,
+    firstFailureAt: null,
+    disabledUntil: null,
+    resetTimer: null,
+  };
 
   constructor(config: PlaywrightClientConfig) {
     this.config = config;
@@ -131,6 +151,11 @@ export class PlaywrightTwitterClient implements ITwitterClient {
       return { tweetId: `dry_pw_${Date.now()}` };
     }
 
+    if (this.isDisabled) {
+      this.logger.warn('postTweet blocked — circuit breaker is active');
+      return null;
+    }
+
     if (!this.page) {
       this.logger.error('Cannot post — Playwright browser not initialized');
       return null;
@@ -153,6 +178,7 @@ export class PlaywrightTwitterClient implements ITwitterClient {
       if (this.isLoginRedirect()) {
         this.logger.error('Session expired — redirected to login during postTweet');
         this._isLoggedIn = false;
+        this.recordFailure();
         return null;
       }
 
@@ -174,10 +200,12 @@ export class PlaywrightTwitterClient implements ITwitterClient {
       const tweetId = await this.extractTweetIdFromResponse(responsePromise);
       if (!tweetId) {
         this.logger.error('Tweet posting failed — no confirmed tweet ID');
+        this.recordFailure();
         return null;
       }
       if (!tweetId.startsWith('pw_unconfirmed_')) {
         this.trackPost();
+        this.recordSuccess();
       }
       this.logger.info(
         { tweetId, charCount: text.length, dailyPosts: this.dailyPostCount, confirmed: !tweetId.startsWith('pw_unconfirmed_') },
@@ -186,6 +214,7 @@ export class PlaywrightTwitterClient implements ITwitterClient {
       return { tweetId };
     } catch (error) {
       this.logger.error({ err: error }, 'Failed to post tweet via Playwright');
+      this.recordFailure();
       return null;
     } finally {
       this.busy = false;
@@ -204,6 +233,11 @@ export class PlaywrightTwitterClient implements ITwitterClient {
         '[DRY RUN] Would reply via Playwright',
       );
       return { tweetId: `dry_pw_reply_${Date.now()}` };
+    }
+
+    if (this.isDisabled) {
+      this.logger.warn({ replyToId }, 'replyToTweet blocked — circuit breaker is active');
+      return null;
     }
 
     if (!this.page) {
@@ -229,6 +263,7 @@ export class PlaywrightTwitterClient implements ITwitterClient {
       if (this.isLoginRedirect()) {
         this.logger.error({ replyToId }, 'Session expired — redirected to login during replyToTweet');
         this._isLoggedIn = false;
+        this.recordFailure();
         return null;
       }
 
@@ -256,10 +291,12 @@ export class PlaywrightTwitterClient implements ITwitterClient {
       const tweetId = await this.extractTweetIdFromResponse(responsePromise);
       if (!tweetId) {
         this.logger.error({ replyToId }, 'Reply posting failed — no confirmed tweet ID');
+        this.recordFailure();
         return null;
       }
       if (!tweetId.startsWith('pw_unconfirmed_')) {
         this.trackPost();
+        this.recordSuccess();
       }
       this.logger.info(
         { tweetId, replyToId, charCount: text.length, dailyPosts: this.dailyPostCount, confirmed: !tweetId.startsWith('pw_unconfirmed_') },
@@ -268,6 +305,7 @@ export class PlaywrightTwitterClient implements ITwitterClient {
       return { tweetId };
     } catch (error) {
       this.logger.error({ err: error, replyToId }, 'Failed to reply via Playwright');
+      this.recordFailure();
       return null;
     } finally {
       this.busy = false;
@@ -291,6 +329,10 @@ export class PlaywrightTwitterClient implements ITwitterClient {
     if (this.healthCheckTimer) {
       clearInterval(this.healthCheckTimer);
       this.healthCheckTimer = null;
+    }
+    if (this.circuitBreaker.resetTimer) {
+      clearTimeout(this.circuitBreaker.resetTimer);
+      this.circuitBreaker.resetTimer = null;
     }
 
     // Wait for active posting operation to finish (max 30s)
@@ -381,10 +423,28 @@ export class PlaywrightTwitterClient implements ITwitterClient {
       this._isLoggedIn = await this.checkLoggedIn();
       if (!this._isLoggedIn) {
         this.logger.error('Twitter session expired — manual re-login required');
-        // TODO: send Telegram alert via admin bot
+        void this.sendSessionExpiryAlert();
       }
     } finally {
       this.busy = false;
+    }
+  }
+
+  private async sendSessionExpiryAlert(): Promise<void> {
+    const { telegramToken, adminChatId } = this.config;
+    if (!telegramToken || !adminChatId) return;
+    try {
+      await fetch(`https://api.telegram.org/bot${telegramToken}/sendMessage`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          chat_id: adminChatId,
+          text: '🔑 <b>Session expired</b>\n\nPlaywright lost Twitter login. Posting will fail until manual re-login via VNC.',
+          parse_mode: 'HTML',
+        }),
+      });
+    } catch {
+      this.logger.warn('Failed to send session expiry Telegram alert');
     }
   }
 
@@ -589,6 +649,81 @@ export class PlaywrightTwitterClient implements ITwitterClient {
   private async humanDelay(min: number, max: number): Promise<void> {
     const delay = min + Math.random() * (max - min);
     await new Promise<void>((resolve) => setTimeout(resolve, delay));
+  }
+
+  /** Whether the circuit breaker has tripped (too many consecutive failures). */
+  get isDisabled(): boolean {
+    const cb = this.circuitBreaker;
+    return cb.disabledUntil !== null && Date.now() < cb.disabledUntil;
+  }
+
+  /** Record a posting failure. Trips circuit breaker after CIRCUIT_BREAKER_THRESHOLD failures within the window. */
+  private recordFailure(): void {
+    const cb = this.circuitBreaker;
+    const now = Date.now();
+
+    // Reset counter if first failure was outside the window
+    if (cb.firstFailureAt && now - cb.firstFailureAt > CIRCUIT_BREAKER_WINDOW_MS) {
+      cb.consecutiveFailures = 0;
+      cb.firstFailureAt = null;
+    }
+
+    if (!cb.firstFailureAt) cb.firstFailureAt = now;
+    cb.consecutiveFailures++;
+
+    if (cb.consecutiveFailures >= CIRCUIT_BREAKER_THRESHOLD) {
+      cb.disabledUntil = now + CIRCUIT_BREAKER_COOLDOWN_MS;
+      this.logger.error(
+        { failures: cb.consecutiveFailures, cooldownHours: CIRCUIT_BREAKER_COOLDOWN_MS / 3_600_000 },
+        'Circuit breaker tripped — Playwright posting disabled',
+      );
+      void this.sendCircuitBreakerAlert(cb.consecutiveFailures);
+
+      // Auto-reset after cooldown
+      if (cb.resetTimer) clearTimeout(cb.resetTimer);
+      cb.resetTimer = setTimeout(() => {
+        this.resetCircuitBreaker();
+        this.logger.info('Circuit breaker auto-reset after cooldown');
+      }, CIRCUIT_BREAKER_COOLDOWN_MS);
+    }
+  }
+
+  /** Record a successful post — resets the consecutive failure counter. */
+  private recordSuccess(): void {
+    const cb = this.circuitBreaker;
+    cb.consecutiveFailures = 0;
+    cb.firstFailureAt = null;
+  }
+
+  /** Manually reset the circuit breaker (e.g. from admin command). */
+  resetCircuitBreaker(): void {
+    const cb = this.circuitBreaker;
+    cb.consecutiveFailures = 0;
+    cb.firstFailureAt = null;
+    cb.disabledUntil = null;
+    if (cb.resetTimer) {
+      clearTimeout(cb.resetTimer);
+      cb.resetTimer = null;
+    }
+  }
+
+  private async sendCircuitBreakerAlert(failures: number): Promise<void> {
+    const { telegramToken, adminChatId } = this.config;
+    if (!telegramToken || !adminChatId) return;
+    try {
+      const cooldownHours = CIRCUIT_BREAKER_COOLDOWN_MS / 3_600_000;
+      await fetch(`https://api.telegram.org/bot${telegramToken}/sendMessage`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          chat_id: adminChatId,
+          text: `🔴 <b>Circuit breaker tripped</b>\n\n${String(failures)} consecutive Playwright failures.\nPosting disabled for ${String(cooldownHours)}h.\n\nUse /replyguy reset to override.`,
+          parse_mode: 'HTML',
+        }),
+      });
+    } catch {
+      this.logger.warn('Failed to send circuit breaker Telegram alert');
+    }
   }
 
   private trackPost(): void {

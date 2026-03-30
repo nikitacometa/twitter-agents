@@ -93,12 +93,17 @@ export function formatLivePostMessage(
   pipelineType?: PipelineType,
   durationMs?: number,
   runnerUps?: RunnerUp[],
+  unconfirmed?: boolean,
 ): string {
   const t = candidate.tweet;
   const handleLink = `<a href="${t.tweetUrl}">@${escapeHtml(t.authorHandle)}</a>`;
   const tweetText = escapeHtml(t.text.length > 120 ? t.text.slice(0, 120) + '…' : t.text);
   const roast = escapeHtml(roastText);
-  const replyUrl = `https://x.com/0xBeefer/status/${postedTweetId}`;
+
+  const statusBadge = unconfirmed ? '⚠️ <b>UNCONFIRMED</b>' : '✅ <b>POSTED</b>';
+  const linkBlock = unconfirmed
+    ? '⚠️ Tweet may not have been posted (CreateTweet timeout)'
+    : `🔗 <a href="https://x.com/0xBeefer/status/${postedTweetId}">View reply</a>`;
 
   let runnerUpBlock = '';
   if (runnerUps && runnerUps.length > 0) {
@@ -107,12 +112,12 @@ export function formatLivePostMessage(
   }
 
   return (
-    `✅ <b>POSTED</b> · Reply Guy #${String(dailyCount)}/${String(dailyCap)}${formatPipelineBadge(pipelineType, durationMs)}\n\n` +
+    `${statusBadge} · Reply Guy #${String(dailyCount)}/${String(dailyCap)}${formatPipelineBadge(pipelineType, durationMs)}\n\n` +
     `💬 ${handleLink} · ${String(t.ageMinutes)}m ago\n` +
     `<i>"${tweetText}"</i>\n\n` +
     `🔥 <b>Reply:</b>\n` +
     `<code>${roast}</code>\n\n` +
-    `🔗 <a href="${replyUrl}">View reply</a>` +
+    linkBlock +
     runnerUpBlock
   );
 }

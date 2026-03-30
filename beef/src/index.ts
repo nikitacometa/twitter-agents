@@ -179,6 +179,7 @@ let twitter: ITwitterClient | undefined;
 let profileFetcher: IProfileFetcher | undefined;
 let twitterEnricher: TwitterEnricher | undefined;
 let mentionHandler: MentionHandler | undefined;
+let playwrightClientRef: PlaywrightTwitterClient | undefined;
 let engagementTracker: EngagementTracker | undefined;
 
 if (config.ENABLE_TWITTER) {
@@ -248,10 +249,13 @@ if (config.ENABLE_TWITTER) {
       proxyUrl: config.PROXY_URL,
       dryRun: config.DRY_RUN,
       logger,
+      telegramToken: config.TELEGRAM_BOT_TOKEN,
+      adminChatId: config.TELEGRAM_CHAT_ID ?? config.TELEGRAM_ADMIN_IDS[0],
     });
 
     try {
       await playwrightClient.initialize();
+      playwrightClientRef = playwrightClient;
       twitter = new HybridTwitterClient({ apiClient, playwrightClient, logger });
       profileFetcher = new CachedProfileFetcher({
         inner: apiClient,
@@ -655,10 +659,24 @@ if (twitter && 'searchRecentTweets' in twitter && config.TELEGRAM_BOT_TOKEN && m
       farmAttemptRepo,
     });
 
+    const replyGuyTelegramToken = config.TELEGRAM_BOT_TOKEN;
+    const replyGuyAdminChatId = adminChatId;
+
     onNewTweets = (tweets) => {
-      void replyGuy.processCycle(tweets).catch((err) =>
-        logger.error({ err }, 'Reply guy cycle failed'),
-      );
+      void replyGuy.processCycle(tweets).catch(async (err) => {
+        logger.error({ err }, 'Reply guy cycle failed');
+        try {
+          const { sendReplyGuyNotification } = await import('./reply-guy/reply-guy-notify.js');
+          const errMsg = err instanceof Error ? err.message : String(err);
+          await sendReplyGuyNotification(
+            replyGuyTelegramToken,
+            replyGuyAdminChatId,
+            `🚨 <b>Reply Guy cycle crashed</b>\n\n<code>${errMsg.slice(0, 500)}</code>`,
+          );
+        } catch {
+          // Telegram alert failed — already logged above
+        }
+      });
     };
 
     logger.info(
@@ -724,6 +742,7 @@ if (config.TELEGRAM_BOT_TOKEN) {
     metricsRepo,
     anthropicApiKey: config.ANTHROPIC_API_KEY,
     openaiApiKey: config.OPENAI_API_KEY,
+    resetCircuitBreaker: playwrightClientRef ? (() => { const pw = playwrightClientRef; pw?.resetCircuitBreaker(); }) : undefined,
   });
 
   void bot.start({

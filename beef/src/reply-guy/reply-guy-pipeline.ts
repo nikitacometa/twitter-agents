@@ -18,6 +18,7 @@ import type { TweetRoastContextInput } from '../roast/prompt-builder.js';
 import { formatDryRunMessage, formatLivePostMessage, sendReplyGuyNotification } from './reply-guy-notify.js';
 import type { RunnerUp } from './reply-guy-notify.js';
 import { routeCandidates } from './pipeline-router.js';
+import { isQuietHour } from '@scheduler/scheduler.js';
 
 const CYCLE_TIMEOUT_MS = 3 * 60 * 1000;
 
@@ -65,6 +66,18 @@ export class ReplyGuyPipeline {
     const result: CycleResult = { candidates: 0, evaluated: 0, winners: 0, generated: 0, notified: 0, errors: 0, maxUsed: 0 };
 
     try {
+      // 0a. Skip during quiet hours (UTC 5-10 — US sleeping, EU commuting)
+      if (isQuietHour()) {
+        this.config.logger.debug('Reply guy: skipping cycle — quiet hours');
+        return result;
+      }
+
+      // 0b. Kill-switch via Telegram /replyguy off
+      if (this.config.configRepo?.get('reply_guy_enabled') === 'false') {
+        this.config.logger.debug('Reply guy: skipping cycle — disabled via kill-switch');
+        return result;
+      }
+
       // 1. Hard filter
       const candidates = this.selector.filterCandidates(scoredTweets, this.config.selectorConfig);
       result.candidates = candidates.length;
@@ -248,7 +261,6 @@ export class ReplyGuyPipeline {
 
     const best = lightningResult.variants[0]!;
     candidateRepo.markGenerated(t.tweetId, best.text, best.score, 'lightning');
-    result.generated++;
 
     const runnerUps: RunnerUp[] = lightningResult.variants.slice(1, 3).map((v) => ({ text: v.text, score: v.score }));
     await this.postOrNotify(winner, tweetData, best.text, 'lightning', lightningResult.stats.durationMs, result, runnerUps);
@@ -277,7 +289,6 @@ export class ReplyGuyPipeline {
 
     const best = maxResult.variants[0]!;
     candidateRepo.markGenerated(t.tweetId, best.text, best.judgeScore, 'max');
-    result.generated++;
 
     logger.info(
       {
@@ -309,6 +320,7 @@ export class ReplyGuyPipeline {
 
     if (dryRun) {
       candidateRepo.markPosted(t.tweetId, null);
+      result.generated++;
 
       const html = formatDryRunMessage(
         winner,
@@ -331,7 +343,15 @@ export class ReplyGuyPipeline {
       const postResult = await twitterClient.replyToTweet(roastText, t.tweetId);
 
       if (postResult) {
-        candidateRepo.markPosted(t.tweetId, postResult.tweetId);
+        const isUnconfirmed = postResult.tweetId.startsWith('pw_unconfirmed_');
+
+        if (isUnconfirmed) {
+          // Don't count unconfirmed toward daily cap — mark as generated but not posted
+          logger.warn({ tweetId: t.tweetId, pwId: postResult.tweetId }, 'Reply guy: post unconfirmed — tweet may or may not exist');
+        } else {
+          candidateRepo.markPosted(t.tweetId, postResult.tweetId);
+          result.generated++;
+        }
         result.notified++;
 
         const html = formatLivePostMessage(
@@ -343,6 +363,7 @@ export class ReplyGuyPipeline {
           pipelineType,
           durationMs,
           runnerUps,
+          isUnconfirmed,
         );
         try {
           await sendReplyGuyNotification(this.config.telegramToken, this.config.adminChatId, html);
@@ -350,7 +371,7 @@ export class ReplyGuyPipeline {
           logger.warn({ err: error }, 'Reply guy: failed to send live post notification');
         }
       } else {
-        logger.error({ tweetId: t.tweetId }, 'Reply guy: replyToTweet returned null');
+        logger.error({ tweetId: t.tweetId }, 'Reply guy: replyToTweet returned null — posting failed');
         result.errors++;
       }
     }

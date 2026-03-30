@@ -171,6 +171,7 @@ export function createBot(opts: {
   metricsRepo?: MetricsRepository;
   anthropicApiKey?: string;
   openaiApiKey?: string;
+  resetCircuitBreaker?: () => void;
 }): Bot {
   const { token, adminIds, openAccess, feedbackRepo, provider, logger, queueManager, configRepo, exampleRepo, patternRepo, stockpileRepo, farmAttemptRepo, roastRepo, postingMode, pollMentions } = opts;
   const twitterUsername = opts.twitterUsername || '0xBeefer';
@@ -275,6 +276,7 @@ export function createBot(opts: {
         '<code>/approve on|off</code> — require approval for feed posts',
         '<code>/approve_mentions on|off</code> — require approval for mention replies',
         '<code>/pause</code> / <code>/resume</code> — toggle autonomous posting',
+        '<code>/replyguy on|off|reset|status</code> — reply-guy kill-switch',
         '',
         '<b>📊 Monitoring</b>',
         '<code>/status</code> — bot health, queue, stockpile',
@@ -4152,6 +4154,38 @@ If no contradictions found, return {"contradictions":[]}`;
         }
       }
     })();
+  });
+
+  // --- Reply Guy control ---
+  bot.command('replyguy', async (ctx) => {
+    if (!configRepo) {
+      await ctx.reply('⚠️ Config not available.');
+      return;
+    }
+    const arg = ctx.match?.trim().toLowerCase() ?? '';
+
+    if (arg === 'on') {
+      configRepo.set('reply_guy_enabled', 'true');
+      await ctx.reply('✅ Reply guy <b>enabled</b>.', { parse_mode: 'HTML' });
+    } else if (arg === 'off') {
+      configRepo.set('reply_guy_enabled', 'false');
+      await ctx.reply('⏸ Reply guy <b>disabled</b>.', { parse_mode: 'HTML' });
+    } else if (arg === 'reset') {
+      if (opts.resetCircuitBreaker) {
+        opts.resetCircuitBreaker();
+        await ctx.reply('🔄 Circuit breaker reset. Playwright posting re-enabled.');
+      } else {
+        await ctx.reply('⚠️ Circuit breaker not available (not in hybrid mode).');
+      }
+    } else if (arg === 'status' || arg === '') {
+      const enabled = configRepo.get('reply_guy_enabled') !== 'false';
+      await ctx.reply(
+        `🤖 <b>Reply Guy</b>\n\nEnabled: ${enabled ? '✅ yes' : '⏸ no'}\nUse <code>/replyguy on|off|reset</code>`,
+        { parse_mode: 'HTML' },
+      );
+    } else {
+      await ctx.reply('Usage: <code>/replyguy on|off|reset|status</code>', { parse_mode: 'HTML' });
+    }
   });
 
   return bot;
