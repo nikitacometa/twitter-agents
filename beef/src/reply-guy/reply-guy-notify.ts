@@ -26,6 +26,11 @@ function formatPipelineBadge(pipelineType?: PipelineType, durationMs?: number): 
   return ` · ${badge}${timing}`;
 }
 
+export interface RunnerUp {
+  text: string;
+  score: number;
+}
+
 export function formatDryRunMessage(
   candidate: EvaluatedCandidate,
   tweetData: TweetData | null,
@@ -34,6 +39,7 @@ export function formatDryRunMessage(
   dailyCap: number,
   pipelineType?: PipelineType,
   durationMs?: number,
+  runnerUps?: RunnerUp[],
 ): string {
   const t = candidate.tweet;
   const handleLink = `<a href="${t.tweetUrl}">@${escapeHtml(t.authorHandle)}</a>`;
@@ -52,13 +58,21 @@ export function formatDryRunMessage(
   const tweetText = escapeHtml(t.text.length > 200 ? t.text.slice(0, 200) + '…' : t.text);
   const roast = escapeHtml(roastText);
 
-  const spoiler = [
+  const spoilerParts = [
     `📊 Monitor: ${String(t.score)}pts · Roastability: ${String(candidate.roastability)}/10`,
     candidate.suggestedAngle ? `Angle: ${candidate.suggestedAngle}` : null,
     candidate.reasoning,
-  ]
-    .filter(Boolean)
-    .join('\n');
+  ];
+
+  if (runnerUps && runnerUps.length > 0) {
+    spoilerParts.push('');
+    spoilerParts.push('🥈🥉 Runner-ups:');
+    for (const ru of runnerUps) {
+      spoilerParts.push(`[${String(ru.score)}] ${ru.text}`);
+    }
+  }
+
+  const spoiler = spoilerParts.filter(Boolean).join('\n');
 
   return (
     `🏜 <b>DRY RUN</b> · Reply Guy #${String(dailyCount)}/${String(dailyCap)}${formatPipelineBadge(pipelineType, durationMs)}\n\n` +
@@ -78,6 +92,7 @@ export function formatLivePostMessage(
   dailyCap: number,
   pipelineType?: PipelineType,
   durationMs?: number,
+  runnerUps?: RunnerUp[],
 ): string {
   const t = candidate.tweet;
   const handleLink = `<a href="${t.tweetUrl}">@${escapeHtml(t.authorHandle)}</a>`;
@@ -85,13 +100,20 @@ export function formatLivePostMessage(
   const roast = escapeHtml(roastText);
   const replyUrl = `https://x.com/0xBeefer/status/${postedTweetId}`;
 
+  let runnerUpBlock = '';
+  if (runnerUps && runnerUps.length > 0) {
+    const lines = runnerUps.map((ru) => `[${String(ru.score)}] ${ru.text}`);
+    runnerUpBlock = `\n\n<tg-spoiler>🥈🥉 Runner-ups:\n${escapeHtml(lines.join('\n'))}</tg-spoiler>`;
+  }
+
   return (
     `✅ <b>POSTED</b> · Reply Guy #${String(dailyCount)}/${String(dailyCap)}${formatPipelineBadge(pipelineType, durationMs)}\n\n` +
     `💬 ${handleLink} · ${String(t.ageMinutes)}m ago\n` +
     `<i>"${tweetText}"</i>\n\n` +
     `🔥 <b>Reply:</b>\n` +
     `<code>${roast}</code>\n\n` +
-    `🔗 <a href="${replyUrl}">View reply</a>`
+    `🔗 <a href="${replyUrl}">View reply</a>` +
+    runnerUpBlock
   );
 }
 

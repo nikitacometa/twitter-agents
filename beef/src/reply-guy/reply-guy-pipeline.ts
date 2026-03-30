@@ -16,6 +16,7 @@ import { generateRoastsLightning, generateRoastsMax } from '../admin/roast-gener
 import { buildTweetRoastContext } from '../roast/prompt-builder.js';
 import type { TweetRoastContextInput } from '../roast/prompt-builder.js';
 import { formatDryRunMessage, formatLivePostMessage, sendReplyGuyNotification } from './reply-guy-notify.js';
+import type { RunnerUp } from './reply-guy-notify.js';
 import { routeCandidates } from './pipeline-router.js';
 
 const CYCLE_TIMEOUT_MS = 3 * 60 * 1000;
@@ -110,12 +111,20 @@ export class ReplyGuyPipeline {
       let maxPromise: Promise<void> | null = null;
       if (maxDecision) {
         result.maxUsed = 1;
-        maxPromise = this.processWinnerMax(maxDecision.candidate, result).catch((err: unknown) => {
-          result.errors++;
+        maxPromise = this.processWinnerMax(maxDecision.candidate, result).catch(async (err: unknown) => {
           this.config.logger.error(
             { err, tweetId: maxDecision.candidate.tweet.tweetId, author: maxDecision.candidate.tweet.authorHandle },
-            'Reply guy: Max processing failed',
+            'Reply guy: Max failed — falling back to Lightning',
           );
+          try {
+            await this.processWinnerLightning(maxDecision.candidate, result);
+          } catch (fallbackErr) {
+            result.errors++;
+            this.config.logger.error(
+              { err: fallbackErr, tweetId: maxDecision.candidate.tweet.tweetId },
+              'Reply guy: Lightning fallback also failed',
+            );
+          }
         });
       }
 
@@ -241,7 +250,8 @@ export class ReplyGuyPipeline {
     candidateRepo.markGenerated(t.tweetId, best.text, best.score, 'lightning');
     result.generated++;
 
-    await this.postOrNotify(winner, tweetData, best.text, 'lightning', lightningResult.stats.durationMs, result);
+    const runnerUps: RunnerUp[] = lightningResult.variants.slice(1, 3).map((v) => ({ text: v.text, score: v.score }));
+    await this.postOrNotify(winner, tweetData, best.text, 'lightning', lightningResult.stats.durationMs, result, runnerUps);
   }
 
   private async processWinnerMax(winner: EvaluatedCandidate, result: CycleResult): Promise<void> {
@@ -265,12 +275,6 @@ export class ReplyGuyPipeline {
       quick: true,
     });
 
-    if (maxResult.variants.length === 0) {
-      logger.warn({ tweetId: t.tweetId }, 'Reply guy: Max produced 0 variants — falling back to Lightning');
-      await this.processWinnerLightning(winner, result);
-      return;
-    }
-
     const best = maxResult.variants[0]!;
     candidateRepo.markGenerated(t.tweetId, best.text, best.judgeScore, 'max');
     result.generated++;
@@ -286,7 +290,8 @@ export class ReplyGuyPipeline {
       'Reply guy: Max generation complete',
     );
 
-    await this.postOrNotify(winner, tweetData, best.text, 'max', maxResult.stats.durationMs, result);
+    const runnerUps: RunnerUp[] = maxResult.variants.slice(1, 3).map((v) => ({ text: v.text, score: v.judgeScore }));
+    await this.postOrNotify(winner, tweetData, best.text, 'max', maxResult.stats.durationMs, result, runnerUps);
   }
 
   private async postOrNotify(
@@ -296,12 +301,15 @@ export class ReplyGuyPipeline {
     pipelineType: 'lightning' | 'max',
     durationMs: number,
     result: CycleResult,
+    runnerUps?: RunnerUp[],
   ): Promise<void> {
     const { twitterClient, candidateRepo, dryRun, logger } = this.config;
     const t = winner.tweet;
-    const dailyCount = candidateRepo.getTodayCount();
+    const dailyCount = candidateRepo.getTodayCount() + 1;
 
     if (dryRun) {
+      candidateRepo.markPosted(t.tweetId, null);
+
       const html = formatDryRunMessage(
         winner,
         tweetData,
@@ -310,11 +318,15 @@ export class ReplyGuyPipeline {
         this.config.selectorConfig.dailyCap,
         pipelineType,
         durationMs,
+        runnerUps,
       );
 
-      await sendReplyGuyNotification(this.config.telegramToken, this.config.adminChatId, html);
-      candidateRepo.markPosted(t.tweetId, null);
-      result.notified++;
+      try {
+        await sendReplyGuyNotification(this.config.telegramToken, this.config.adminChatId, html);
+        result.notified++;
+      } catch (error) {
+        logger.warn({ err: error }, 'Reply guy: failed to send dry-run notification');
+      }
     } else {
       const postResult = await twitterClient.replyToTweet(roastText, t.tweetId);
 
@@ -330,6 +342,7 @@ export class ReplyGuyPipeline {
           this.config.selectorConfig.dailyCap,
           pipelineType,
           durationMs,
+          runnerUps,
         );
         try {
           await sendReplyGuyNotification(this.config.telegramToken, this.config.adminChatId, html);
