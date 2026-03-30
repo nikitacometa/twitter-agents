@@ -69,6 +69,7 @@ Status: `[ ]` pending, `[~]` in progress, `[x]` done, `[!]` blocked
 ## Backlog: Autonomy
 
 [x] #B-44 — Reply-guy pipeline: fire-and-forget from monitor, hard filter + LLM eval + lightning roast, dry-run mode, 6 new files + migration 018. Deployed 2026-03-29
+[x] #B-46 — /roast_max command: 3 parallel pipelines (Opus+Sonnet+R+Sonnet) → cross-pipeline dedup → rankBatch → serious eval → top 3. prepareTweetContext extracted, variant count 10 for all pipelines. Shipped 2026-03-30
 [ ] #B-45 — Reply-guy live mode: switch REPLY_GUY_DRY_RUN=false, reduce cap to 20, raise min roastability to 7, verify Playwright posting
 [ ] #B-33 — Auto-farm cron: every 6h farm top 3-5 targets from timeline monitor, dedup 48h, stockpile low alert
 [ ] #B-34 — Auto-post from stockpile: every 3h post best entry (humanScore ≥ 4, buffer ≥ 5), max 3/day, notify after
