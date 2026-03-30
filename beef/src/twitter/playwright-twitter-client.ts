@@ -23,6 +23,13 @@ const HEALTH_CHECK_INTERVAL = 5 * 60 * 1000;
 /** Timeout for CreateTweet response interception (ms). */
 const CREATE_TWEET_RESPONSE_TIMEOUT = 15_000;
 
+export interface TwitterBrowserCookies {
+  authToken: string;
+  ct0: string;
+  twid: string;
+  kdt?: string;
+}
+
 export interface PlaywrightClientConfig {
   profilePath: string;
   proxyUrl: string;
@@ -30,6 +37,8 @@ export interface PlaywrightClientConfig {
   logger: Logger;
   telegramToken?: string;
   adminChatId?: number | string;
+  cookies?: TwitterBrowserCookies;
+  chromeExecutablePath?: string;
 }
 
 /** Circuit breaker: disable posting after consecutive failures, auto-reset after cooldown. */
@@ -92,22 +101,37 @@ export class PlaywrightTwitterClient implements ITwitterClient {
 
     let context: BrowserContext | null = null;
     try {
+      const launchOptions: Parameters<typeof chromium.launchPersistentContext>[1] = {
+        headless: false,
+        viewport: { width: 1440, height: 900 },
+        proxy: this.parseProxy(this.config.proxyUrl),
+        ignoreDefaultArgs: [
+          '--enable-automation',
+          '--disable-component-update',
+        ],
+        args: [
+          '--no-sandbox',
+          '--disable-setuid-sandbox',
+          '--disable-blink-features=AutomationControlled',
+          '--disable-dev-shm-usage',
+          '--disable-infobars',
+          '--no-first-run',
+          '--no-default-browser-check',
+        ],
+        locale: 'en-US',
+        timezoneId: 'Asia/Singapore',
+      };
+
+      // Prefer Chrome Stable over Playwright Chromium (real Google API keys, proper TLS fingerprint)
+      if (this.config.chromeExecutablePath) {
+        launchOptions.executablePath = this.config.chromeExecutablePath;
+      } else {
+        launchOptions.channel = 'chrome';
+      }
+
       context = await chromium.launchPersistentContext(
         this.config.profilePath,
-        {
-          headless: false,
-          viewport: { width: 1440, height: 900 },
-          proxy: this.parseProxy(this.config.proxyUrl),
-          args: [
-            '--no-sandbox',
-            '--disable-setuid-sandbox',
-            '--disable-blink-features=AutomationControlled',
-            '--disable-dev-shm-usage',
-            '--restore-last-session',
-          ],
-          locale: 'en-US',
-          timezoneId: 'Asia/Singapore',
-        },
+        launchOptions,
       );
 
       this.context = context;
@@ -117,10 +141,16 @@ export class PlaywrightTwitterClient implements ITwitterClient {
       this.page.setDefaultTimeout(SELECTOR_TIMEOUT);
       this.page.setDefaultNavigationTimeout(NAVIGATION_TIMEOUT);
 
-      // Verify session is alive
+      // Verify session — first from persistent profile, then from injected cookies
       this._isLoggedIn = await this.checkLoggedIn();
+      if (!this._isLoggedIn && this.config.cookies) {
+        this.logger.info('Session not found in profile — injecting cookies');
+        await this.injectCookies(this.config.cookies);
+        this._isLoggedIn = await this.checkLoggedIn();
+      }
+
       if (!this._isLoggedIn) {
-        this.logger.error('Playwright browser launched but NOT logged into Twitter — manual login required');
+        this.logger.error('Playwright browser launched but NOT logged into Twitter — provide valid cookies or login manually');
       } else {
         this.logger.info('Playwright Twitter client initialized — session active');
       }
@@ -428,6 +458,34 @@ export class PlaywrightTwitterClient implements ITwitterClient {
     } finally {
       this.busy = false;
     }
+  }
+
+  /** Inject browser cookies to establish Twitter session without login flow. */
+  private async injectCookies(cookies: TwitterBrowserCookies): Promise<void> {
+    if (!this.context) return;
+
+    const cookieEntries: Array<{
+      name: string;
+      value: string;
+      domain: string;
+      path: string;
+      secure: boolean;
+      httpOnly: boolean;
+      sameSite: 'None' | 'Lax' | 'Strict';
+    }> = [
+      { name: 'auth_token', value: cookies.authToken, domain: '.x.com', path: '/', secure: true, httpOnly: true, sameSite: 'None' },
+      { name: 'ct0', value: cookies.ct0, domain: '.x.com', path: '/', secure: true, httpOnly: false, sameSite: 'Lax' },
+      { name: 'twid', value: cookies.twid, domain: '.x.com', path: '/', secure: true, httpOnly: false, sameSite: 'None' },
+    ];
+    if (cookies.kdt) {
+      cookieEntries.push({ name: 'kdt', value: cookies.kdt, domain: '.x.com', path: '/', secure: true, httpOnly: true, sameSite: 'Lax' });
+    }
+
+    // Also set on .twitter.com for backward compatibility
+    const twitterDomainCookies = cookieEntries.map((c) => ({ ...c, domain: '.twitter.com' }));
+
+    await this.context.addCookies([...cookieEntries, ...twitterDomainCookies]);
+    this.logger.info({ cookieCount: cookieEntries.length }, 'Twitter cookies injected');
   }
 
   private async sendSessionExpiryAlert(): Promise<void> {

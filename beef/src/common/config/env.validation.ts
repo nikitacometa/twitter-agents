@@ -25,6 +25,13 @@ const envSchema = z
 
     // Playwright browser automation
     CHROME_PROFILE_PATH: z.string().optional(),
+    CHROME_EXECUTABLE_PATH: z.string().optional(),
+
+    // Twitter browser cookies (for Playwright session — avoids login flow)
+    TWITTER_AUTH_TOKEN: z.string().optional(),
+    TWITTER_CT0: z.string().optional(),
+    TWITTER_TWID: z.string().optional(),
+    TWITTER_KDT: z.string().optional(),
 
     // Twitter bot handle (without @) — used for mention filtering in API mode
     TWITTER_BOT_USERNAME: z.string().optional(),

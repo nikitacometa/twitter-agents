@@ -32,6 +32,7 @@ try {
 }
 
 // 5. window.chrome object (Twitter checks chrome.runtime)
+// With real Chrome Stable, window.chrome already exists — only patch if missing (Playwright Chromium fallback)
 if (!window.chrome) {
   window.chrome = {
     app: { isInstalled: false, getDetails: () => null, getIsInstalled: () => false },
@@ -42,6 +43,9 @@ if (!window.chrome) {
       sendMessage: () => {},
     },
   };
+} else if (window.chrome && !window.chrome.runtime) {
+  // Chrome exists but runtime missing (Edge, Electron, etc.)
+  window.chrome.runtime = { connect: () => {}, sendMessage: () => {} };
 }
 
 // 6. Permissions API — fix notifications query behavior

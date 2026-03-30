@@ -244,6 +244,10 @@ if (config.ENABLE_TWITTER) {
       logger,
     });
 
+    const browserCookies = config.TWITTER_AUTH_TOKEN && config.TWITTER_CT0 && config.TWITTER_TWID
+      ? { authToken: config.TWITTER_AUTH_TOKEN, ct0: config.TWITTER_CT0, twid: config.TWITTER_TWID, kdt: config.TWITTER_KDT }
+      : undefined;
+
     const playwrightClient = new PlaywrightTwitterClient({
       profilePath: config.CHROME_PROFILE_PATH,
       proxyUrl: config.PROXY_URL,
@@ -251,6 +255,8 @@ if (config.ENABLE_TWITTER) {
       logger,
       telegramToken: config.TELEGRAM_BOT_TOKEN,
       adminChatId: config.TELEGRAM_CHAT_ID ?? config.TELEGRAM_ADMIN_IDS[0],
+      cookies: browserCookies,
+      chromeExecutablePath: config.CHROME_EXECUTABLE_PATH,
     });
 
     try {
