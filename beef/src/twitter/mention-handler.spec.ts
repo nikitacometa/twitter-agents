@@ -1,12 +1,14 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import {
   extractTaggedHandle,
   classifyMention,
   extractTarget,
   isBareOrSimpleMention,
   shouldSkipThreadMention,
+  MentionHandler,
 } from './mention-handler.js';
 import type { MentionData } from './twitter-client.interface.js';
+import type { ITwitterClient } from './twitter-client.interface.js';
 
 describe('extractTaggedHandle', () => {
   const bot = 'BeefThis';
@@ -201,5 +203,114 @@ describe('shouldSkipThreadMention', () => {
   it('allows reply to bot even when conversation dedup is true (direct engagement)', () => {
     const m = mention({ parentAuthorName: '0xBeefer' });
     expect(shouldSkipThreadMention(m, 'reply', bot, true)).toBe(false);
+  });
+});
+
+describe('MentionHandler reply_to target (regression: must reply to mention tweet, not parent)', () => {
+  const BOT = '0xBeefer';
+
+  // Capture enqueued context strings to verify reply_to targets
+  function buildHandler(mentions: MentionData[]) {
+    const enqueuedContexts: string[] = [];
+
+    const twitter = {
+      isConfigured: true,
+      getMentions: vi.fn().mockResolvedValue(mentions),
+    } as unknown as ITwitterClient;
+
+    const mentionRepo = {
+      exists: vi.fn().mockReturnValue(false),
+      insert: vi.fn(),
+    };
+
+    const userRepo = { upsert: vi.fn(), incrementInteraction: vi.fn() };
+
+    const configRepo = {
+      getRuntime: vi.fn().mockReturnValue({ mentionSinceId: null }),
+      setMentionSinceId: vi.fn(),
+    };
+
+    const queueRepo = {
+      enqueue: vi.fn().mockImplementation((item: { context?: string }) => {
+        if (item.context) enqueuedContexts.push(item.context);
+        return 1;
+      }),
+    };
+
+    const logger = { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() };
+
+    const handler = new MentionHandler({
+      twitter,
+      mentionRepo: mentionRepo as never,
+      userRepo: userRepo as never,
+      configRepo: configRepo as never,
+      queueRepo: queueRepo as never,
+      logger: logger as never,
+      botUsername: BOT,
+    });
+
+    return { handler, enqueuedContexts };
+  }
+
+  it('handle roast: reply_to = mention tweet, not parent tweet', async () => {
+    // User replies to some third party's tweet and tags "@0xBeefer @elonmusk"
+    const { handler, enqueuedContexts } = buildHandler([{
+      tweetId: '200',         // the mention tweet
+      authorId: 'u1',
+      authorName: 'SomeUser',
+      text: '@0xBeefer @elonmusk',
+      inReplyToTweetId: '100', // parent tweet (NOT the target)
+      parentAuthorName: 'ThirdParty',
+    }]);
+
+    await handler.poll();
+    expect(enqueuedContexts).toHaveLength(1);
+    expect(enqueuedContexts[0]).toMatch(/^reply_to:200\|/);
+  });
+
+  it('explicit "roast @X": reply_to = mention tweet, not parent tweet', async () => {
+    const { handler, enqueuedContexts } = buildHandler([{
+      tweetId: '300',
+      authorId: 'u2',
+      authorName: 'Requester',
+      text: '@0xBeefer roast @vitalik',
+      inReplyToTweetId: '100',
+      parentAuthorName: 'ThirdParty',
+    }]);
+
+    await handler.poll();
+    expect(enqueuedContexts).toHaveLength(1);
+    expect(enqueuedContexts[0]).toMatch(/^reply_to:300\|/);
+  });
+
+  it('parent tweet roast (Scenario 2): reply_to = parent tweet (correct)', async () => {
+    // Bare "@0xBeefer" under someone's tweet → should reply to parent
+    const { handler, enqueuedContexts } = buildHandler([{
+      tweetId: '400',
+      authorId: 'u3',
+      authorName: 'AskingUser',
+      text: '@0xBeefer',
+      inReplyToTweetId: '100',
+      parentAuthorName: 'TargetAuthor',
+      parentTweetText: 'My portfolio is up 10000%',
+    }]);
+
+    await handler.poll();
+    expect(enqueuedContexts).toHaveLength(1);
+    expect(enqueuedContexts[0]).toMatch(/^reply_to:100\|/);
+  });
+
+  it('casual reply: reply_to = mention tweet', async () => {
+    // Standalone mention with no roast keyword and no tagged handle
+    const { handler, enqueuedContexts } = buildHandler([{
+      tweetId: '500',
+      authorId: 'u4',
+      authorName: 'RandomUser',
+      text: '@0xBeefer hey nice work today bro keep it up',
+    }]);
+
+    await handler.poll();
+    expect(enqueuedContexts).toHaveLength(1);
+    expect(enqueuedContexts[0]).toMatch(/^reply_to:500\|/);
   });
 });

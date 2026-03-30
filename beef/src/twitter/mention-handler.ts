@@ -177,15 +177,14 @@ export class MentionHandler {
       if (requestType === 'roast_request') {
         const target = extractTarget(m.text);
         if (target) {
-          // Scenario 1: explicit "roast @X" / "roast $TOKEN"
-          const replyTarget = m.inReplyToTweetId ?? m.tweetId;
+          // Scenario 1: explicit "roast @X" / "roast $TOKEN" — reply to the mention tweet, not its parent
           const convPart = m.conversationId ? `|conversation:${m.conversationId}` : '';
           this.queueRepo.enqueue({
             targetName: target,
             targetType: 'project',
             source: 'mention',
             priority: 3,
-            context: `reply_to:${replyTarget}|by:@${m.authorName}|mention:${m.tweetId}${convPart}`,
+            context: `reply_to:${m.tweetId}|by:@${m.authorName}|mention:${m.tweetId}${convPart}`,
           });
           queued = true;
           queueTarget = target;
@@ -335,8 +334,8 @@ export class MentionHandler {
 
   private enqueueHandleRoast(m: MentionData, handle: string, opts?: { roastMe?: boolean }): string {
     const targetName = `@${handle}`;
-    // Reply to parent tweet (if under someone's tweet) so the roast appears in that thread
-    const replyTarget = m.inReplyToTweetId ?? m.tweetId;
+    // Always reply to the mention tweet itself — the person who asked for the roast
+    const replyTarget = m.tweetId;
     const roastMeFlag = opts?.roastMe ? '|roast_me:1' : '';
     const convPart = m.conversationId ? `|conversation:${m.conversationId}` : '';
     this.queueRepo.enqueue({
