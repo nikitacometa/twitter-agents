@@ -244,6 +244,7 @@ export class PlaywrightTwitterClient implements ITwitterClient {
       return { tweetId };
     } catch (error) {
       this.logger.error({ err: error }, 'Failed to post tweet via Playwright');
+      await this.captureAndSendScreenshot('postTweet');
       this.recordFailure();
       return null;
     } finally {
@@ -335,6 +336,7 @@ export class PlaywrightTwitterClient implements ITwitterClient {
       return { tweetId };
     } catch (error) {
       this.logger.error({ err: error, replyToId }, 'Failed to reply via Playwright');
+      await this.captureAndSendScreenshot('replyToTweet', replyToId);
       this.recordFailure();
       return null;
     } finally {
@@ -791,5 +793,29 @@ export class PlaywrightTwitterClient implements ITwitterClient {
       this.dailyPostDate = today;
     }
     this.dailyPostCount++;
+  }
+
+  /** Capture a screenshot and send it to Telegram admin for debugging. */
+  private async captureAndSendScreenshot(context: string, tweetId?: string): Promise<void> {
+    try {
+      if (!this.page) return;
+      const buffer = await this.page.screenshot({ fullPage: false });
+      const { telegramToken, adminChatId } = this.config;
+      if (!telegramToken || !adminChatId) {
+        this.logger.warn('No Telegram config — screenshot not sent');
+        return;
+      }
+      const caption = `🖥 Playwright failure: ${context}${tweetId ? ` (tweet ${tweetId})` : ''}\nURL: ${this.page.url()}`;
+      const formData = new FormData();
+      formData.append('chat_id', String(adminChatId));
+      formData.append('caption', caption);
+      formData.append('photo', new Blob([new Uint8Array(buffer)], { type: 'image/png' }), 'screenshot.png');
+      await fetch(`https://api.telegram.org/bot${telegramToken}/sendPhoto`, {
+        method: 'POST',
+        body: formData,
+      });
+    } catch {
+      this.logger.warn('Failed to capture/send debug screenshot');
+    }
   }
 }
