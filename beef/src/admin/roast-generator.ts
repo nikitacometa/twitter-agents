@@ -363,7 +363,7 @@ export async function generateRoastsMax(opts: MaxCommonOpts): Promise<MaxRoastRe
   const opusPromise = raceTimeout(
     generateRoasts(
       targetName, provider, logger,
-      repoArgs.feedbackRepo, 'farm-generate', 3,
+      repoArgs.feedbackRepo, 'farm-generate', 10,
       repoArgs.configRepo, repoArgs.exampleRepo, repoArgs.patternRepo,
       imagePaths, profileContext,
       undefined, // evaluationMode = none
