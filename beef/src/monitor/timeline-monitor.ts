@@ -135,12 +135,11 @@ export class TimelineMonitor {
     // Sort by score desc, then freshness (lower age = better)
     allScored.sort((a, b) => b.score - a.score || a.ageMinutes - b.ageMinutes);
 
-    // Top N per section for digest: Base Posts (priority) → Base Replies (capped) → General
+    // Top N per section for digest: Base Posts (priority) → Base Replies (capped)
     const basePosts = allScored.filter((t) => t.category === 'base' && !t.isReply).slice(0, SECTION_TOP_N);
     const baseReplies = allScored.filter((t) => t.category === 'base' && t.isReply).slice(0, BASE_REPLIES_TOP_N);
-    const generalTweets = allScored.filter((t) => t.category === 'general').slice(0, SECTION_TOP_N);
-    const digestSet = new Set([...basePosts, ...baseReplies, ...generalTweets]);
-    const digest = [...basePosts, ...baseReplies, ...generalTweets];
+    const digestSet = new Set([...basePosts, ...baseReplies]);
+    const digest = [...basePosts, ...baseReplies];
     const rest = allScored.filter((t) => !digestSet.has(t));
 
     // Mark all as seen

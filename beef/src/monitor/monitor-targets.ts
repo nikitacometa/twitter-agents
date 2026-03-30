@@ -1,5 +1,5 @@
 export type MonitorTier = 'S' | 'A' | 'B' | 'C';
-export type MonitorCategory = 'base' | 'general';
+export type MonitorCategory = 'base';
 
 export interface MonitorTarget {
   handle: string;
@@ -76,38 +76,6 @@ export const MONITOR_TARGETS: readonly MonitorTarget[] = [
   { handle: 'ExtraFi_io', followersK: 20, tier: 'C', category: 'base' },
   { handle: 'overnight_fi', followersK: 20, tier: 'C', category: 'base' },
   { handle: 'AlienBaseDex', followersK: 11, tier: 'C', category: 'base' },
-
-  // ──────────────────────────────────────────────
-  // GENERAL CRYPTO — news, KOLs, analysts
-  // ──────────────────────────────────────────────
-
-  // S-tier General — massive reach
-  { handle: 'VitalikButerin', followersK: 5600, tier: 'S', category: 'general' },
-  { handle: 'CoinDesk', followersK: 2800, tier: 'S', category: 'general' },
-
-  // A-tier General — high-value crypto accounts
-  { handle: 'WatcherGuru', followersK: 3900, tier: 'A', category: 'general' },
-  { handle: 'Cointelegraph', followersK: 2500, tier: 'A', category: 'general' },
-  { handle: 'CryptoWizardd', followersK: 510, tier: 'A', category: 'general' },
-  { handle: 'AltcoinGordon', followersK: 700, tier: 'A', category: 'general' },
-  { handle: 'ZssBecker', followersK: 800, tier: 'A', category: 'general' },
-  { handle: 'arkham', followersK: 1529, tier: 'A', category: 'general' },
-  { handle: 'nansen_ai', followersK: 355, tier: 'A', category: 'general' },
-
-  // B-tier General — solid crypto voices
-  { handle: 'CryptoGodJohn', followersK: 1300, tier: 'B', category: 'general' },
-  { handle: 'DegenSpartan', followersK: 210, tier: 'B', category: 'general' },
-  { handle: 'lookonchain', followersK: 1500, tier: 'B', category: 'general' },
-  { handle: 'theblock__', followersK: 700, tier: 'B', category: 'general' },
-  { handle: 'zachxbt', followersK: 680, tier: 'B', category: 'general' },
-  { handle: 'DylanLeClair_', followersK: 380, tier: 'B', category: 'general' },
-
-  // C-tier General — niche analysts
-  { handle: 'AutismCapital', followersK: 490, tier: 'C', category: 'general' },
-  { handle: 'GCRClassic', followersK: 560, tier: 'C', category: 'general' },
-  { handle: 'HsakaTrades', followersK: 490, tier: 'C', category: 'general' },
-  { handle: 'tier10k', followersK: 320, tier: 'C', category: 'general' },
-  { handle: 'EmberCN', followersK: 150, tier: 'C', category: 'general' },
 ] as const;
 
 const MAX_QUERY_LENGTH = 512;
@@ -119,12 +87,8 @@ export interface SearchBatch {
 
 export function buildSearchBatches(targets: readonly MonitorTarget[]): SearchBatch[] {
   const baseTargets = targets.filter((t) => t.category === 'base');
-  const generalTargets = targets.filter((t) => t.category === 'general');
 
-  return [
-    ...buildCategoryBatches(baseTargets, 'base'),
-    ...buildCategoryBatches(generalTargets, 'general'),
-  ];
+  return buildCategoryBatches(baseTargets, 'base');
 }
 
 function buildCategoryBatches(targets: readonly MonitorTarget[], category: MonitorCategory): SearchBatch[] {
@@ -148,12 +112,9 @@ function buildCategoryBatches(targets: readonly MonitorTarget[], category: Monit
   return batches;
 }
 
-export function buildSearchQuery(handles: string[], category: MonitorCategory): string {
+export function buildSearchQuery(handles: string[], _category: MonitorCategory): string {
   const fromClauses = handles.map((h) => `from:${h}`).join(' OR ');
-  // Base accounts engage primarily via replies — include them for richer content
-  // General accounts (news, KOLs) — filter replies to get headlines only
-  const filters = category === 'base' ? '-is:retweet' : '-is:reply -is:retweet';
-  return `(${fromClauses}) ${filters}`;
+  return `(${fromClauses}) -is:retweet`;
 }
 
 export function buildTargetMap(targets: readonly MonitorTarget[]): Map<string, MonitorTarget> {

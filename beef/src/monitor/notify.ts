@@ -38,14 +38,12 @@ export function formatMonitorDigest(tweets: ScoredTweet[]): string[] {
 
   const basePosts = tweets.filter((t) => t.category === 'base' && !t.isReply);
   const baseReplies = tweets.filter((t) => t.category === 'base' && t.isReply);
-  const generalTweets = tweets.filter((t) => t.category === 'general');
 
   const header = `📊 <b>Monitor Digest</b> — ${String(tweets.length)} tweet${tweets.length > 1 ? 's' : ''}`;
   const basePostSection = formatSection('🔵 BASE ECOSYSTEM', basePosts);
   const baseReplySection = formatSection('💬 BASE REPLIES', baseReplies);
-  const generalSection = formatSection('🌐 GENERAL CRYPTO', generalTweets);
 
-  const fullMessage = header + basePostSection + baseReplySection + generalSection;
+  const fullMessage = header + basePostSection + baseReplySection;
 
   // Split into chunks if exceeds Telegram limit
   if (fullMessage.length <= TELEGRAM_MAX_LENGTH - 100) {
@@ -59,10 +57,6 @@ export function formatMonitorDigest(tweets: ScoredTweet[]): string[] {
   }
   if (baseReplies.length > 0) {
     messages.push(baseReplySection.trim());
-  }
-  if (generalTweets.length > 0) {
-    const genHeader = basePosts.length > 0 || baseReplies.length > 0 ? '' : header + '\n';
-    messages.push(genHeader + generalSection);
   }
 
   return messages;
