@@ -603,7 +603,7 @@ export function createBot(opts: {
         updateStatus(`⚡ Generating roasts for <b>${escapeHtml(targetName)}</b>...`);
 
         const output = await generateRoasts(
-          targetName, provider, logger, feedbackRepo, 'farm-generate', 3,
+          targetName, provider, logger, feedbackRepo, 'farm-generate', 10,
           configRepo, exampleRepo, patternRepo,
           imagePaths.length > 0 ? imagePaths : undefined,
           profileContext,
@@ -718,7 +718,7 @@ export function createBot(opts: {
         { parse_mode: 'HTML' },
       ).catch(() => {});
 
-      const variants = flags.variants ?? 3;
+      const variants = flags.variants ?? 10;
       const evalMode = flags.eval ? 'quick' as const : undefined;
       const mutations = flags.mutate ? (flags.mutations ?? 1) : undefined;
 
@@ -831,7 +831,7 @@ export function createBot(opts: {
     }
 
     // --- Mode 4: Freeform target ---
-    const variants = flags.variants ?? 3;
+    const variants = flags.variants ?? 10;
     const evalMode = flags.eval ? 'quick' as const : undefined;
     const mutations = flags.mutate ? (flags.mutations ?? 1) : undefined;
 
@@ -3562,7 +3562,7 @@ export function createBot(opts: {
       void (async () => {
         try {
           const output = await generateRoasts(
-            storedCtx.targetName, provider, logger, feedbackRepo, 'farm-generate', 3,
+            storedCtx.targetName, provider, logger, feedbackRepo, 'farm-generate', 10,
             configRepo, exampleRepo, patternRepo,
             storedCtx.imagePaths.length > 0 ? storedCtx.imagePaths : undefined,
             storedCtx.profileContext,
