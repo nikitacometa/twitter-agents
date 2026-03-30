@@ -24,7 +24,7 @@ Status: `[ ]` pending, `[~]` in progress, `[x]` done, `[!]` blocked
 
 ## Backlog: Pre-Server-Deploy (critical)
 
-[ ] #B-1 — ISP proxy setup (Decodo ~$3-5/мес) + PROXY_URL in env schema + wire into scraper
+[x] #B-1 — ISP proxy setup: Decodo static residential (3 IPs: SG×2 + HK×1), PROXY_URL validated in env schema, HybridTwitterClient wired in index.ts. Shipped 2026-03-29
 [ ] #B-2 — DB backup cron on VPS
 [x] #B-3 — Replace auto re-login with Telegram alert on cookie expiry
 [ ] #B-4 — Circuit breaker for Error 226 (3x/1h → disable 6h → Telegram alert)
@@ -68,6 +68,8 @@ Status: `[ ]` pending, `[~]` in progress, `[x]` done, `[!]` blocked
 
 ## Backlog: Autonomy
 
+[x] #B-44 — Reply-guy pipeline: fire-and-forget from monitor, hard filter + LLM eval + lightning roast, dry-run mode, 6 new files + migration 018. Deployed 2026-03-29
+[ ] #B-45 — Reply-guy live mode: switch REPLY_GUY_DRY_RUN=false, reduce cap to 20, raise min roastability to 7, verify Playwright posting
 [ ] #B-33 — Auto-farm cron: every 6h farm top 3-5 targets from timeline monitor, dedup 48h, stockpile low alert
 [ ] #B-34 — Auto-post from stockpile: every 3h post best entry (humanScore ≥ 4, buffer ≥ 5), max 3/day, notify after
 [ ] #B-35 — Smart reply autonomy: stratify by follower count (<1K auto, 1-10K auto if eval ≥ 4.0, >10K require approval)
