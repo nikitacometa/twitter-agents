@@ -178,7 +178,7 @@ const DEFAULT_PRESETS: Record<TaskProfile, TaskPreset> = {
     effort: 'medium',
     tools: LIGHT_RESEARCH_TOOLS,
     maxTurns: 3,
-    timeoutMs: 75_000,
+    timeoutMs: 180_000,
     fallbackModel: 'haiku',
   },
 };

@@ -576,9 +576,11 @@ export async function generateRoastsMax(opts: MaxCommonOpts): Promise<MaxRoastRe
         }
       }
 
-      // Re-sort top5 by serious eval score, then merge back
+      // Merge serious-eval'd variants back, then re-sort entire array
+      // so vetoed variants (score=0) sink below rankBatch-scored ones
       top5.sort((a, b) => b.judgeScore - a.judgeScore);
       ranked.splice(0, top5.length, ...top5);
+      ranked.sort((a, b) => b.judgeScore - a.judgeScore);
     } catch (err) {
       logger.warn({ err }, 'Max serious evaluation failed, keeping rankBatch scores');
     }
