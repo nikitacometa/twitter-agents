@@ -3,6 +3,7 @@ import type { Logger } from 'pino';
 import type { TweetMetrics } from '@common/types/index.js';
 import type { ITwitterClient, IProfileFetcher, TwitterProfile, PostResult, MentionData, TweetData, FollowUserResult, SearchTweetResult } from './twitter-client.interface.js';
 import { retryWithBackoff, NonRetryableError, getErrorMessage } from '@common/utils/error.util.js';
+import { expandTcoUrls } from '@common/utils/tweet-text.js';
 
 export interface TwitterCredentials {
   apiKey: string;
@@ -170,7 +171,7 @@ export class TwitterClient implements ITwitterClient, IProfileFetcher {
         this.cachedUserId = me.data.id;
       }
       const params: Record<string, string> = {
-        'tweet.fields': 'author_id,created_at,referenced_tweets,attachments,conversation_id',
+        'tweet.fields': 'author_id,created_at,referenced_tweets,attachments,conversation_id,note_tweet,entities',
         'user.fields': 'username',
         'media.fields': 'url,type,preview_image_url',
         expansions: 'author_id,referenced_tweets.id,referenced_tweets.id.author_id,attachments.media_keys',
@@ -196,12 +197,14 @@ export class TwitterClient implements ITwitterClient, IProfileFetcher {
         }
       }
 
-      // Index referenced tweets for parent tweet lookup
+      // Index referenced tweets for parent tweet lookup (with note_tweet support)
       const refTweets = new Map<string, { text: string; author_id?: string; mediaKeys?: string[] }>();
       if (mentions.includes?.tweets) {
         for (const t of mentions.includes.tweets) {
+          const rawText = t.note_tweet?.text ?? t.text;
+          const urlEntities = t.note_tweet?.entities?.urls ?? t.entities?.urls;
           refTweets.set(t.id, {
-            text: t.text,
+            text: expandTcoUrls(rawText, urlEntities),
             author_id: t.author_id,
             mediaKeys: t.attachments?.media_keys,
           });
@@ -211,11 +214,15 @@ export class TwitterClient implements ITwitterClient, IProfileFetcher {
       const results: MentionData[] = [];
 
       for (const tweet of mentions.data?.data ?? []) {
+        // Use note_tweet.text for long mentions, expand t.co URLs
+        const rawMentionText = tweet.note_tweet?.text ?? tweet.text;
+        const mentionUrlEntities = tweet.note_tweet?.entities?.urls ?? tweet.entities?.urls;
+
         const mention: MentionData = {
           tweetId: tweet.id,
           authorId: tweet.author_id ?? 'unknown',
           authorName: users.get(tweet.author_id ?? '') ?? 'unknown',
-          text: tweet.text,
+          text: expandTcoUrls(rawMentionText, mentionUrlEntities),
           conversationId: (tweet as unknown as Record<string, unknown>).conversation_id as string | undefined,
         };
 
@@ -296,7 +303,7 @@ export class TwitterClient implements ITwitterClient, IProfileFetcher {
     try {
       const response = await this.client.v2.singleTweet(tweetId, {
         expansions: ['author_id', 'attachments.media_keys', 'referenced_tweets.id'],
-        'tweet.fields': ['text', 'author_id', 'public_metrics', 'created_at', 'referenced_tweets'],
+        'tweet.fields': ['text', 'note_tweet', 'entities', 'author_id', 'public_metrics', 'created_at', 'referenced_tweets'],
         'user.fields': ['username'],
         'media.fields': ['url', 'type', 'preview_image_url'],
       });
@@ -308,19 +315,25 @@ export class TwitterClient implements ITwitterClient, IProfileFetcher {
         .map((m) => m.url ?? m.preview_image_url)
         .filter((u): u is string => !!u);
 
+      // Use note_tweet.text for long-form tweets (>280 chars), fall back to text
+      const rawText = tweet.note_tweet?.text ?? tweet.text;
+      // Expand t.co URLs using entities (note_tweet entities take priority)
+      const urlEntities = tweet.note_tweet?.entities?.urls ?? tweet.entities?.urls;
+      const text = expandTcoUrls(rawText, urlEntities);
+
       const metrics = tweet.public_metrics;
       const refs = tweet.referenced_tweets;
       const replyRef = refs?.find((r) => r.type === 'replied_to');
       const quoteRef = refs?.find((r) => r.type === 'quoted');
 
       this.trackRead();
-      this.logger.info({ tweetId, author: author?.username }, 'Tweet fetched via API');
+      this.logger.info({ tweetId, author: author?.username, noteExpanded: !!tweet.note_tweet }, 'Tweet fetched via API');
 
       return {
         tweetId: tweet.id,
         authorId: tweet.author_id ?? 'unknown',
         authorName: author?.username ?? 'unknown',
-        text: tweet.text,
+        text,
         mediaUrls: mediaUrls.length > 0 ? mediaUrls : undefined,
         likes: metrics?.like_count,
         retweets: metrics?.retweet_count,
@@ -356,9 +369,12 @@ export class TwitterClient implements ITwitterClient, IProfileFetcher {
         const timeline = await this.client.v2.userTimeline(user.data.id, {
           max_results: 5,
           exclude: ['replies', 'retweets'],
+          'tweet.fields': ['text', 'note_tweet', 'entities'],
         });
         for (const tweet of timeline.data?.data ?? []) {
-          recentTweets.push(tweet.text);
+          const fullText = tweet.note_tweet?.text ?? tweet.text;
+          const urls = tweet.note_tweet?.entities?.urls ?? tweet.entities?.urls;
+          recentTweets.push(expandTcoUrls(fullText, urls));
         }
       } catch {
         this.logger.debug({ username }, 'Failed to fetch user timeline — continuing without');
@@ -391,7 +407,7 @@ export class TwitterClient implements ITwitterClient, IProfileFetcher {
       async () => {
         try {
           const params: Record<string, string | number> = {
-            'tweet.fields': 'author_id,created_at',
+            'tweet.fields': 'author_id,created_at,note_tweet,entities',
             expansions: 'author_id',
             'user.fields': 'username',
             max_results: maxResults,
@@ -410,11 +426,13 @@ export class TwitterClient implements ITwitterClient, IProfileFetcher {
 
           const results: SearchTweetResult[] = [];
           for (const tweet of paginator.data?.data ?? []) {
+            const rawText = tweet.note_tweet?.text ?? tweet.text;
+            const urlEntities = tweet.note_tweet?.entities?.urls ?? tweet.entities?.urls;
             results.push({
               tweetId: tweet.id,
               authorId: tweet.author_id ?? 'unknown',
               authorUsername: users.get(tweet.author_id ?? '') ?? 'unknown',
-              text: tweet.text,
+              text: expandTcoUrls(rawText, urlEntities),
               createdAt: tweet.created_at ?? new Date().toISOString(),
             });
           }

@@ -8,6 +8,7 @@ import type { Logger } from 'pino';
 import type { TweetMetrics } from '@common/types/index.js';
 import type { ITwitterClient, IProfileFetcher, TwitterProfile, PostResult, MentionData, TweetData } from './twitter-client.interface.js';
 import { CookieStore } from './cookie-store.js';
+import { expandTcoUrls, expandTcoUrlsByPosition } from '@common/utils/tweet-text.js';
 import { retryWithBackoff, NonRetryableError } from '@common/utils/error.util.js';
 
 export interface ScraperCredentials {
@@ -351,7 +352,7 @@ export class ScraperTwitterClient implements ITwitterClient, IProfileFetcher {
       const tweets = this.scraper.getTweets(username, 5);
       for await (const tweet of tweets) {
         if (isCancelled?.()) break;
-        if (tweet.text) recentTweets.push(tweet.text);
+        if (tweet.text) recentTweets.push(expandTcoUrlsByPosition(tweet.text, tweet.urls));
         if (recentTweets.length >= 5) break;
       }
     } catch (err) {
@@ -463,13 +464,20 @@ export class ScraperTwitterClient implements ITwitterClient, IProfileFetcher {
       throw new Error(`notifications/all returned ${resp.status}`);
     }
 
+    interface NotifUrlEntity {
+      url?: string;
+      expanded_url?: string;
+    }
     interface NotifTweet {
       id_str: string;
       user_id_str: string;
       full_text?: string;
       in_reply_to_status_id_str?: string;
       conversation_id_str?: string;
-      entities?: { media?: Array<{ media_url_https?: string; type?: string }> };
+      entities?: {
+        media?: Array<{ media_url_https?: string; type?: string }>;
+        urls?: NotifUrlEntity[];
+      };
       extended_entities?: { media?: Array<{ media_url_https?: string; type?: string }> };
     }
 
@@ -503,7 +511,7 @@ export class ScraperTwitterClient implements ITwitterClient, IProfileFetcher {
         tweetId,
         authorId: tweet.user_id_str,
         authorName: user?.screen_name ?? 'unknown',
-        text: tweet.full_text,
+        text: expandTcoUrls(tweet.full_text, tweet.entities?.urls),
         conversationId: tweet.conversation_id_str,
       };
 
@@ -513,7 +521,7 @@ export class ScraperTwitterClient implements ITwitterClient, IProfileFetcher {
         mention.inReplyToTweetId = parentId;
         const parentTweet = tweets[parentId];
         if (parentTweet?.full_text) {
-          mention.parentTweetText = parentTweet.full_text;
+          mention.parentTweetText = expandTcoUrls(parentTweet.full_text, parentTweet.entities?.urls);
           const parentUser = users[parentTweet.user_id_str];
           if (parentUser) {
             mention.parentAuthorName = parentUser.screen_name;
@@ -540,7 +548,7 @@ export class ScraperTwitterClient implements ITwitterClient, IProfileFetcher {
       try {
         const parentTweet = await this.scraper.getTweet(mention.inReplyToTweetId!);
         if (parentTweet) {
-          mention.parentTweetText = parentTweet.text ?? undefined;
+          mention.parentTweetText = expandTcoUrlsByPosition(parentTweet.text ?? '', parentTweet.urls) || undefined;
           mention.parentAuthorName = parentTweet.username ?? undefined;
           const photos = parentTweet.photos?.map((p) => p.url).filter(Boolean);
           if (photos && photos.length > 0) {
@@ -625,13 +633,20 @@ export class ScraperTwitterClient implements ITwitterClient, IProfileFetcher {
       return [];
     }
 
+    interface SearchUrlEntity {
+      url?: string;
+      expanded_url?: string;
+    }
     interface SearchTweet {
       id_str: string;
       user_id_str: string;
       full_text?: string;
       in_reply_to_status_id_str?: string;
       conversation_id_str?: string;
-      entities?: { media?: Array<{ media_url_https?: string; type?: string }> };
+      entities?: {
+        media?: Array<{ media_url_https?: string; type?: string }>;
+        urls?: SearchUrlEntity[];
+      };
       extended_entities?: { media?: Array<{ media_url_https?: string; type?: string }> };
     }
 
@@ -658,7 +673,7 @@ export class ScraperTwitterClient implements ITwitterClient, IProfileFetcher {
         tweetId,
         authorId: tweet.user_id_str,
         authorName: user?.screen_name ?? 'unknown',
-        text: tweet.full_text,
+        text: expandTcoUrls(tweet.full_text, tweet.entities?.urls),
         conversationId: tweet.conversation_id_str,
       };
 
@@ -667,7 +682,7 @@ export class ScraperTwitterClient implements ITwitterClient, IProfileFetcher {
         mention.inReplyToTweetId = parentId;
         const parentTweet = tweets[parentId];
         if (parentTweet?.full_text) {
-          mention.parentTweetText = parentTweet.full_text;
+          mention.parentTweetText = expandTcoUrls(parentTweet.full_text, parentTweet.entities?.urls);
           const parentUser = users[parentTweet.user_id_str];
           if (parentUser) mention.parentAuthorName = parentUser.screen_name;
           const media = parentTweet.extended_entities?.media ?? parentTweet.entities?.media;
@@ -689,7 +704,7 @@ export class ScraperTwitterClient implements ITwitterClient, IProfileFetcher {
       try {
         const parentTweet = await this.scraper.getTweet(mention.inReplyToTweetId!);
         if (parentTweet) {
-          mention.parentTweetText = parentTweet.text ?? undefined;
+          mention.parentTweetText = expandTcoUrlsByPosition(parentTweet.text ?? '', parentTweet.urls) || undefined;
           mention.parentAuthorName = parentTweet.username ?? undefined;
           const photos = parentTweet.photos?.map((p) => p.url).filter(Boolean);
           if (photos && photos.length > 0) mention.parentMediaUrls = photos;
@@ -713,6 +728,10 @@ export class ScraperTwitterClient implements ITwitterClient, IProfileFetcher {
       if (!tweet) return null;
 
       const mediaUrls = tweet.photos?.map((p) => p.url).filter(Boolean) as string[] | undefined;
+      // Scraper handles note_tweet internally (full_text override).
+      // Expand t.co URLs using the scraper's expanded urls array.
+      const rawText = tweet.text ?? '';
+      const expandedText = expandTcoUrlsByPosition(rawText, tweet.urls);
 
       this.logger.info({ tweetId, author: tweet.username }, 'Tweet fetched via scraper');
 
@@ -720,7 +739,7 @@ export class ScraperTwitterClient implements ITwitterClient, IProfileFetcher {
         tweetId: tweet.id ?? tweetId,
         authorId: tweet.userId ?? 'unknown',
         authorName: tweet.username ?? 'unknown',
-        text: tweet.text ?? '',
+        text: expandedText,
         mediaUrls: mediaUrls && mediaUrls.length > 0 ? mediaUrls : undefined,
         likes: tweet.likes ?? undefined,
         retweets: tweet.retweets ?? undefined,

@@ -42,6 +42,7 @@ import { SelfEvaluator } from './self-evaluator.js';
 import { sendFarmNotification } from './notify.js';
 import { createFarmLogger } from './logger.js';
 import { getErrorMessage } from '@common/utils/error.util.js';
+import { expandTcoUrlsByPosition } from '@common/utils/tweet-text.js';
 import type { TweetData } from '@twitter/twitter-client.interface.js';
 import type { Scraper } from '@the-convocation/twitter-scraper';
 import type { FarmAttempt } from './types.js';
@@ -98,11 +99,14 @@ function tweetFromRaw(
 ): TweetData | null {
   if (!raw) return null;
   const mediaUrls = raw.photos?.map((p) => p.url).filter(Boolean) as string[] | undefined;
+  // Scraper handles note_tweet internally. Expand t.co URLs using expanded urls array.
+  const rawText = raw.text ?? '';
+  const expandedText = expandTcoUrlsByPosition(rawText, raw.urls);
   return {
     tweetId: raw.id ?? fallbackId,
     authorId: raw.userId ?? 'unknown',
     authorName: raw.username ?? 'unknown',
-    text: raw.text ?? '',
+    text: expandedText,
     mediaUrls: mediaUrls && mediaUrls.length > 0 ? mediaUrls : undefined,
     likes: raw.likes ?? undefined,
     retweets: raw.retweets ?? undefined,

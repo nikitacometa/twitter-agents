@@ -9,6 +9,7 @@ import type { Scraper } from '@the-convocation/twitter-scraper';
 import type { TwitterApi } from 'twitter-api-v2';
 import type { Logger } from 'pino';
 import { getErrorMessage } from '@common/utils/error.util.js';
+import { expandTcoUrls, expandTcoUrlsByPosition } from '@common/utils/tweet-text.js';
 
 // ---------------------------------------------------------------------------
 // Public API
@@ -117,7 +118,7 @@ export class TwitterEnricher {
         const pinned = await scraper.getTweet(pinnedTweetIds[0]!);
         if (pinned?.text) {
           sections.push(this.formatPinnedTweet({
-            text: pinned.text,
+            text: expandTcoUrlsByPosition(pinned.text, pinned.urls),
             likes: pinned.likes ?? 0,
             retweets: pinned.retweets ?? 0,
             views: pinned.views ?? 0,
@@ -140,7 +141,7 @@ export class TwitterEnricher {
         if (!tweet.text) { count++; continue; }
 
         const snippet: TweetSnippet = {
-          text: tweet.text,
+          text: expandTcoUrlsByPosition(tweet.text, tweet.urls),
           likes: tweet.likes ?? 0,
           retweets: tweet.retweets ?? 0,
           views: tweet.views ?? 0,
@@ -183,7 +184,7 @@ export class TwitterEnricher {
 
         likedTweets.push({
           author: tweet.username ?? 'unknown',
-          text: tweet.text,
+          text: expandTcoUrlsByPosition(tweet.text, tweet.urls),
           likes: tweet.likes ?? 0,
         });
         likeCount++;
@@ -228,7 +229,7 @@ export class TwitterEnricher {
           'profile_image_url', 'entities',
         ],
         expansions: ['pinned_tweet_id'],
-        'tweet.fields': ['text', 'public_metrics', 'created_at'],
+        'tweet.fields': ['text', 'note_tweet', 'entities', 'public_metrics', 'created_at'],
       });
 
       if (!user.data) {
@@ -256,12 +257,14 @@ export class TwitterEnricher {
         website: user.data.url ?? null,
       }));
 
-      // Pinned tweet from expansion
+      // Pinned tweet from expansion (with note_tweet + URL expansion)
       const pinnedTweet = user.includes?.tweets?.[0];
       if (pinnedTweet?.text) {
         const pm = pinnedTweet.public_metrics;
+        const pinnedText = pinnedTweet.note_tweet?.text ?? pinnedTweet.text;
+        const pinnedUrls = pinnedTweet.note_tweet?.entities?.urls ?? pinnedTweet.entities?.urls;
         sections.push(this.formatPinnedTweet({
-          text: pinnedTweet.text,
+          text: expandTcoUrls(pinnedText, pinnedUrls),
           likes: pm?.like_count ?? 0,
           retweets: pm?.retweet_count ?? 0,
           views: pm?.impression_count ?? 0,
@@ -279,7 +282,7 @@ export class TwitterEnricher {
       try {
         const timeline = await api.v2.userTimeline(userId, {
           max_results: 50,
-          'tweet.fields': ['text', 'public_metrics', 'created_at', 'in_reply_to_user_id', 'referenced_tweets'],
+          'tweet.fields': ['text', 'note_tweet', 'entities', 'public_metrics', 'created_at', 'in_reply_to_user_id', 'referenced_tweets'],
           expansions: ['referenced_tweets.id.author_id'],
           'user.fields': ['username'],
         });
@@ -299,9 +302,11 @@ export class TwitterEnricher {
           const pm = tweet.public_metrics;
           const isReply = !!tweet.in_reply_to_user_id;
           const replyTo = tweet.in_reply_to_user_id ? (refUsers.get(tweet.in_reply_to_user_id) ?? null) : null;
+          const tweetText = tweet.note_tweet?.text ?? tweet.text;
+          const tweetUrls = tweet.note_tweet?.entities?.urls ?? tweet.entities?.urls;
 
           const snippet: TweetSnippet = {
-            text: tweet.text,
+            text: expandTcoUrls(tweetText, tweetUrls),
             likes: pm?.like_count ?? 0,
             retweets: pm?.retweet_count ?? 0,
             views: pm?.impression_count ?? 0,
@@ -334,7 +339,7 @@ export class TwitterEnricher {
       try {
         const liked = await api.v2.userLikedTweets(userId, {
           max_results: this.maxLikes,
-          'tweet.fields': ['text', 'public_metrics', 'author_id'],
+          'tweet.fields': ['text', 'note_tweet', 'entities', 'public_metrics', 'author_id'],
           expansions: ['author_id'],
           'user.fields': ['username'],
         });
@@ -349,9 +354,11 @@ export class TwitterEnricher {
         const likedTweets: LikedTweetSnippet[] = [];
         for (const tweet of liked.data?.data ?? []) {
           if (!tweet.text) continue;
+          const likedText = tweet.note_tweet?.text ?? tweet.text;
+          const likedUrls = tweet.note_tweet?.entities?.urls ?? tweet.entities?.urls;
           likedTweets.push({
             author: tweet.author_id ? (likedUsers.get(tweet.author_id) ?? 'unknown') : 'unknown',
-            text: tweet.text,
+            text: expandTcoUrls(likedText, likedUrls),
             likes: tweet.public_metrics?.like_count ?? 0,
           });
         }
