@@ -1,5 +1,7 @@
 import type { ScoredTweet } from '../monitor/tweet-scorer.js';
 
+export type PipelineType = 'lightning' | 'max';
+
 export interface EvaluatedCandidate {
   tweet: ScoredTweet;
   roastability: number;
@@ -14,5 +16,6 @@ export interface CycleResult {
   generated: number;
   notified: number;
   errors: number;
+  maxUsed: number;
 }
 

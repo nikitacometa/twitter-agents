@@ -12,10 +12,11 @@ import type { ReplyGuyCandidateRepository } from './reply-guy-candidate.reposito
 import { ReplyGuySelector } from './reply-guy-selector.js';
 import type { SelectorConfig } from './reply-guy-selector.js';
 import type { EvaluatedCandidate, CycleResult } from './types.js';
-import { generateRoastsLightning } from '../admin/roast-generator.js';
+import { generateRoastsLightning, generateRoastsMax } from '../admin/roast-generator.js';
 import { buildTweetRoastContext } from '../roast/prompt-builder.js';
 import type { TweetRoastContextInput } from '../roast/prompt-builder.js';
 import { formatDryRunMessage, formatLivePostMessage, sendReplyGuyNotification } from './reply-guy-notify.js';
+import { routeCandidates } from './pipeline-router.js';
 
 const CYCLE_TIMEOUT_MS = 3 * 60 * 1000;
 
@@ -28,6 +29,7 @@ export interface ReplyGuyPipelineConfig {
   adminChatId: number | string;
   dryRun: boolean;
   selectorConfig: SelectorConfig;
+  maxDaily: number;
   // Repos for roast generation
   feedbackRepo?: FeedbackRepository;
   configRepo?: ConfigRepository;
@@ -54,12 +56,12 @@ export class ReplyGuyPipeline {
   async processCycle(scoredTweets: ScoredTweet[]): Promise<CycleResult> {
     if (this.isRunning) {
       this.config.logger.debug('Reply guy: cycle skipped — already running');
-      return { candidates: 0, evaluated: 0, winners: 0, generated: 0, notified: 0, errors: 0 };
+      return { candidates: 0, evaluated: 0, winners: 0, generated: 0, notified: 0, errors: 0, maxUsed: 0 };
     }
 
     this.isRunning = true;
     const cycleStart = Date.now();
-    const result: CycleResult = { candidates: 0, evaluated: 0, winners: 0, generated: 0, notified: 0, errors: 0 };
+    const result: CycleResult = { candidates: 0, evaluated: 0, winners: 0, generated: 0, notified: 0, errors: 0, maxUsed: 0 };
 
     try {
       // 1. Hard filter
@@ -89,22 +91,55 @@ export class ReplyGuyPipeline {
         return result;
       }
 
-      // 3. Process each winner
-      for (const winner of winners) {
+      // 3. Route candidates to Lightning vs Max
+      const todayMaxCount = this.config.candidateRepo.getTodayMaxCount();
+      const decisions = routeCandidates(winners, {
+        maxDailyBudget: this.config.maxDaily,
+        todayMaxCount,
+      });
+
+      const maxDecision = decisions.find((d) => d.pipeline === 'max');
+      const lightningDecisions = decisions.filter((d) => d.pipeline === 'lightning');
+
+      this.config.logger.info(
+        { total: winners.length, lightning: lightningDecisions.length, max: maxDecision ? 1 : 0, todayMaxCount },
+        'Reply guy: routing complete',
+      );
+
+      // 4. Start Max generation immediately (non-blocking)
+      let maxPromise: Promise<void> | null = null;
+      if (maxDecision) {
+        result.maxUsed = 1;
+        maxPromise = this.processWinnerMax(maxDecision.candidate, result).catch((err: unknown) => {
+          result.errors++;
+          this.config.logger.error(
+            { err, tweetId: maxDecision.candidate.tweet.tweetId, author: maxDecision.candidate.tweet.authorHandle },
+            'Reply guy: Max processing failed',
+          );
+        });
+      }
+
+      // 5. Process Lightning winners within cycle timeout
+      for (const decision of lightningDecisions) {
         if (Date.now() - cycleStart > CYCLE_TIMEOUT_MS) {
-          this.config.logger.warn('Reply guy: cycle timeout — aborting remaining winners');
+          this.config.logger.warn('Reply guy: cycle timeout — aborting remaining Lightning winners');
           break;
         }
 
         try {
-          await this.processWinner(winner, result);
+          await this.processWinnerLightning(decision.candidate, result);
         } catch (error) {
           result.errors++;
           this.config.logger.error(
-            { err: error, tweetId: winner.tweet.tweetId, author: winner.tweet.authorHandle },
-            'Reply guy: failed to process winner',
+            { err: error, tweetId: decision.candidate.tweet.tweetId, author: decision.candidate.tweet.authorHandle },
+            'Reply guy: Lightning processing failed',
           );
         }
+      }
+
+      // 6. Await Max completion (started above, runs concurrently with Lightning)
+      if (maxPromise) {
+        await maxPromise;
       }
 
       // Probabilistic prune (~1% chance per cycle)
@@ -122,11 +157,12 @@ export class ReplyGuyPipeline {
     }
   }
 
-  private async processWinner(winner: EvaluatedCandidate, result: CycleResult): Promise<void> {
-    const { logger, twitterClient, candidateRepo, dryRun } = this.config;
+  private async buildWinnerContext(
+    winner: EvaluatedCandidate,
+  ): Promise<{ tweetData: TweetData | null; profileContext: string }> {
+    const { logger, twitterClient } = this.config;
     const t = winner.tweet;
 
-    // Fetch full tweet data (metrics, parent tweet)
     let tweetData: TweetData | null = null;
     if (twitterClient.getTweet) {
       try {
@@ -136,7 +172,6 @@ export class ReplyGuyPipeline {
       }
     }
 
-    // Build tweet roast context
     const contextInput: TweetRoastContextInput = {
       tweetText: tweetData?.text ?? t.text,
       tweetAuthor: t.authorHandle,
@@ -150,7 +185,6 @@ export class ReplyGuyPipeline {
         : undefined,
     };
 
-    // Fetch parent tweet if this is a reply
     if (tweetData?.inReplyToTweetId && twitterClient.getTweet) {
       try {
         const parent = await twitterClient.getTweet(tweetData.inReplyToTweetId);
@@ -162,7 +196,6 @@ export class ReplyGuyPipeline {
       }
     }
 
-    // Fetch quoted tweet if present
     if (tweetData?.quotedTweetId && twitterClient.getTweet) {
       try {
         const quoted = await twitterClient.getTweet(tweetData.quotedTweetId);
@@ -174,9 +207,15 @@ export class ReplyGuyPipeline {
       }
     }
 
-    const profileContext = buildTweetRoastContext(contextInput);
+    return { tweetData, profileContext: buildTweetRoastContext(contextInput) };
+  }
 
-    // Generate lightning roast (tweet-mode)
+  private async processWinnerLightning(winner: EvaluatedCandidate, result: CycleResult): Promise<void> {
+    const { logger, candidateRepo } = this.config;
+    const t = winner.tweet;
+
+    const { tweetData, profileContext } = await this.buildWinnerContext(winner);
+
     const lightningResult = await generateRoastsLightning(
       `tweet by @${t.authorHandle}`,
       this.config.provider,
@@ -187,40 +226,97 @@ export class ReplyGuyPipeline {
       this.config.patternRepo,
       this.config.stockpileRepo,
       this.config.farmAttemptRepo,
-      undefined, // imagePaths
+      undefined,
       profileContext,
-      true, // tweetMode
+      true,
     );
 
     if (lightningResult.variants.length === 0) {
-      logger.warn({ tweetId: t.tweetId }, 'Reply guy: lightning produced 0 variants');
+      logger.warn({ tweetId: t.tweetId }, 'Reply guy: Lightning produced 0 variants');
       candidateRepo.markSkipped(t.tweetId, winner.roastability, 'No variants passed filters');
       return;
     }
 
-    // Pick best variant
     const best = lightningResult.variants[0]!;
-    candidateRepo.markGenerated(t.tweetId, best.text, best.score);
+    candidateRepo.markGenerated(t.tweetId, best.text, best.score, 'lightning');
     result.generated++;
 
+    await this.postOrNotify(winner, tweetData, best.text, 'lightning', lightningResult.stats.durationMs, result);
+  }
+
+  private async processWinnerMax(winner: EvaluatedCandidate, result: CycleResult): Promise<void> {
+    const { logger, candidateRepo } = this.config;
+    const t = winner.tweet;
+
+    const { tweetData, profileContext } = await this.buildWinnerContext(winner);
+
+    const maxResult = await generateRoastsMax({
+      targetName: `tweet by @${t.authorHandle}`,
+      provider: this.config.provider,
+      logger,
+      feedbackRepo: this.config.feedbackRepo,
+      configRepo: this.config.configRepo,
+      exampleRepo: this.config.exampleRepo,
+      patternRepo: this.config.patternRepo,
+      stockpileRepo: this.config.stockpileRepo,
+      farmAttemptRepo: this.config.farmAttemptRepo,
+      profileContext,
+      tweetMode: true,
+      quick: true,
+    });
+
+    if (maxResult.variants.length === 0) {
+      logger.warn({ tweetId: t.tweetId }, 'Reply guy: Max produced 0 variants — falling back to Lightning');
+      await this.processWinnerLightning(winner, result);
+      return;
+    }
+
+    const best = maxResult.variants[0]!;
+    candidateRepo.markGenerated(t.tweetId, best.text, best.judgeScore, 'max');
+    result.generated++;
+
+    logger.info(
+      {
+        tweetId: t.tweetId,
+        author: t.authorHandle,
+        tier: t.tier,
+        durationMs: maxResult.stats.durationMs,
+        pipelines: maxResult.stats.pipelineResults.map((p) => `${p.pipeline}:${p.status}`).join(','),
+      },
+      'Reply guy: Max generation complete',
+    );
+
+    await this.postOrNotify(winner, tweetData, best.text, 'max', maxResult.stats.durationMs, result);
+  }
+
+  private async postOrNotify(
+    winner: EvaluatedCandidate,
+    tweetData: TweetData | null,
+    roastText: string,
+    pipelineType: 'lightning' | 'max',
+    durationMs: number,
+    result: CycleResult,
+  ): Promise<void> {
+    const { twitterClient, candidateRepo, dryRun, logger } = this.config;
+    const t = winner.tweet;
     const dailyCount = candidateRepo.getTodayCount();
 
     if (dryRun) {
-      // Dry run — send to Telegram only
       const html = formatDryRunMessage(
         winner,
         tweetData,
-        best.text,
+        roastText,
         dailyCount,
         this.config.selectorConfig.dailyCap,
+        pipelineType,
+        durationMs,
       );
 
       await sendReplyGuyNotification(this.config.telegramToken, this.config.adminChatId, html);
       candidateRepo.markPosted(t.tweetId, null);
       result.notified++;
     } else {
-      // Live mode — post via Playwright
-      const postResult = await twitterClient.replyToTweet(best.text, t.tweetId);
+      const postResult = await twitterClient.replyToTweet(roastText, t.tweetId);
 
       if (postResult) {
         candidateRepo.markPosted(t.tweetId, postResult.tweetId);
@@ -228,10 +324,12 @@ export class ReplyGuyPipeline {
 
         const html = formatLivePostMessage(
           winner,
-          best.text,
+          roastText,
           postResult.tweetId,
           dailyCount,
           this.config.selectorConfig.dailyCap,
+          pipelineType,
+          durationMs,
         );
         try {
           await sendReplyGuyNotification(this.config.telegramToken, this.config.adminChatId, html);

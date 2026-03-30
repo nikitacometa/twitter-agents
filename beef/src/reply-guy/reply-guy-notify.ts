@@ -1,5 +1,5 @@
 import type { TweetData } from '../twitter/twitter-client.interface.js';
-import type { EvaluatedCandidate } from './types.js';
+import type { EvaluatedCandidate, PipelineType } from './types.js';
 
 function escapeHtml(text: string): string {
   return text
@@ -19,12 +19,21 @@ function formatFollowers(k: number): string {
   return `${String(k)}K`;
 }
 
+function formatPipelineBadge(pipelineType?: PipelineType, durationMs?: number): string {
+  if (!pipelineType) return '';
+  const badge = pipelineType === 'max' ? '🔴 MAX' : '⚡ LTN';
+  const timing = durationMs != null ? ` · ${String(Math.round(durationMs / 1000))}s` : '';
+  return ` · ${badge}${timing}`;
+}
+
 export function formatDryRunMessage(
   candidate: EvaluatedCandidate,
   tweetData: TweetData | null,
   roastText: string,
   dailyCount: number,
   dailyCap: number,
+  pipelineType?: PipelineType,
+  durationMs?: number,
 ): string {
   const t = candidate.tweet;
   const handleLink = `<a href="${t.tweetUrl}">@${escapeHtml(t.authorHandle)}</a>`;
@@ -52,7 +61,7 @@ export function formatDryRunMessage(
     .join('\n');
 
   return (
-    `🏜 <b>DRY RUN</b> · Reply Guy #${String(dailyCount)}/${String(dailyCap)}\n\n` +
+    `🏜 <b>DRY RUN</b> · Reply Guy #${String(dailyCount)}/${String(dailyCap)}${formatPipelineBadge(pipelineType, durationMs)}\n\n` +
     `💬 ${handleLink} · ${formatFollowers(t.followersK)} · ${String(t.ageMinutes)}m ago\n` +
     `<i>"${tweetText}"</i>${metricsLine}\n\n` +
     `🔥 <b>Reply:</b>\n` +
@@ -67,6 +76,8 @@ export function formatLivePostMessage(
   postedTweetId: string,
   dailyCount: number,
   dailyCap: number,
+  pipelineType?: PipelineType,
+  durationMs?: number,
 ): string {
   const t = candidate.tweet;
   const handleLink = `<a href="${t.tweetUrl}">@${escapeHtml(t.authorHandle)}</a>`;
@@ -75,7 +86,7 @@ export function formatLivePostMessage(
   const replyUrl = `https://x.com/0xBeefer/status/${postedTweetId}`;
 
   return (
-    `✅ <b>POSTED</b> · Reply Guy #${String(dailyCount)}/${String(dailyCap)}\n\n` +
+    `✅ <b>POSTED</b> · Reply Guy #${String(dailyCount)}/${String(dailyCap)}${formatPipelineBadge(pipelineType, durationMs)}\n\n` +
     `💬 ${handleLink} · ${String(t.ageMinutes)}m ago\n` +
     `<i>"${tweetText}"</i>\n\n` +
     `🔥 <b>Reply:</b>\n` +

@@ -1,5 +1,6 @@
 import type Database from 'better-sqlite3';
 import type { ScoredTweet } from '../monitor/tweet-scorer.js';
+import type { PipelineType } from './types.js';
 
 export class ReplyGuyCandidateRepository {
   private readonly insertStmt: Database.Statement;
@@ -9,6 +10,7 @@ export class ReplyGuyCandidateRepository {
   private readonly markPostedStmt: Database.Statement;
   private readonly markSkippedStmt: Database.Statement;
   private readonly todayCountStmt: Database.Statement;
+  private readonly todayMaxCountStmt: Database.Statement;
   private readonly recentAuthorStmt: Database.Statement;
   private readonly pruneStmt: Database.Statement;
   private readonly dailyStatsStmt: Database.Statement;
@@ -33,7 +35,7 @@ export class ReplyGuyCandidateRepository {
 
     this.markGeneratedStmt = db.prepare(`
       UPDATE reply_guy_candidates
-      SET roast_text = ?, roast_score = ?,
+      SET roast_text = ?, roast_score = ?, pipeline_type = ?,
           status = 'generated', generated_at = datetime('now')
       WHERE tweet_id = ?
     `);
@@ -54,6 +56,13 @@ export class ReplyGuyCandidateRepository {
     this.todayCountStmt = db.prepare(`
       SELECT COUNT(*) as total FROM reply_guy_candidates
       WHERE posted_at >= datetime('now', 'start of day')
+        AND status IN ('generated', 'posted')
+    `);
+
+    this.todayMaxCountStmt = db.prepare(`
+      SELECT COUNT(*) as total FROM reply_guy_candidates
+      WHERE pipeline_type = 'max'
+        AND generated_at >= datetime('now', 'start of day')
         AND status IN ('generated', 'posted')
     `);
 
@@ -101,8 +110,8 @@ export class ReplyGuyCandidateRepository {
     this.markEvaluatedStmt.run(roastability, reasoning, angle, tweetId);
   }
 
-  markGenerated(tweetId: string, roastText: string, roastScore: number): void {
-    this.markGeneratedStmt.run(roastText, roastScore, tweetId);
+  markGenerated(tweetId: string, roastText: string, roastScore: number, pipelineType: PipelineType = 'lightning'): void {
+    this.markGeneratedStmt.run(roastText, roastScore, pipelineType, tweetId);
   }
 
   markPosted(tweetId: string, postedTweetId: string | null): void {
@@ -115,6 +124,11 @@ export class ReplyGuyCandidateRepository {
 
   getTodayCount(): number {
     const row = this.todayCountStmt.get() as { total: number };
+    return row.total;
+  }
+
+  getTodayMaxCount(): number {
+    const row = this.todayMaxCountStmt.get() as { total: number };
     return row.total;
   }
 

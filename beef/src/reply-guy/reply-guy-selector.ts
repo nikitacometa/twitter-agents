@@ -4,6 +4,7 @@ import type { ProviderManager } from '../agent/provider-manager.js';
 import type { ReplyGuyCandidateRepository } from './reply-guy-candidate.repository.js';
 import type { EvaluatedCandidate } from './types.js';
 import { getErrorMessage } from '../common/utils/error.util.js';
+import { TIER_SCORES } from '../monitor/monitor-targets.js';
 
 interface EvalResponseItem {
   tweetId: string;
@@ -127,7 +128,7 @@ function buildEvalPrompt(candidates: ScoredTweet[]): string {
       (c) =>
         `- tweetId: "${c.tweetId}"
   author: @${c.authorHandle} (${c.tier}-tier, ${String(c.followersK)}K followers)
-  age: ${String(c.ageMinutes)}m
+  score: ${String(c.score)} pts (tier=${String(TIER_SCORES[c.tier])}, age=${String(c.ageMinutes)}m)
   isReply: ${String(c.isReply)}
   text: "${c.text}"`,
     )
