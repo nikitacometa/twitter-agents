@@ -16,8 +16,8 @@ import type { ExternalExampleRepository } from '@storage/repositories/external-e
 import type { RoastPatternRepository } from '@storage/repositories/roast-pattern.repository.js';
 import type { StockpileRepository } from '@storage/repositories/stockpile.repository.js';
 import type { FarmAttemptRepository } from '@storage/repositories/farm-attempt.repository.js';
-import { generateRoasts, generateRoastsLightning } from './roast-generator.js';
-import type { GenerateRoastsResult } from './roast-generator.js';
+import { generateRoasts, generateRoastsLightning, generateRoastsMax } from './roast-generator.js';
+import type { GenerateRoastsResult, MaxRoastResult, MaxPipeline } from './roast-generator.js';
 import type { LightningRoastResult } from '@roast/roast-engine.js';
 import type { EvaluationMode } from '@roast/roast-engine.js';
 import type { PollResult } from '@twitter/mention-handler.js';
@@ -210,6 +210,7 @@ export function createBot(opts: {
         '<b>Generation:</b>',
         '/roast &lt;target&gt; — Sonnet, 9 variants (3×3)',
         '/roasttweet &lt;tweet_url&gt; — Opus roast of a specific tweet (full enrichment + eval)',
+        '/roast_max &lt;target&gt; — 3 pipelines in parallel → ranked top 3',
         '/farm &lt;target&gt; — 6 variants + mutations + serious eval',
         '/meme &lt;target&gt; | #&lt;id&gt; | &lt;tweet_url&gt; — generate meme',
         '',
@@ -254,6 +255,13 @@ export function createBot(opts: {
         '  <code>/meme #42</code> — meme from stockpile entry',
         '  <code>/meme https://x.com/...</code> — meme response to tweet',
         '',
+        '<b>🚀 /roast_max</b> &lt;target&gt;',
+        '3 parallel pipelines (Opus + Sonnet+R + Sonnet) → judge panel → top 3',
+        '  <code>/roast_max https://x.com/.../status/...</code> — tweet',
+        '  <code>/roast_max @handle</code> — person',
+        '  <code>/roast_max hyperliquid</code> — freeform',
+        '  <code>--quick</code> skip serious eval (rankBatch only)',
+        '',
         '━━━━━━━━━━━━━━━━━━━━━━',
         '<b>🐦 Twitter</b>',
         '<code>/follow @h1 @h2 ...</code> — follow accounts (15-45s jitter delay)',
@@ -294,6 +302,108 @@ export function createBot(opts: {
       { parse_mode: 'HTML' },
     );
   });
+
+  // ---------------------------------------------------------------------------
+  // Shared tweet preparation — used by /roast, /roast_fast, /roast_max
+  // ---------------------------------------------------------------------------
+
+  interface TweetPreparation {
+    targetName: string;
+    profileContext: string;
+    imagePaths: string[];
+    mediaCleanup?: () => Promise<void>;
+    enrichedFollowers: number | null;
+  }
+
+  async function prepareTweetContext(
+    tweetUrl: string,
+    onStatus?: (stage: string) => void,
+  ): Promise<TweetPreparation | { error: string }> {
+    const twitterClient = opts.twitterClient;
+    if (!twitterClient?.getTweet) {
+      return { error: '⚠️ Twitter client not configured or getTweet not available.' };
+    }
+
+    const tweetId = parseTweetUrl(tweetUrl);
+    if (!tweetId) return { error: '❌ Invalid tweet URL.' };
+
+    const tweet = await twitterClient.getTweet(tweetId);
+    if (!tweet) return { error: '❌ Could not fetch tweet. It may be deleted or protected.' };
+
+    const targetName = tweet.authorName;
+
+    // Download media
+    onStatus?.('🖼 Downloading media...');
+    let imagePaths: string[] = [];
+    let mediaCleanup: (() => Promise<void>) | undefined;
+    if (tweet.mediaUrls && tweet.mediaUrls.length > 0) {
+      try {
+        const media = await downloadTweetMedia(tweet.mediaUrls, logger);
+        imagePaths = media.paths;
+        mediaCleanup = media.cleanup;
+      } catch (err) {
+        logger.warn({ err, tweetId: tweet.tweetId }, 'Media download failed — continuing without');
+      }
+    }
+
+    // Enrich author
+    onStatus?.('👤 Enriching author profile...');
+    let enrichmentContext: string | undefined;
+    let enrichedFollowers: number | null = null;
+    if (opts.twitterEnricher) {
+      try {
+        const enrichment = await opts.twitterEnricher.enrich(targetName);
+        if (enrichment?.hasData) {
+          enrichmentContext = enrichment.profileContext;
+          enrichedFollowers = enrichment.followersCount;
+        }
+      } catch (err) {
+        logger.warn({ err, target: targetName }, 'Author enrichment failed — continuing without');
+      }
+    }
+
+    // Fetch referenced tweet (parent or quoted)
+    let parentTweet: { text: string; author: string } | undefined;
+    let quotedTweet: { text: string; author: string } | undefined;
+    const refTweetId = tweet.inReplyToTweetId ?? tweet.quotedTweetId;
+    if (refTweetId && twitterClient.getTweet) {
+      try {
+        onStatus?.('🔗 Fetching referenced tweet...');
+        const refTweet = await twitterClient.getTweet(refTweetId);
+        if (refTweet) {
+          const ref = { text: refTweet.text, author: refTweet.authorName };
+          if (tweet.inReplyToTweetId) parentTweet = ref;
+          else quotedTweet = ref;
+        }
+      } catch (err) {
+        logger.warn({ err, refTweetId }, 'Referenced tweet fetch failed — continuing without');
+      }
+    }
+
+    const tweetAgeDays = tweet.createdAt
+      ? Math.floor((Date.now() - new Date(tweet.createdAt).getTime()) / 86_400_000)
+      : undefined;
+
+    const contextInput: TweetRoastContextInput = {
+      tweetText: tweet.text,
+      tweetAuthor: targetName,
+      enrichmentContext,
+      imagePaths: imagePaths.length > 0 ? imagePaths : undefined,
+      metrics: tweet.likes != null ? {
+        likes: tweet.likes ?? 0,
+        retweets: tweet.retweets ?? 0,
+        replies: tweet.replies ?? 0,
+        views: tweet.views,
+      } : undefined,
+      tweetAgeDays,
+      parentTweet,
+      quotedTweet,
+    };
+
+    const profileContext = buildTweetRoastContext(contextInput);
+
+    return { targetName, profileContext, imagePaths, mediaCleanup, enrichedFollowers };
+  }
 
   interface RoastCommandOpts {
     ctx: Context;
@@ -444,11 +554,6 @@ export function createBot(opts: {
       void ctx.reply('⚠️ LLM provider not configured.');
       return;
     }
-    const twitterClient = opts.twitterClient;
-    if (!twitterClient?.getTweet) {
-      void ctx.reply('⚠️ Twitter client not configured or getTweet not available.');
-      return;
-    }
     const chatId = ctx.chat?.id;
     if (!chatId) return;
     const api = ctx.api;
@@ -467,86 +572,16 @@ export function createBot(opts: {
       };
 
       try {
-        const tweetId = parseTweetUrl(tweetUrl);
-        if (!tweetId) {
-          await api.editMessageText(chatId, statusMsg.message_id, '❌ Invalid tweet URL.');
+        const prep = await prepareTweetContext(tweetUrl, updateStatus);
+        if ('error' in prep) {
+          await api.editMessageText(chatId, statusMsg.message_id, prep.error);
           return;
         }
 
-        const tweet = await twitterClient.getTweet!(tweetId);
-        if (!tweet) {
-          await api.editMessageText(chatId, statusMsg.message_id, '❌ Could not fetch tweet. It may be deleted or protected.');
-          return;
-        }
+        const { targetName, profileContext, imagePaths, enrichedFollowers } = prep;
+        mediaCleanup = prep.mediaCleanup;
 
-        const targetName = tweet.authorName;
-
-        updateStatus('🖼 Downloading media...');
-        let imagePaths: string[] = [];
-        if (tweet.mediaUrls && tweet.mediaUrls.length > 0) {
-          try {
-            const media = await downloadTweetMedia(tweet.mediaUrls, logger);
-            imagePaths = media.paths;
-            mediaCleanup = media.cleanup;
-          } catch (err) {
-            logger.warn({ err, tweetId: tweet.tweetId }, 'Media download failed — continuing without');
-          }
-        }
-
-        updateStatus('👤 Enriching author profile...');
-        let enrichmentContext: string | undefined;
-        let enrichedFollowers: number | null = null;
-        if (opts.twitterEnricher) {
-          try {
-            const enrichment = await opts.twitterEnricher.enrich(targetName);
-            if (enrichment?.hasData) {
-              enrichmentContext = enrichment.profileContext;
-              enrichedFollowers = enrichment.followersCount;
-            }
-          } catch (err) {
-            logger.warn({ err, target: targetName }, 'Author enrichment failed — continuing without');
-          }
-        }
-
-        let parentTweet: { text: string; author: string } | undefined;
-        let quotedTweet: { text: string; author: string } | undefined;
-        const refTweetId = tweet.inReplyToTweetId ?? tweet.quotedTweetId;
-        if (refTweetId && twitterClient.getTweet) {
-          try {
-            updateStatus('🔗 Fetching referenced tweet...');
-            const refTweet = await twitterClient.getTweet(refTweetId);
-            if (refTweet) {
-              const ref = { text: refTweet.text, author: refTweet.authorName };
-              if (tweet.inReplyToTweetId) parentTweet = ref;
-              else quotedTweet = ref;
-            }
-          } catch (err) {
-            logger.warn({ err, refTweetId }, 'Referenced tweet fetch failed — continuing without');
-          }
-        }
-
-        const tweetAgeDays = tweet.createdAt
-          ? Math.floor((Date.now() - new Date(tweet.createdAt).getTime()) / 86_400_000)
-          : undefined;
-
-        const contextInput: TweetRoastContextInput = {
-          tweetText: tweet.text,
-          tweetAuthor: targetName,
-          enrichmentContext,
-          imagePaths: imagePaths.length > 0 ? imagePaths : undefined,
-          metrics: tweet.likes != null ? {
-            likes: tweet.likes ?? 0,
-            retweets: tweet.retweets ?? 0,
-            replies: tweet.replies ?? 0,
-            views: tweet.views,
-          } : undefined,
-          tweetAgeDays,
-          parentTweet,
-          quotedTweet,
-        };
-
-        const profileContext = buildTweetRoastContext(contextInput);
-
+        const tweetId = parseTweetUrl(tweetUrl)!;
         ctxKey = `rt-${Date.now()}-${tweetId}`;
         roastTweetContexts.set(ctxKey, {
           tweetUrl,
@@ -557,7 +592,6 @@ export function createBot(opts: {
           userContext,
         });
 
-        // Cleanup helper — removes context cache + temp media files
         const scheduleCleanup = (delayMs: number): void => {
           const key = ctxKey;
           setTimeout(() => {
@@ -623,13 +657,11 @@ export function createBot(opts: {
           link_preview_options: { is_disabled: true },
         });
 
-        // Keep context alive for 10 min for regen button
         scheduleCleanup(600_000);
 
       } catch (error) {
         const elapsed = Math.round((Date.now() - startTime) / 1000);
         logger.error({ err: error, url: tweetUrl, elapsedSec: elapsed }, 'Tweet roast pipeline failed');
-        // Clean up context cache + media on failure
         if (mediaCleanup) mediaCleanup().catch(() => {});
         if (ctxKey) roastTweetContexts.delete(ctxKey);
         await api
@@ -924,11 +956,6 @@ export function createBot(opts: {
       void ctx.reply('⚠️ LLM provider not configured.');
       return;
     }
-    const twitterClient = opts.twitterClient;
-    if (!twitterClient?.getTweet) {
-      void ctx.reply('⚠️ Twitter client not configured.');
-      return;
-    }
     const chatId = ctx.chat?.id;
     if (!chatId) return;
     const api = ctx.api;
@@ -945,80 +972,15 @@ export function createBot(opts: {
       let mediaCleanup: (() => Promise<void>) | undefined;
 
       try {
-        const tweetId = parseTweetUrl(tweetUrl);
-        if (!tweetId) {
-          await api.editMessageText(chatId, statusMsg.message_id, '❌ Invalid tweet URL.');
+        const prep = await prepareTweetContext(tweetUrl, updateStatus);
+        if ('error' in prep) {
+          await api.editMessageText(chatId, statusMsg.message_id, prep.error);
           return;
         }
 
-        const tweet = await twitterClient.getTweet!(tweetId);
-        if (!tweet) {
-          await api.editMessageText(chatId, statusMsg.message_id, '❌ Could not fetch tweet.');
-          return;
-        }
+        const { targetName, profileContext, imagePaths } = prep;
+        mediaCleanup = prep.mediaCleanup;
 
-        const targetName = tweet.authorName;
-
-        let imagePaths: string[] = [];
-        if (tweet.mediaUrls && tweet.mediaUrls.length > 0) {
-          try {
-            const media = await downloadTweetMedia(tweet.mediaUrls, logger);
-            imagePaths = media.paths;
-            mediaCleanup = media.cleanup;
-          } catch (err) {
-            logger.warn({ err, tweetId: tweet.tweetId }, 'Media download failed');
-          }
-        }
-
-        let enrichmentContext: string | undefined;
-        if (opts.twitterEnricher) {
-          try {
-            const enrichment = await opts.twitterEnricher.enrich(targetName);
-            if (enrichment?.hasData) enrichmentContext = enrichment.profileContext;
-          } catch (err) {
-            logger.warn({ err, target: targetName }, 'Enrichment failed');
-          }
-        }
-
-        let parentTweet: { text: string; author: string } | undefined;
-        let quotedTweet: { text: string; author: string } | undefined;
-        const refTweetId = tweet.inReplyToTweetId ?? tweet.quotedTweetId;
-        if (refTweetId && twitterClient.getTweet) {
-          try {
-            const refTweet = await twitterClient.getTweet(refTweetId);
-            if (refTweet) {
-              const ref = { text: refTweet.text, author: refTweet.authorName };
-              if (tweet.inReplyToTweetId) parentTweet = ref;
-              else quotedTweet = ref;
-            }
-          } catch (err) {
-            logger.warn({ err, refTweetId }, 'Referenced tweet fetch failed');
-          }
-        }
-
-        const tweetAgeDays = tweet.createdAt
-          ? Math.floor((Date.now() - new Date(tweet.createdAt).getTime()) / 86_400_000)
-          : undefined;
-
-        const contextInput: TweetRoastContextInput = {
-          tweetText: tweet.text,
-          tweetAuthor: targetName,
-          enrichmentContext,
-          imagePaths: imagePaths.length > 0 ? imagePaths : undefined,
-          metrics: tweet.likes != null ? {
-            likes: tweet.likes ?? 0,
-            retweets: tweet.retweets ?? 0,
-            replies: tweet.replies ?? 0,
-            views: tweet.views,
-          } : undefined,
-          tweetAgeDays,
-          parentTweet,
-          quotedTweet,
-        };
-
-        const profileContext = buildTweetRoastContext(contextInput);
-
-        // Save context for regen
         const ctxKey = `lt-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
         lightningContexts.set(ctxKey, {
           tweetUrl,
@@ -1068,9 +1030,8 @@ export function createBot(opts: {
           link_preview_options: { is_disabled: true },
         });
 
-        // Keep context alive for 10 min for regen button
         scheduleCleanup(600_000);
-        mediaCleanup = undefined; // Owned by scheduleCleanup now
+        mediaCleanup = undefined;
       } catch (error) {
         const elapsed = Math.round((Date.now() - startTime) / 1000);
         logger.error({ err: error, url: tweetUrl, elapsedSec: elapsed }, 'Lightning tweet roast failed');
@@ -1235,6 +1196,398 @@ export function createBot(opts: {
 
     // Freeform
     handleLightningFreeformRoast(ctx, target, userContext);
+  });
+
+  // ---------------------------------------------------------------------------
+  // /roast_max — 3 parallel pipelines (Opus + Sonnet+R + Sonnet) → ranked top 3
+  // ---------------------------------------------------------------------------
+
+  const maxContexts = new Map<string, {
+    tweetUrl?: string;
+    targetName: string;
+    profileContext?: string;
+    imagePaths: string[];
+    cleanup?: () => Promise<void>;
+    userContext?: string;
+    quick: boolean;
+  }>();
+
+  const PIPELINE_LABELS: Record<MaxPipeline, string> = {
+    'opus': 'Opus',
+    'sonnet-research': 'Sonnet+R',
+    'sonnet': 'Sonnet',
+  };
+
+  function formatMaxOutput(result: MaxRoastResult): string {
+    const top = result.variants.slice(0, 3);
+    const lines: string[] = [];
+
+    for (let i = 0; i < top.length; i++) {
+      const v = top[i]!;
+      const label = PIPELINE_LABELS[v.pipeline];
+      lines.push(`<b>${String(i + 1)}.</b> <i>${escapeHtml(v.angle)}</i>  ★ ${v.judgeScore.toFixed(1)}  [${label}]`);
+      lines.push(`<pre>${escapeHtml(v.text)}</pre>`);
+      lines.push('');
+    }
+
+    const s = result.stats;
+    const pipelineSummary = s.pipelineResults
+      .map((p) => {
+        const label = PIPELINE_LABELS[p.pipeline];
+        if (p.status !== 'ok') return `${label}: ${p.status}`;
+        return `${label}: ${String(p.variants)}`;
+      })
+      .join(' | ');
+    lines.push(`📊 ${pipelineSummary} → ${String(s.afterDedup)} dedup → ${String(s.ranked)} ranked → ${String(Math.min(3, result.variants.length))} top`);
+
+    return lines.join('\n');
+  }
+
+  function handleMaxTweetRoast(ctx: Context, tweetUrl: string, userContext?: string, quick = false): void {
+    if (!provider) {
+      void ctx.reply('⚠️ LLM provider not configured.');
+      return;
+    }
+    const chatId = ctx.chat?.id;
+    if (!chatId) return;
+    const api = ctx.api;
+
+    void (async () => {
+      const startTime = Date.now();
+      const statusMsg = await api.sendMessage(chatId, '🔍 Fetching tweet...');
+
+      const updateStatus = (text: string): void => {
+        const elapsed = Math.round((Date.now() - startTime) / 1000);
+        api.editMessageText(chatId, statusMsg.message_id, `${text} <i>(${String(elapsed)}s)</i>`, { parse_mode: 'HTML' }).catch(() => {});
+      };
+
+      let mediaCleanup: (() => Promise<void>) | undefined;
+
+      try {
+        const prep = await prepareTweetContext(tweetUrl, updateStatus);
+        if ('error' in prep) {
+          await api.editMessageText(chatId, statusMsg.message_id, prep.error);
+          return;
+        }
+
+        const { targetName, profileContext, imagePaths } = prep;
+        mediaCleanup = prep.mediaCleanup;
+
+        const ctxKey = `mx-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+        maxContexts.set(ctxKey, {
+          tweetUrl,
+          targetName,
+          profileContext,
+          imagePaths,
+          cleanup: mediaCleanup,
+          userContext,
+          quick,
+        });
+
+        const scheduleCleanup = (delayMs: number): void => {
+          setTimeout(() => {
+            const stored = maxContexts.get(ctxKey);
+            if (stored?.cleanup) stored.cleanup().catch(() => {});
+            maxContexts.delete(ctxKey);
+          }, delayMs);
+        };
+
+        updateStatus(`🚀 MAX for <b>${escapeHtml(targetName)}</b> — launching 3 pipelines...`);
+
+        const pipelineStatuses: string[] = [];
+        const onProgress = (pipeline: MaxPipeline, status: string, variants: number, durationMs: number): void => {
+          const label = PIPELINE_LABELS[pipeline];
+          const sec = Math.round(durationMs / 1000);
+          if (status === 'ok') {
+            pipelineStatuses.push(`✅ ${label}: ${String(variants)} (${String(sec)}s)`);
+          } else {
+            pipelineStatuses.push(`❌ ${label}: ${status} (${String(sec)}s)`);
+          }
+          const remaining = 3 - pipelineStatuses.length;
+          const progressLine = pipelineStatuses.join('\n');
+          const waitLine = remaining > 0 ? `\n⏳ Waiting for ${String(remaining)} more...` : '\n⚖️ Ranking...';
+          updateStatus(`🚀 MAX <b>${escapeHtml(targetName)}</b>\n${progressLine}${waitLine}`);
+        };
+
+        const result = await generateRoastsMax({
+          targetName,
+          provider,
+          logger,
+          feedbackRepo,
+          configRepo,
+          exampleRepo,
+          patternRepo,
+          stockpileRepo,
+          farmAttemptRepo,
+          imagePaths: imagePaths.length > 0 ? imagePaths : undefined,
+          profileContext,
+          tweetMode: true,
+          userContext,
+          quick,
+          onProgress,
+        });
+
+        const elapsed = Math.round((Date.now() - startTime) / 1000);
+        const normalizedUrl = tweetUrl.startsWith('http') ? tweetUrl : `https://${tweetUrl}`;
+
+        const headerLines = [
+          `🚀 MAX <b>${escapeHtml(targetName)}</b> — ${String(elapsed)}s${quick ? ' (quick)' : ''}`,
+          `<a href="${escapeHtml(normalizedUrl)}">Original tweet</a>`,
+          '',
+        ];
+
+        if (result.variants.length === 0) {
+          headerLines.push('❌ <i>All variants filtered or scored below threshold.</i>');
+          await api.editMessageText(chatId, statusMsg.message_id, headerLines.join('\n'), { parse_mode: 'HTML' });
+          scheduleCleanup(30_000);
+          return;
+        }
+
+        const body = headerLines.join('\n') + formatMaxOutput(result);
+
+        const keyboard = new InlineKeyboard()
+          .text('🔄 Regen', `mx-regen:${ctxKey}`);
+
+        await api.deleteMessage(chatId, statusMsg.message_id).catch(() => {});
+        await api.sendMessage(chatId, body, {
+          parse_mode: 'HTML',
+          reply_markup: keyboard,
+          link_preview_options: { is_disabled: true },
+        });
+
+        scheduleCleanup(600_000);
+        mediaCleanup = undefined;
+      } catch (error) {
+        const elapsed = Math.round((Date.now() - startTime) / 1000);
+        logger.error({ err: error, url: tweetUrl, elapsedSec: elapsed }, 'Max tweet roast failed');
+        await api.editMessageText(
+          chatId, statusMsg.message_id,
+          `❌ Failed after ${String(elapsed)}s: ${escapeHtml(getErrorMessage(error).slice(0, 200))}`,
+          { parse_mode: 'HTML' },
+        ).catch(() => {});
+      } finally {
+        if (mediaCleanup) mediaCleanup().catch(() => {});
+      }
+    })();
+  }
+
+  function handleMaxPersonRoast(ctx: Context, handle: string, userContext?: string, quick = false): void {
+    if (!provider) {
+      void ctx.reply('⚠️ LLM provider not configured.');
+      return;
+    }
+    const chatId = ctx.chat?.id;
+    if (!chatId) return;
+    const api = ctx.api;
+
+    void (async () => {
+      const startTime = Date.now();
+      const statusMsg = await api.sendMessage(
+        chatId,
+        `🚀 MAX for <b>@${escapeHtml(handle)}</b> — launching 3 pipelines...`,
+        { parse_mode: 'HTML' },
+      );
+
+      let enrichmentContext: string | undefined;
+      if (opts.twitterEnricher) {
+        try {
+          const enrichment = await opts.twitterEnricher.enrich(handle);
+          if (enrichment?.hasData) enrichmentContext = enrichment.profileContext;
+        } catch (err) {
+          logger.warn({ err, target: handle }, 'Person enrichment failed');
+        }
+      }
+
+      const updateStatus = (text: string): void => {
+        const elapsed = Math.round((Date.now() - startTime) / 1000);
+        api.editMessageText(chatId, statusMsg.message_id, `${text} <i>(${String(elapsed)}s)</i>`, { parse_mode: 'HTML' }).catch(() => {});
+      };
+
+      const pipelineStatuses: string[] = [];
+      const onProgress = (pipeline: MaxPipeline, status: string, variants: number, durationMs: number): void => {
+        const label = PIPELINE_LABELS[pipeline];
+        const sec = Math.round(durationMs / 1000);
+        if (status === 'ok') {
+          pipelineStatuses.push(`✅ ${label}: ${String(variants)} (${String(sec)}s)`);
+        } else {
+          pipelineStatuses.push(`❌ ${label}: ${status} (${String(sec)}s)`);
+        }
+        const remaining = 3 - pipelineStatuses.length;
+        const progressLine = pipelineStatuses.join('\n');
+        const waitLine = remaining > 0 ? `\n⏳ Waiting for ${String(remaining)} more...` : '\n⚖️ Ranking...';
+        updateStatus(`🚀 MAX <b>@${escapeHtml(handle)}</b>\n${progressLine}${waitLine}`);
+      };
+
+      try {
+        const result = await generateRoastsMax({
+          targetName: handle,
+          provider,
+          logger,
+          feedbackRepo,
+          configRepo,
+          exampleRepo,
+          patternRepo,
+          stockpileRepo,
+          farmAttemptRepo,
+          profileContext: enrichmentContext,
+          userContext,
+          quick,
+          onProgress,
+        });
+
+        const elapsed = Math.round((Date.now() - startTime) / 1000);
+        const header = `🚀 MAX <b>@${escapeHtml(handle)}</b> — ${String(elapsed)}s${quick ? ' (quick)' : ''}\n\n`;
+        const body = header + formatMaxOutput(result);
+
+        await api.editMessageText(chatId, statusMsg.message_id, body, {
+          parse_mode: 'HTML',
+          link_preview_options: { is_disabled: true },
+        });
+      } catch (error) {
+        const elapsed = Math.round((Date.now() - startTime) / 1000);
+        logger.error({ err: error, target: handle, elapsedSec: elapsed }, 'Max person roast failed');
+        await api.editMessageText(
+          chatId, statusMsg.message_id,
+          `❌ Failed after ${String(elapsed)}s: ${escapeHtml(getErrorMessage(error).slice(0, 200))}`,
+          { parse_mode: 'HTML' },
+        ).catch(() => {});
+      }
+    })();
+  }
+
+  function handleMaxFreeformRoast(ctx: Context, target: string, userContext?: string, quick = false): void {
+    if (!provider) {
+      void ctx.reply('⚠️ LLM provider not configured.');
+      return;
+    }
+    const chatId = ctx.chat?.id;
+    if (!chatId) return;
+    const api = ctx.api;
+
+    void (async () => {
+      const startTime = Date.now();
+      const statusMsg = await api.sendMessage(
+        chatId,
+        `🚀 MAX for <b>${escapeHtml(target)}</b> — launching 3 pipelines...`,
+        { parse_mode: 'HTML' },
+      );
+
+      const updateStatus = (text: string): void => {
+        const elapsed = Math.round((Date.now() - startTime) / 1000);
+        api.editMessageText(chatId, statusMsg.message_id, `${text} <i>(${String(elapsed)}s)</i>`, { parse_mode: 'HTML' }).catch(() => {});
+      };
+
+      const pipelineStatuses: string[] = [];
+      const onProgress = (pipeline: MaxPipeline, status: string, variants: number, durationMs: number): void => {
+        const label = PIPELINE_LABELS[pipeline];
+        const sec = Math.round(durationMs / 1000);
+        if (status === 'ok') {
+          pipelineStatuses.push(`✅ ${label}: ${String(variants)} (${String(sec)}s)`);
+        } else {
+          pipelineStatuses.push(`❌ ${label}: ${status} (${String(sec)}s)`);
+        }
+        const remaining = 3 - pipelineStatuses.length;
+        const progressLine = pipelineStatuses.join('\n');
+        const waitLine = remaining > 0 ? `\n⏳ Waiting for ${String(remaining)} more...` : '\n⚖️ Ranking...';
+        updateStatus(`🚀 MAX <b>${escapeHtml(target)}</b>\n${progressLine}${waitLine}`);
+      };
+
+      try {
+        const result = await generateRoastsMax({
+          targetName: target,
+          provider,
+          logger,
+          feedbackRepo,
+          configRepo,
+          exampleRepo,
+          patternRepo,
+          stockpileRepo,
+          farmAttemptRepo,
+          userContext,
+          quick,
+          onProgress,
+        });
+
+        const elapsed = Math.round((Date.now() - startTime) / 1000);
+        const header = `🚀 MAX <b>${escapeHtml(target)}</b> — ${String(elapsed)}s${quick ? ' (quick)' : ''}\n\n`;
+        const body = header + formatMaxOutput(result);
+
+        await api.editMessageText(chatId, statusMsg.message_id, body, {
+          parse_mode: 'HTML',
+          link_preview_options: { is_disabled: true },
+        });
+      } catch (error) {
+        const elapsed = Math.round((Date.now() - startTime) / 1000);
+        logger.error({ err: error, target, elapsedSec: elapsed }, 'Max freeform roast failed');
+        await api.editMessageText(
+          chatId, statusMsg.message_id,
+          `❌ Failed after ${String(elapsed)}s: ${escapeHtml(getErrorMessage(error).slice(0, 200))}`,
+          { parse_mode: 'HTML' },
+        ).catch(() => {});
+      }
+    })();
+  }
+
+  bot.command('roast_max', async (ctx) => {
+    const raw = ctx.match?.trim();
+    if (!raw) {
+      await ctx.reply(
+        [
+          'Usage: /roast_max &lt;target&gt;',
+          '',
+          '3 parallel pipelines (Opus + Sonnet+R + Sonnet) → judge panel → top 3',
+          '',
+          'Target types:',
+          '  <code>/roast_max https://x.com/.../status/...</code> — tweet',
+          '  <code>/roast_max @handle</code> — person',
+          '  <code>/roast_max hyperliquid</code> — freeform',
+          '',
+          'Options:',
+          '  <code>--quick</code> — skip serious eval (rankBatch only)',
+          '',
+          'Context (second line):',
+          '  <code>/roast_max @handle</code>',
+          '  <code>focus on his rug pulls</code>',
+        ].join('\n'),
+        { parse_mode: 'HTML' },
+      );
+      return;
+    }
+
+    if (!provider) {
+      await ctx.reply('⚠️ LLM provider not configured.');
+      return;
+    }
+
+    const lines = raw.split('\n');
+    let firstLine = lines[0]!.trim();
+    const userContext = lines.slice(1).join('\n').trim() || undefined;
+    const quick = firstLine.includes('--quick');
+    firstLine = firstLine.replace('--quick', '').trim();
+
+    // Tweet URL
+    if (isTweetUrl(firstLine)) {
+      handleMaxTweetRoast(ctx, firstLine, userContext, quick);
+      return;
+    }
+
+    // @handle
+    if (isTwitterHandle(firstLine)) {
+      handleMaxPersonRoast(ctx, firstLine.slice(1), userContext, quick);
+      return;
+    }
+
+    // Profile URL
+    if (isTwitterProfileUrl(firstLine)) {
+      const handle = extractTwitterHandle(firstLine);
+      if (handle) {
+        handleMaxPersonRoast(ctx, handle, userContext, quick);
+        return;
+      }
+    }
+
+    // Freeform
+    handleMaxFreeformRoast(ctx, firstLine, userContext, quick);
   });
 
   // ---------------------------------------------------------------------------
@@ -3316,6 +3669,85 @@ export function createBot(opts: {
           });
         } catch (error) {
           logger.error({ err: error, ctxKey }, 'lt-regen callback failed');
+          await ctx.editMessageText(
+            `❌ <b>Regen failed:</b> ${escapeHtml(getErrorMessage(error).slice(0, 200))}`,
+            { parse_mode: 'HTML' },
+          ).catch(() => {});
+        }
+      })();
+
+    // --- Max regen ---
+    } else if (data.startsWith('mx-regen:')) {
+      const ctxKey = data.slice(9);
+      const storedCtx = maxContexts.get(ctxKey);
+      if (!storedCtx) {
+        await ctx.answerCallbackQuery({ text: 'Context expired — run /roast_max again', show_alert: true });
+        return;
+      }
+
+      if (!provider) {
+        await ctx.answerCallbackQuery({ text: 'Provider not available', show_alert: true });
+        return;
+      }
+
+      await ctx.answerCallbackQuery({ text: 'Regenerating (3 pipelines)...' });
+      await ctx.editMessageText('🚀 <b>Regenerating MAX...</b>', { parse_mode: 'HTML' });
+
+      const chatId = ctx.chat?.id;
+      if (!chatId) return;
+
+      void (async () => {
+        try {
+          const startTime = Date.now();
+          const result = await generateRoastsMax({
+            targetName: storedCtx.targetName,
+            provider,
+            logger,
+            feedbackRepo,
+            configRepo,
+            exampleRepo,
+            patternRepo,
+            stockpileRepo,
+            farmAttemptRepo,
+            imagePaths: storedCtx.imagePaths.length > 0 ? storedCtx.imagePaths : undefined,
+            profileContext: storedCtx.profileContext,
+            tweetMode: !!storedCtx.tweetUrl,
+            userContext: storedCtx.userContext,
+            quick: storedCtx.quick,
+          });
+
+          const elapsed = Math.round((Date.now() - startTime) / 1000);
+          const regenLines: string[] = [
+            `🔄 MAX <b>${escapeHtml(storedCtx.targetName)}</b> — regenerated, ${String(elapsed)}s${storedCtx.quick ? ' (quick)' : ''}`,
+          ];
+
+          if (storedCtx.tweetUrl) {
+            const normalizedUrl = storedCtx.tweetUrl.startsWith('http') ? storedCtx.tweetUrl : `https://${storedCtx.tweetUrl}`;
+            regenLines.push(`<a href="${escapeHtml(normalizedUrl)}">Original tweet</a>`);
+          }
+          regenLines.push('');
+
+          if (result.variants.length === 0) {
+            regenLines.push('❌ <i>All variants filtered or scored below threshold.</i>');
+          } else {
+            regenLines.push(formatMaxOutput(result));
+          }
+
+          const regenKeyboard = result.variants.length > 0
+            ? new InlineKeyboard().text('🔄 Regen', `mx-regen:${ctxKey}`)
+            : undefined;
+
+          const regenMsgId = ctx.callbackQuery?.message?.message_id;
+          if (chatId && regenMsgId) {
+            await bot.api.deleteMessage(chatId, regenMsgId).catch(() => {});
+          }
+          await ctx.reply(regenLines.join('\n'), {
+            parse_mode: 'HTML',
+            reply_markup: regenKeyboard,
+            link_preview_options: { is_disabled: true },
+          });
+        } catch (error) {
+          logger.error({ err: error, ctxKey }, 'mx-regen callback failed');
           await ctx.editMessageText(
             `❌ <b>Regen failed:</b> ${escapeHtml(getErrorMessage(error).slice(0, 200))}`,
             { parse_mode: 'HTML' },

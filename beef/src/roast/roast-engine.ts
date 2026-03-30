@@ -970,7 +970,7 @@ function jaccardSimilarity(a: Set<string>, b: Set<string>): number {
  * Remove variants that are >threshold similar to a higher-scored variant.
  * Input must be pre-sorted by selfScore descending.
  */
-function jaccardDedup<T extends { text: string }>(variants: T[], threshold: number): T[] {
+export function jaccardDedup<T extends { text: string }>(variants: T[], threshold: number): T[] {
   const kept: T[] = [];
   const keptBigrams: Set<string>[] = [];
 
