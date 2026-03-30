@@ -213,8 +213,10 @@ export class PlaywrightTwitterClient implements ITwitterClient {
       }
 
       // Type the tweet
-      const textarea = this.page.locator('[data-testid="tweetTextarea_0"]');
-      await textarea.waitFor({ state: 'visible' });
+      const textarea = this.page.locator(
+        '[data-testid="tweetTextarea_0"], [data-testid="tweetTextarea_0_label"] [role="textbox"], [role="dialog"] [role="textbox"]',
+      ).first();
+      await textarea.waitFor({ state: 'visible', timeout: 15_000 });
       await this.hoverAndClick(textarea);
       await this.humanDelay(300, 800);
       await this.humanType(text);
@@ -305,8 +307,11 @@ export class PlaywrightTwitterClient implements ITwitterClient {
       await this.humanDelay(500, 1500);
 
       // Type the reply (character by character for realism)
-      const textarea = this.page.locator('[data-testid="tweetTextarea_0"]');
-      await textarea.waitFor({ state: 'visible' });
+      // Try testid first, then fall back to role="textbox" (Twitter changes testids periodically)
+      const textarea = this.page.locator(
+        '[data-testid="tweetTextarea_0"], [data-testid="tweetTextarea_0_label"] [role="textbox"], [role="dialog"] [role="textbox"]',
+      ).first();
+      await textarea.waitFor({ state: 'visible', timeout: 15_000 });
       await this.hoverAndClick(textarea);
       await this.humanDelay(300, 800);
       await this.humanType(text);
