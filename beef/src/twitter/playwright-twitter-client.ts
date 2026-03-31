@@ -1,4 +1,4 @@
-import { chromium, type BrowserContext, type Page } from 'rebrowser-playwright';
+import { chromium, type BrowserContext, type Page } from 'patchright';
 import type { Logger } from 'pino';
 import type { TweetMetrics } from '@common/types/index.js';
 import type {
@@ -59,7 +59,7 @@ const MAX_AUTO_RESTARTS = 3;
 const AUTO_RESTART_WINDOW_MS = 60 * 60 * 1000; // 1 hour
 
 /**
- * Twitter client using rebrowser-playwright for browser automation.
+ * Twitter client using patchright for browser automation.
  * Handles reply-guy posting (replies to tweets where the bot wasn't mentioned)
  * which is impossible via Twitter API v2 (returns 403).
  *
