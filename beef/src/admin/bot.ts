@@ -2169,17 +2169,19 @@ export function createBot(opts: {
             } else if (result.posted || result.savedOnly) {
               const statusEmoji = result.posted ? '✅' : '📝';
               const statusLabel = result.posted ? 'Posted' : 'Generated (Twitter disabled)';
+              const stockpileInfo = result.fromStockpile ? ' (from stockpile)' : '';
               const evalInfo = result.evaluationScore
                 ? `\nEval: <b>${result.evaluationScore.toFixed(1)}</b>/5`
                 : '';
+              const tweetIdLine = result.tweetId ? `\n🔗 ${tweetLink(result.tweetId, twitterUsername)}` : '';
               await api.editMessageText(
                 chatId,
                 statusMsg.message_id,
-                `${statusEmoji} ${statusLabel} in ${String(elapsed)}s\nTarget: <b>${escapeHtml(result.target ?? '?')}</b>${evalInfo}`,
+                `${statusEmoji} ${statusLabel} in ${String(elapsed)}s${stockpileInfo}\nTarget: <b>${escapeHtml(result.target ?? '?')}</b>${tweetIdLine}${evalInfo}`,
                 { parse_mode: 'HTML' },
               );
               if (result.postedText) {
-                await api.sendMessage(chatId, `<code>${escapeHtml(result.postedText)}</code>`, { parse_mode: 'HTML' }).catch(() => {});
+                await api.sendMessage(chatId, `🔥 <b>Reply:</b>\n<code>${escapeHtml(result.postedText)}</code>`, { parse_mode: 'HTML' }).catch(() => {});
               }
             } else {
               const reason = result.error ?? 'Processing failed';

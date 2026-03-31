@@ -372,7 +372,7 @@ export class QueueManager {
               { queueId: item.id, roastId, tweetId: postResult.tweetId, target: item.targetName, fromStockpile: true },
               'Stockpiled roast posted',
             );
-            return { dequeued: true, posted: true, tweetId: postResult.tweetId, target: item.targetName, fromStockpile: true };
+            return { dequeued: true, posted: true, tweetId: postResult.tweetId, target: item.targetName, fromStockpile: true, postedText: stockpiled.tweetText };
           }
 
           this.roastRepo.updateStatus(roastId, 'failed');
