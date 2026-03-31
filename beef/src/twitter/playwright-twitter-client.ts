@@ -698,88 +698,84 @@ export class PlaywrightTwitterClient implements ITwitterClient {
   }
 
   /**
-   * Click the post button with fallback selectors.
-   * Primary: tweetButton (compose page). Fallback: tweetButtonInline.
+   * Click the post button — finds first enabled submit button on page.
    */
   private async clickPostButton(): Promise<void> {
-    if (!this.page) return;
-
-    const button = await this.findVisibleButton(
-      '[data-testid="tweetButton"]',
-      '[data-testid="tweetButtonInline"]',
-    );
-    if (!button) {
-      throw new Error('No post button found — Twitter UI may have changed');
-    }
-
-    if (!(await this.waitForButtonEnabled(button))) {
-      const charInfo = await this.getTextareaCharInfo();
-      throw new Error(`Post button disabled — text may exceed character limit (${charInfo})`);
-    }
-
-    await this.hoverAndClick(button);
+    await this.clickSubmitButton('post');
   }
 
   /**
-   * Click the reply button with fallback selectors.
-   * Primary: tweetButtonInline (reply dialog). Fallback: tweetButton.
+   * Click the reply button — finds first enabled submit button on page.
    */
   private async clickReplyButton(): Promise<void> {
-    if (!this.page) return;
-
-    const button = await this.findVisibleButton(
-      '[data-testid="tweetButtonInline"]',
-      '[data-testid="tweetButton"]',
-    );
-    if (!button) {
-      throw new Error('No reply button found — Twitter UI may have changed');
-    }
-
-    if (!(await this.waitForButtonEnabled(button))) {
-      const charInfo = await this.getTextareaCharInfo();
-      throw new Error(`Reply button disabled — text may exceed character limit (${charInfo})`);
-    }
-
-    await this.hoverAndClick(button);
-  }
-
-  /** Find first visible button from primary/fallback selectors. */
-  private async findVisibleButton(
-    primarySelector: string,
-    fallbackSelector: string,
-  ): Promise<ReturnType<Page['locator']> | null> {
-    if (!this.page) return null;
-    const primary = this.page.locator(primarySelector);
-    const fallback = this.page.locator(fallbackSelector);
-
-    if (await primary.isVisible({ timeout: 2000 }).catch(() => false)) {
-      return primary;
-    }
-    if (await fallback.isVisible({ timeout: 2000 }).catch(() => false)) {
-      this.logger.debug(`${primarySelector} not found, using fallback ${fallbackSelector}`);
-      return fallback;
-    }
-    return null;
+    await this.clickSubmitButton('reply');
   }
 
   /**
-   * Wait for a submit button to become enabled (aria-disabled !== "true").
-   * Twitter validates text asynchronously — button may be briefly disabled after typing.
+   * Find and click the first ENABLED submit button on the page.
+   *
+   * Twitter has two submit button testids:
+   * - tweetButton: used on compose/post page and compose dialog overlay
+   * - tweetButtonInline: used for inline reply on status pages
+   *
+   * When clicking reply on a tweet, Twitter may open a compose dialog overlay.
+   * In that case BOTH buttons exist: tweetButton (enabled, in dialog) and
+   * tweetButtonInline (disabled, on status page behind dialog).
+   * We must find the ENABLED one, not just the first visible one.
    */
-  private async waitForButtonEnabled(
-    locator: ReturnType<Page['locator']>,
-    timeout = 5000,
-  ): Promise<boolean> {
-    const deadline = Date.now() + timeout;
+  private async clickSubmitButton(context: 'post' | 'reply'): Promise<void> {
+    if (!this.page) return;
+
+    const url = this.page.url();
+
+    // Diagnostic: enumerate ALL submit buttons and their states
+    const allButtons = this.page.locator(
+      '[data-testid="tweetButton"], [data-testid="tweetButtonInline"]',
+    );
+    const buttonCount = await allButtons.count().catch(() => 0);
+    const diagnostics: Array<{ index: number; testid: string | null; disabled: string | null; visible: boolean }> = [];
+
+    for (let i = 0; i < buttonCount; i++) {
+      const btn = allButtons.nth(i);
+      diagnostics.push({
+        index: i,
+        testid: await btn.getAttribute('data-testid').catch(() => null),
+        disabled: await btn.getAttribute('aria-disabled').catch(() => null),
+        visible: await btn.isVisible().catch(() => false),
+      });
+    }
+
+    this.logger.info(
+      { context, url, buttonCount, buttons: diagnostics },
+      'Submit button diagnostics',
+    );
+
+    // Strategy: find first ENABLED + VISIBLE button, with 5s retry
+    const deadline = Date.now() + 5_000;
     while (Date.now() < deadline) {
-      const ariaDisabled = await locator.getAttribute('aria-disabled').catch(() => null);
-      if (ariaDisabled !== 'true') return true;
+      for (let i = 0; i < buttonCount; i++) {
+        const btn = allButtons.nth(i);
+        const visible = await btn.isVisible().catch(() => false);
+        if (!visible) continue;
+        const disabled = await btn.getAttribute('aria-disabled').catch(() => null);
+        if (disabled !== 'true') {
+          const testid = await btn.getAttribute('data-testid').catch(() => 'unknown');
+          this.logger.info({ testid, index: i }, 'Clicking enabled submit button');
+          await this.hoverAndClick(btn);
+          return;
+        }
+      }
       await new Promise<void>((r) => setTimeout(r, 300));
     }
-    return false;
+
+    // All buttons disabled — collect debug info and fail
+    const charInfo = await this.getTextareaCharInfo();
+    throw new Error(
+      `No enabled ${context} button found after 5s — url: ${url}, buttons: ${JSON.stringify(diagnostics)}, ${charInfo}`,
+    );
   }
 
-  /** Read textarea content length for debugging disabled button issues. */
+  /** Read textarea content and URL for debugging submit button issues. */
   private async getTextareaCharInfo(): Promise<string> {
     if (!this.page) return 'no page';
     try {
