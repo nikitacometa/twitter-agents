@@ -103,6 +103,7 @@ const DEFAULT_PRESETS: Record<TaskProfile, TaskPreset> = {
     tools: [],
     maxTurns: 1,
     timeoutMs: 30_000,
+    fallbackModel: 'haiku',
   },
   'example-parse': {
     model: 'sonnet',

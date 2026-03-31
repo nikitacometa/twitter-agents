@@ -68,7 +68,7 @@ export class ReplyGuySelector {
       const result = await this.provider.run<EvalResponseItem[]>('reply-guy-eval', {
         prompt,
         profile: 'audit',
-        timeoutMs: 45_000,
+        timeoutMs: 90_000,
         requiresResearch: false,
       });
 

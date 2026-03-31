@@ -179,21 +179,25 @@ export class ClaudeCodeProvider implements LLMProvider {
       child.stdout.on('data', (chunk: Buffer) => { stdout += chunk.toString(); });
       child.stderr.on('data', (chunk: Buffer) => { stderr += chunk.toString(); });
 
+      let killedByTimeout = false;
       const timer = timeout > 0
-        ? setTimeout(() => { child.kill('SIGTERM'); }, timeout)
+        ? setTimeout(() => { killedByTimeout = true; child.kill('SIGTERM'); }, timeout)
         : null;
 
       child.on('close', (code, signal) => {
         if (timer) clearTimeout(timer);
         this.childProcesses.delete(child);
 
-        if (signal) {
+        if (signal || killedByTimeout) {
           reject(new Error(
-            `claude process failed (killed by ${signal} after ${String(timeout)}ms)${stderr ? `\nstderr: ${stderr}` : ''}${stdout ? `\nstdout: ${stdout.slice(0, 500)}` : ''}`,
+            `claude process ${killedByTimeout ? 'timed out' : 'killed'} (${signal ?? 'SIGTERM'} after ${String(timeout)}ms)${stderr ? `\nstderr: ${stderr}` : ''}${stdout ? `\nstdout: ${stdout.slice(0, 500)}` : ''}`,
           ));
         } else if (code !== 0) {
+          // Exit code 143 = SIGTERM (128+15) — process handled the signal instead of dying directly
+          const isTimeout = code === 143 && killedByTimeout;
+          const reason = isTimeout ? `timed out (${String(timeout)}ms)` : `exit code ${String(code)}`;
           reject(new Error(
-            `claude process failed (exit code ${String(code)})${stderr ? `\nstderr: ${stderr}` : ''}${stdout ? `\nstdout: ${stdout.slice(0, 500)}` : ''}`,
+            `claude process failed (${reason})${stderr ? `\nstderr: ${stderr}` : ''}${stdout ? `\nstdout: ${stdout.slice(0, 500)}` : ''}`,
           ));
         } else {
           resolve({ stdout });
