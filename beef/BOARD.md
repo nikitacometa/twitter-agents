@@ -72,7 +72,7 @@ Status: `[ ]` pending, `[~]` in progress, `[x]` done, `[!]` blocked
 [x] #B-47 — Reply-guy pipeline router: Max (Opus) for S/A-tier, Lightning (Sonnet) for rest. Concurrent Max + sequential Lightning, fallback, runner-up variants in TG notifications. 3 audit bugs fixed. Shipped 2026-03-30
 [x] #B-46 — /roast_max command: 3 parallel pipelines (Opus+Sonnet+R+Sonnet) → cross-pipeline dedup → rankBatch → serious eval → top 3. prepareTweetContext extracted, variant count 10 for all pipelines. Shipped 2026-03-30
 [x] #B-48 — Patchright migration + Playwright hardening: rebrowser→patchright 1.58.2 (22 CDP patches), WebRTC leak prevention (JS + Chrome args), session persistence (storageState + restore-last-session), auto-restart (3/hour limit), CB error discrimination, session expiry alerts, t.co URL expansion + note_tweet. Shipped 2026-03-31
-[ ] #B-45 — Reply-guy live mode: switch REPLY_GUY_DRY_RUN=false, reduce cap to 20, raise min roastability to 7, verify Playwright posting
+[x] #B-45 — Reply-guy live mode: REPLY_GUY_DRY_RUN=false, cap 20, roastability 7, max_daily 7, Playwright posting via Patchright. Shipped 2026-03-31
 [ ] #B-33 — Auto-farm cron: every 6h farm top 3-5 targets from timeline monitor, dedup 48h, stockpile low alert
 [ ] #B-34 — Auto-post from stockpile: every 3h post best entry (humanScore ≥ 4, buffer ≥ 5), max 3/day, notify after
 [ ] #B-35 — Smart reply autonomy: stratify by follower count (<1K auto, 1-10K auto if eval ≥ 4.0, >10K require approval)
