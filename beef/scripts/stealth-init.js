@@ -95,3 +95,24 @@ patchWebGLGetParameter(
 patchWebGLGetParameter(
   typeof WebGL2RenderingContext !== 'undefined' ? WebGL2RenderingContext.prototype : null,
 );
+
+// 11. WebRTC leak prevention — block STUN/TURN to hide real IP behind proxy.
+// RTCPeerConnection sends UDP packets directly to STUN servers, bypassing SOCKS5.
+// Clearing iceServers prevents ICE candidate gathering that would expose the VPS IP.
+try {
+  const OriginalRTC = window.RTCPeerConnection || window.webkitRTCPeerConnection;
+  if (OriginalRTC) {
+    window.RTCPeerConnection = class extends OriginalRTC {
+      constructor(config, constraints) {
+        super({ ...config, iceServers: [] }, constraints);
+      }
+    };
+    // Preserve prototype chain so instanceof checks still work
+    window.RTCPeerConnection.prototype = OriginalRTC.prototype;
+    if (window.webkitRTCPeerConnection) {
+      window.webkitRTCPeerConnection = window.RTCPeerConnection;
+    }
+  }
+} catch (_) {
+  // RTCPeerConnection may not be available in all contexts
+}

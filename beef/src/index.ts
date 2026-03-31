@@ -257,6 +257,7 @@ if (config.ENABLE_TWITTER) {
       adminChatId: config.TELEGRAM_CHAT_ID ?? config.TELEGRAM_ADMIN_IDS[0],
       cookies: browserCookies,
       chromeExecutablePath: config.CHROME_EXECUTABLE_PATH,
+      timezoneId: config.BROWSER_TIMEZONE,
     });
 
     try {

@@ -39,6 +39,7 @@ export interface PlaywrightClientConfig {
   adminChatId?: number | string;
   cookies?: TwitterBrowserCookies;
   chromeExecutablePath?: string;
+  timezoneId?: string;
 }
 
 /** Circuit breaker: disable posting after consecutive failures, auto-reset after cooldown. */
@@ -117,9 +118,13 @@ export class PlaywrightTwitterClient implements ITwitterClient {
           '--disable-infobars',
           '--no-first-run',
           '--no-default-browser-check',
+          '--restore-last-session',
+          // WebRTC: prevent real IP leak through STUN/TURN (belt-and-suspenders with stealth-init.js)
+          '--force-webrtc-ip-handling-policy=disable_non_proxied_udp',
+          '--disable-features=WebRtcHideLocalIpsWithMdns',
         ],
         locale: 'en-US',
-        timezoneId: 'Asia/Singapore',
+        timezoneId: this.config.timezoneId ?? 'Asia/Singapore',
       };
 
       // Prefer Chrome Stable over Playwright Chromium (real Google API keys, proper TLS fingerprint)
@@ -208,7 +213,7 @@ export class PlaywrightTwitterClient implements ITwitterClient {
       if (this.isLoginRedirect()) {
         this.logger.error('Session expired — redirected to login during postTweet');
         this._isLoggedIn = false;
-        this.recordFailure();
+        this.recordFailure(true);
         return null;
       }
 
@@ -229,10 +234,10 @@ export class PlaywrightTwitterClient implements ITwitterClient {
       await this.clickPostButton();
       await this.humanDelay(2000, 4000);
 
-      const tweetId = await this.extractTweetIdFromResponse(responsePromise);
+      const { tweetId, permanent } = await this.extractTweetIdFromResponse(responsePromise);
       if (!tweetId) {
         this.logger.error('Tweet posting failed — no confirmed tweet ID');
-        this.recordFailure();
+        this.recordFailure(permanent);
         return null;
       }
       if (!tweetId.startsWith('pw_unconfirmed_')) {
@@ -296,7 +301,7 @@ export class PlaywrightTwitterClient implements ITwitterClient {
       if (this.isLoginRedirect()) {
         this.logger.error({ replyToId }, 'Session expired — redirected to login during replyToTweet');
         this._isLoggedIn = false;
-        this.recordFailure();
+        this.recordFailure(true);
         return null;
       }
 
@@ -324,10 +329,10 @@ export class PlaywrightTwitterClient implements ITwitterClient {
       await this.clickReplyButton();
       await this.humanDelay(2000, 4000);
 
-      const tweetId = await this.extractTweetIdFromResponse(responsePromise);
+      const { tweetId, permanent } = await this.extractTweetIdFromResponse(responsePromise);
       if (!tweetId) {
         this.logger.error({ replyToId }, 'Reply posting failed — no confirmed tweet ID');
-        this.recordFailure();
+        this.recordFailure(permanent);
         return null;
       }
       if (!tweetId.startsWith('pw_unconfirmed_')) {
@@ -382,6 +387,15 @@ export class PlaywrightTwitterClient implements ITwitterClient {
     }
 
     if (this.context) {
+      // Save session state before closing (prevents cookie loss on pm2 restart)
+      try {
+        await this.context.storageState({
+          path: resolve(this.config.profilePath, 'storage-state.json'),
+        });
+        this.logger.info('Session state saved');
+      } catch (err) {
+        this.logger.warn({ err }, 'Failed to save session state');
+      }
       await this.context.close();
       this.context = null;
       this.page = null;
@@ -433,13 +447,25 @@ export class PlaywrightTwitterClient implements ITwitterClient {
     this.page = null;
     this._isLoggedIn = false;
     this.busy = false;
+
+    // Alert admin + auto-restart after 5s
+    void this.sendBrowserCrashAlert();
+    setTimeout(() => {
+      void this.initialize().catch((err) => {
+        this.logger.error({ err }, 'Browser auto-restart failed');
+      });
+    }, 5000);
   }
 
   private async checkLoggedIn(): Promise<boolean> {
     if (!this.page) return false;
     try {
       await this.page.goto('https://x.com/home', { waitUntil: 'domcontentloaded' });
-      await this.page.waitForTimeout(3000);
+      // Wait for a meaningful indicator instead of unconditional 3s sleep
+      await this.page.waitForSelector(
+        '[data-testid="primaryColumn"], [data-testid="loginButton"], [href="/login"]',
+        { timeout: 10_000 },
+      ).catch(() => {});
       const url = this.page.url();
       return !url.includes('/login') && !url.includes('/i/flow/login');
     } catch (error) {
@@ -513,6 +539,24 @@ export class PlaywrightTwitterClient implements ITwitterClient {
     }
   }
 
+  private async sendBrowserCrashAlert(): Promise<void> {
+    const { telegramToken, adminChatId } = this.config;
+    if (!telegramToken || !adminChatId) return;
+    try {
+      await fetch(`https://api.telegram.org/bot${telegramToken}/sendMessage`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          chat_id: adminChatId,
+          text: '💥 <b>Browser crashed</b>\n\nPlaywright context closed unexpectedly. Auto-restarting in 5s...',
+          parse_mode: 'HTML',
+        }),
+      });
+    } catch {
+      this.logger.warn('Failed to send browser crash Telegram alert');
+    }
+  }
+
   /**
    * Set up response interception for Twitter's CreateTweet GraphQL mutation.
    * Intercepts ALL statuses (not just 200) so we can distinguish real failures
@@ -538,12 +582,12 @@ export class PlaywrightTwitterClient implements ITwitterClient {
 
   /**
    * Extract tweet ID from intercepted CreateTweet GraphQL response.
-   * Returns null if the tweet was not posted (non-200, error in body, timeout).
-   * Only returns a real tweet ID on confirmed success.
+   * Returns tweetId (string or null) and whether the failure is permanent
+   * (non-200 status, Error 226, account issues) vs transient (timeout, malformed).
    */
   private async extractTweetIdFromResponse(
     responsePromise: Promise<{ status: number; json: unknown } | null>,
-  ): Promise<string | null> {
+  ): Promise<{ tweetId: string | null; permanent: boolean }> {
     const result = await responsePromise;
 
     // Network timeout — tweet may or may not have been posted.
@@ -551,16 +595,16 @@ export class PlaywrightTwitterClient implements ITwitterClient {
     // but callers should NOT call trackPost() for unconfirmed posts.
     if (!result) {
       this.logger.warn('CreateTweet interception timed out — tweet status unknown');
-      return `pw_unconfirmed_${Date.now()}`;
+      return { tweetId: `pw_unconfirmed_${Date.now()}`, permanent: false };
     }
 
-    // Non-200 status — tweet was NOT posted
+    // Non-200 status — tweet was NOT posted (likely blocked, 226, or rate-limited)
     if (result.status !== 200) {
       this.logger.error(
         { status: result.status },
         'CreateTweet returned non-200 — tweet not posted',
       );
-      return null;
+      return { tweetId: null, permanent: true };
     }
 
     // 200 but check for errors in JSON body (Twitter sometimes does this)
@@ -572,7 +616,7 @@ export class PlaywrightTwitterClient implements ITwitterClient {
           { errors: data['errors'] },
           'CreateTweet returned 200 with errors in body — tweet not posted',
         );
-        return null;
+        return { tweetId: null, permanent: true };
       }
 
       // Navigate nested GraphQL response: data.create_tweet.tweet_results.result.rest_id
@@ -582,13 +626,13 @@ export class PlaywrightTwitterClient implements ITwitterClient {
       const restId = (restResult?.['result'] as Record<string, unknown> | undefined)?.['rest_id'];
 
       if (typeof restId === 'string' && restId.length > 0) {
-        return restId;
+        return { tweetId: restId, permanent: false };
       }
 
       this.logger.warn({ responseKeys: Object.keys(data) }, 'CreateTweet response missing rest_id');
     }
 
-    return null;
+    return { tweetId: null, permanent: false };
   }
 
   /**
@@ -722,24 +766,34 @@ export class PlaywrightTwitterClient implements ITwitterClient {
     return cb.disabledUntil !== null && Date.now() < cb.disabledUntil;
   }
 
-  /** Record a posting failure. Trips circuit breaker after CIRCUIT_BREAKER_THRESHOLD failures within the window. */
-  private recordFailure(): void {
+  /**
+   * Record a posting failure. Trips circuit breaker after CIRCUIT_BREAKER_THRESHOLD
+   * transient failures within the window, or immediately on permanent errors.
+   *
+   * @param permanent - true for errors that won't resolve on retry (226, suspended, 403)
+   */
+  private recordFailure(permanent = false): void {
     const cb = this.circuitBreaker;
     const now = Date.now();
 
-    // Reset counter if first failure was outside the window
-    if (cb.firstFailureAt && now - cb.firstFailureAt > CIRCUIT_BREAKER_WINDOW_MS) {
-      cb.consecutiveFailures = 0;
-      cb.firstFailureAt = null;
+    if (permanent) {
+      // Permanent error → trip immediately (ban, suspension, Error 226)
+      cb.consecutiveFailures = CIRCUIT_BREAKER_THRESHOLD;
+      cb.firstFailureAt = now;
+    } else {
+      // Transient error → normal counting
+      if (cb.firstFailureAt && now - cb.firstFailureAt > CIRCUIT_BREAKER_WINDOW_MS) {
+        cb.consecutiveFailures = 0;
+        cb.firstFailureAt = null;
+      }
+      if (!cb.firstFailureAt) cb.firstFailureAt = now;
+      cb.consecutiveFailures++;
     }
-
-    if (!cb.firstFailureAt) cb.firstFailureAt = now;
-    cb.consecutiveFailures++;
 
     if (cb.consecutiveFailures >= CIRCUIT_BREAKER_THRESHOLD) {
       cb.disabledUntil = now + CIRCUIT_BREAKER_COOLDOWN_MS;
       this.logger.error(
-        { failures: cb.consecutiveFailures, cooldownHours: CIRCUIT_BREAKER_COOLDOWN_MS / 3_600_000 },
+        { failures: cb.consecutiveFailures, permanent, cooldownHours: CIRCUIT_BREAKER_COOLDOWN_MS / 3_600_000 },
         'Circuit breaker tripped — Playwright posting disabled',
       );
       void this.sendCircuitBreakerAlert(cb.consecutiveFailures);

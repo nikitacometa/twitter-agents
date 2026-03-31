@@ -26,6 +26,7 @@ const envSchema = z
     // Playwright browser automation
     CHROME_PROFILE_PATH: z.string().optional(),
     CHROME_EXECUTABLE_PATH: z.string().optional(),
+    BROWSER_TIMEZONE: z.string().default('Asia/Singapore'),
 
     // Twitter browser cookies (for Playwright session — avoids login flow)
     TWITTER_AUTH_TOKEN: z.string().optional(),
