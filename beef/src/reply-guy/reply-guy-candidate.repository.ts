@@ -2,11 +2,20 @@ import type Database from 'better-sqlite3';
 import type { ScoredTweet } from '../monitor/tweet-scorer.js';
 import type { PipelineType } from './types.js';
 
+export interface GenerationMetadata {
+  durationMs: number;
+  variantsTotal: number;
+  variantsFiltered: number;
+  runnerUps: Array<{ text: string; score: number; angle?: string; pipeline?: string }>;
+  pipelineStats?: Array<{ pipeline: string; status: string; variants?: number; durationMs?: number }>;
+}
+
 export class ReplyGuyCandidateRepository {
   private readonly insertStmt: Database.Statement;
   private readonly hasSeenStmt: Database.Statement;
   private readonly markEvaluatedStmt: Database.Statement;
   private readonly markGeneratedStmt: Database.Statement;
+  private readonly markGeneratedWithMetaStmt: Database.Statement;
   private readonly markPostedStmt: Database.Statement;
   private readonly markSkippedStmt: Database.Statement;
   private readonly todayCountStmt: Database.Statement;
@@ -36,6 +45,15 @@ export class ReplyGuyCandidateRepository {
     this.markGeneratedStmt = db.prepare(`
       UPDATE reply_guy_candidates
       SET roast_text = ?, roast_score = ?, pipeline_type = ?,
+          status = 'generated', generated_at = datetime('now')
+      WHERE tweet_id = ?
+    `);
+
+    this.markGeneratedWithMetaStmt = db.prepare(`
+      UPDATE reply_guy_candidates
+      SET roast_text = ?, roast_score = ?, pipeline_type = ?,
+          generation_duration_ms = ?, variants_total = ?, variants_filtered = ?,
+          runner_ups = ?, pipeline_stats = ?,
           status = 'generated', generated_at = datetime('now')
       WHERE tweet_id = ?
     `);
@@ -110,8 +128,28 @@ export class ReplyGuyCandidateRepository {
     this.markEvaluatedStmt.run(roastability, reasoning, angle, tweetId);
   }
 
-  markGenerated(tweetId: string, roastText: string, roastScore: number, pipelineType: PipelineType = 'lightning'): void {
+  markGenerated(tweetId: string, roastText: string, roastScore: number, pipelineType: PipelineType = 'max'): void {
     this.markGeneratedStmt.run(roastText, roastScore, pipelineType, tweetId);
+  }
+
+  markGeneratedWithMetadata(
+    tweetId: string,
+    roastText: string,
+    roastScore: number,
+    pipelineType: PipelineType,
+    metadata: GenerationMetadata,
+  ): void {
+    this.markGeneratedWithMetaStmt.run(
+      roastText,
+      roastScore,
+      pipelineType,
+      metadata.durationMs,
+      metadata.variantsTotal,
+      metadata.variantsFiltered,
+      JSON.stringify(metadata.runnerUps),
+      metadata.pipelineStats ? JSON.stringify(metadata.pipelineStats) : null,
+      tweetId,
+    );
   }
 
   markPosted(tweetId: string, postedTweetId: string | null): void {

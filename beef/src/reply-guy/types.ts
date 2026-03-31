@@ -16,6 +16,4 @@ export interface CycleResult {
   generated: number;
   notified: number;
   errors: number;
-  maxUsed: number;
 }
-

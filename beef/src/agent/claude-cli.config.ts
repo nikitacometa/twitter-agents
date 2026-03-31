@@ -117,7 +117,7 @@ const DEFAULT_PRESETS: Record<TaskProfile, TaskPreset> = {
     effort: 'medium',
     tools: [],
     maxTurns: 1,
-    timeoutMs: 120_000,
+    timeoutMs: 300_000,
   },
   'farm-generate': {
     model: 'opus',
