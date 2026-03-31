@@ -8,6 +8,7 @@ import type {
 } from './twitter-client.interface.js';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
+import { existsSync, readFileSync } from 'node:fs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -53,6 +54,9 @@ interface CircuitBreakerState {
 const CIRCUIT_BREAKER_THRESHOLD = 3;
 const CIRCUIT_BREAKER_WINDOW_MS = 60 * 60 * 1000; // 1 hour
 const CIRCUIT_BREAKER_COOLDOWN_MS = 6 * 60 * 60 * 1000; // 6 hours
+/** Max auto-restarts within one hour before giving up. */
+const MAX_AUTO_RESTARTS = 3;
+const AUTO_RESTART_WINDOW_MS = 60 * 60 * 1000; // 1 hour
 
 /**
  * Twitter client using rebrowser-playwright for browser automation.
@@ -72,6 +76,8 @@ export class PlaywrightTwitterClient implements ITwitterClient {
   private busy = false;
   private _isLoggedIn = false;
   private _shuttingDown = false;
+  private _restartCount = 0;
+  private _restartWindowStart = 0;
   private circuitBreaker: CircuitBreakerState = {
     consecutiveFailures: 0,
     firstFailureAt: null,
@@ -146,10 +152,23 @@ export class PlaywrightTwitterClient implements ITwitterClient {
       this.page.setDefaultTimeout(SELECTOR_TIMEOUT);
       this.page.setDefaultNavigationTimeout(NAVIGATION_TIMEOUT);
 
-      // Verify session — first from persistent profile, then from injected cookies
+      // Verify session — persistent profile → saved storage state → injected cookies
       this._isLoggedIn = await this.checkLoggedIn();
+      if (!this._isLoggedIn) {
+        // Try loading saved storage state (created on clean shutdown)
+        const storageStatePath = resolve(this.config.profilePath, 'storage-state.json');
+        if (existsSync(storageStatePath)) {
+          try {
+            this.logger.info('Session not found in profile — loading saved storage state');
+            await this.loadStorageState(storageStatePath);
+            this._isLoggedIn = await this.checkLoggedIn();
+          } catch (err) {
+            this.logger.warn({ err }, 'Failed to load storage state');
+          }
+        }
+      }
       if (!this._isLoggedIn && this.config.cookies) {
-        this.logger.info('Session not found in profile — injecting cookies');
+        this.logger.info('Session not found — injecting cookies from env');
         await this.injectCookies(this.config.cookies);
         this._isLoggedIn = await this.checkLoggedIn();
       }
@@ -430,10 +449,19 @@ export class PlaywrightTwitterClient implements ITwitterClient {
     }
   }
 
+  /** Detect login, suspension, and challenge redirects that prevent normal operation. */
   private isLoginRedirect(): boolean {
     if (!this.page) return false;
     const url = this.page.url();
-    return url.includes('/login') || url.includes('/i/flow/login') || url.includes('/account/access');
+    return (
+      url.includes('/login') ||
+      url.includes('/i/flow/login') ||
+      url.includes('/account/access') ||
+      url.includes('/i/flow/suspended') ||
+      url.includes('/account/suspended') ||
+      url.includes('/i/flow/consent') ||
+      url.includes('/i/flow/verify_password')
+    );
   }
 
   private handleContextClose(): void {
@@ -448,13 +476,29 @@ export class PlaywrightTwitterClient implements ITwitterClient {
     this._isLoggedIn = false;
     this.busy = false;
 
-    // Alert admin + auto-restart after 5s
-    void this.sendBrowserCrashAlert();
-    setTimeout(() => {
-      void this.initialize().catch((err) => {
-        this.logger.error({ err }, 'Browser auto-restart failed');
-      });
-    }, 5000);
+    // Auto-restart with limit (max 3/hour to prevent infinite loop)
+    const now = Date.now();
+    if (now - this._restartWindowStart > AUTO_RESTART_WINDOW_MS) {
+      this._restartCount = 0;
+      this._restartWindowStart = now;
+    }
+    this._restartCount++;
+
+    if (this._restartCount <= MAX_AUTO_RESTARTS) {
+      void this.sendBrowserCrashAlert();
+      this.logger.warn(
+        { attempt: this._restartCount, max: MAX_AUTO_RESTARTS },
+        'Browser auto-restart scheduled',
+      );
+      setTimeout(() => {
+        void this.initialize().catch((err) => {
+          this.logger.error({ err }, 'Browser auto-restart failed');
+        });
+      }, 5000);
+    } else {
+      this.logger.error('Browser restart limit reached — manual intervention required');
+      void this.sendBrowserCrashAlert(true);
+    }
   }
 
   private async checkLoggedIn(): Promise<boolean> {
@@ -464,7 +508,7 @@ export class PlaywrightTwitterClient implements ITwitterClient {
       // Wait for a meaningful indicator instead of unconditional 3s sleep
       await this.page.waitForSelector(
         '[data-testid="primaryColumn"], [data-testid="loginButton"], [href="/login"]',
-        { timeout: 10_000 },
+        { timeout: 5_000 },
       ).catch(() => {});
       const url = this.page.url();
       return !url.includes('/login') && !url.includes('/i/flow/login');
@@ -490,6 +534,22 @@ export class PlaywrightTwitterClient implements ITwitterClient {
       }
     } finally {
       this.busy = false;
+    }
+  }
+
+  /** Load cookies from a previously saved storage state file (created on clean shutdown). */
+  private async loadStorageState(path: string): Promise<void> {
+    if (!this.context) return;
+    const raw = readFileSync(path, 'utf-8');
+    const state = JSON.parse(raw) as { cookies?: Array<{ name: string; value: string; domain: string; path: string; secure: boolean; httpOnly: boolean; sameSite: string }> };
+    if (state.cookies && state.cookies.length > 0) {
+      await this.context.addCookies(
+        state.cookies.map((c) => ({
+          ...c,
+          sameSite: (c.sameSite as 'None' | 'Lax' | 'Strict') || 'None',
+        })),
+      );
+      this.logger.info({ cookieCount: state.cookies.length }, 'Storage state cookies restored');
     }
   }
 
@@ -539,18 +599,17 @@ export class PlaywrightTwitterClient implements ITwitterClient {
     }
   }
 
-  private async sendBrowserCrashAlert(): Promise<void> {
+  private async sendBrowserCrashAlert(restartLimitReached = false): Promise<void> {
     const { telegramToken, adminChatId } = this.config;
     if (!telegramToken || !adminChatId) return;
     try {
+      const text = restartLimitReached
+        ? `🔴 <b>Browser crashed — restart limit reached</b>\n\n${String(MAX_AUTO_RESTARTS)} restarts in 1h. Posting is down.\nManual intervention required (pm2 restart or VNC).`
+        : `💥 <b>Browser crashed</b>\n\nPlaywright context closed unexpectedly.\nAuto-restarting (${String(this._restartCount)}/${String(MAX_AUTO_RESTARTS)})...`;
       await fetch(`https://api.telegram.org/bot${telegramToken}/sendMessage`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          chat_id: adminChatId,
-          text: '💥 <b>Browser crashed</b>\n\nPlaywright context closed unexpectedly. Auto-restarting in 5s...',
-          parse_mode: 'HTML',
-        }),
+        body: JSON.stringify({ chat_id: adminChatId, text, parse_mode: 'HTML' }),
       });
     } catch {
       this.logger.warn('Failed to send browser crash Telegram alert');
