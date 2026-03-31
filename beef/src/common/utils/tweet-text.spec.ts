@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { expandTcoUrls, expandTcoUrlsByPosition } from './tweet-text.js';
+import { expandTcoUrls, expandTcoUrlsByPosition, twitterWeightedLength } from './tweet-text.js';
 
 describe('expandTcoUrls', () => {
   it('replaces t.co URL with expanded URL', () => {
@@ -68,6 +68,56 @@ describe('expandTcoUrls', () => {
     const text = 'no matching url here';
     const urls = [{ url: 'https://t.co/notintext', expanded_url: 'https://example.com' }];
     expect(expandTcoUrls(text, urls)).toBe('no matching url here');
+  });
+});
+
+describe('twitterWeightedLength', () => {
+  it('counts ASCII text as 1 per char', () => {
+    expect(twitterWeightedLength('hello world')).toBe(11);
+  });
+
+  it('counts URLs as 23 each regardless of length', () => {
+    expect(twitterWeightedLength('check https://example.com/very/long/path out')).toBe(
+      'check '.length + 23 + ' out'.length,
+    );
+  });
+
+  it('counts multiple URLs correctly', () => {
+    expect(twitterWeightedLength('https://a.com https://b.com')).toBe(23 + 1 + 23);
+  });
+
+  it('counts emojis (surrogate pairs) as 2', () => {
+    // 🔥 is U+1F525, in the emoticons range
+    expect(twitterWeightedLength('fire 🔥')).toBe(5 + 2);
+  });
+
+  it('counts CJK characters as 2', () => {
+    expect(twitterWeightedLength('你好')).toBe(4);
+  });
+
+  it('counts mixed ASCII + emoji + CJK', () => {
+    // "hi 🔥 你" = 2 + 1 + 2 + 1 + 2 = 8
+    expect(twitterWeightedLength('hi 🔥 你')).toBe(8);
+  });
+
+  it('returns 0 for empty string', () => {
+    expect(twitterWeightedLength('')).toBe(0);
+  });
+
+  it('counts typical roast text (ASCII only) same as length', () => {
+    const text = 'your TVL dropped 94% and you tweeting about partnerships';
+    expect(twitterWeightedLength(text)).toBe(text.length);
+  });
+
+  it('handles text at 280 ASCII chars', () => {
+    const text = 'a'.repeat(280);
+    expect(twitterWeightedLength(text)).toBe(280);
+  });
+
+  it('detects text over limit due to emoji weight', () => {
+    // 279 ASCII + 1 emoji (weight 2) = 281 weighted
+    const text = 'a'.repeat(279) + '🔥';
+    expect(twitterWeightedLength(text)).toBe(281);
   });
 });
 

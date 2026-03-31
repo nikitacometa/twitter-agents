@@ -6,6 +6,7 @@ import type {
   PostResult,
   MentionData,
 } from './twitter-client.interface.js';
+import { twitterWeightedLength } from '@common/utils/tweet-text.js';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
 import { existsSync, readFileSync } from 'node:fs';
@@ -195,8 +196,9 @@ export class PlaywrightTwitterClient implements ITwitterClient {
   }
 
   async postTweet(text: string): Promise<PostResult | null> {
-    if (text.length > 280) {
-      this.logger.error({ charCount: text.length }, 'Tweet exceeds 280 chars — rejected');
+    const weighted = twitterWeightedLength(text);
+    if (weighted > 280) {
+      this.logger.error({ charCount: text.length, weightedCount: weighted }, 'Tweet exceeds 280 weighted chars — rejected');
       return null;
     }
 
@@ -264,7 +266,7 @@ export class PlaywrightTwitterClient implements ITwitterClient {
         this.recordSuccess();
       }
       this.logger.info(
-        { tweetId, charCount: text.length, dailyPosts: this.dailyPostCount, confirmed: !tweetId.startsWith('pw_unconfirmed_') },
+        { tweetId, charCount: text.length, weightedCount: weighted, dailyPosts: this.dailyPostCount, confirmed: !tweetId.startsWith('pw_unconfirmed_') },
         'Tweet posted via Playwright',
       );
       return { tweetId };
@@ -279,8 +281,9 @@ export class PlaywrightTwitterClient implements ITwitterClient {
   }
 
   async replyToTweet(text: string, replyToId: string): Promise<PostResult | null> {
-    if (text.length > 280) {
-      this.logger.error({ charCount: text.length }, 'Reply exceeds 280 chars — rejected');
+    const weighted = twitterWeightedLength(text);
+    if (weighted > 280) {
+      this.logger.error({ charCount: text.length, weightedCount: weighted, replyToId }, 'Reply exceeds 280 weighted chars — rejected');
       return null;
     }
 
@@ -359,7 +362,7 @@ export class PlaywrightTwitterClient implements ITwitterClient {
         this.recordSuccess();
       }
       this.logger.info(
-        { tweetId, replyToId, charCount: text.length, dailyPosts: this.dailyPostCount, confirmed: !tweetId.startsWith('pw_unconfirmed_') },
+        { tweetId, replyToId, charCount: text.length, weightedCount: weighted, dailyPosts: this.dailyPostCount, confirmed: !tweetId.startsWith('pw_unconfirmed_') },
         'Reply posted via Playwright',
       );
       return { tweetId };
@@ -701,17 +704,20 @@ export class PlaywrightTwitterClient implements ITwitterClient {
   private async clickPostButton(): Promise<void> {
     if (!this.page) return;
 
-    const primary = this.page.locator('[data-testid="tweetButton"]');
-    const fallback = this.page.locator('[data-testid="tweetButtonInline"]');
-
-    if (await primary.isVisible({ timeout: 2000 }).catch(() => false)) {
-      await this.hoverAndClick(primary);
-    } else if (await fallback.isVisible({ timeout: 2000 }).catch(() => false)) {
-      this.logger.debug('tweetButton not found, using tweetButtonInline fallback');
-      await this.hoverAndClick(fallback);
-    } else {
+    const button = await this.findVisibleButton(
+      '[data-testid="tweetButton"]',
+      '[data-testid="tweetButtonInline"]',
+    );
+    if (!button) {
       throw new Error('No post button found — Twitter UI may have changed');
     }
+
+    if (!(await this.waitForButtonEnabled(button))) {
+      const charInfo = await this.getTextareaCharInfo();
+      throw new Error(`Post button disabled — text may exceed character limit (${charInfo})`);
+    }
+
+    await this.hoverAndClick(button);
   }
 
   /**
@@ -721,16 +727,70 @@ export class PlaywrightTwitterClient implements ITwitterClient {
   private async clickReplyButton(): Promise<void> {
     if (!this.page) return;
 
-    const primary = this.page.locator('[data-testid="tweetButtonInline"]');
-    const fallback = this.page.locator('[data-testid="tweetButton"]');
+    const button = await this.findVisibleButton(
+      '[data-testid="tweetButtonInline"]',
+      '[data-testid="tweetButton"]',
+    );
+    if (!button) {
+      throw new Error('No reply button found — Twitter UI may have changed');
+    }
+
+    if (!(await this.waitForButtonEnabled(button))) {
+      const charInfo = await this.getTextareaCharInfo();
+      throw new Error(`Reply button disabled — text may exceed character limit (${charInfo})`);
+    }
+
+    await this.hoverAndClick(button);
+  }
+
+  /** Find first visible button from primary/fallback selectors. */
+  private async findVisibleButton(
+    primarySelector: string,
+    fallbackSelector: string,
+  ): Promise<ReturnType<Page['locator']> | null> {
+    if (!this.page) return null;
+    const primary = this.page.locator(primarySelector);
+    const fallback = this.page.locator(fallbackSelector);
 
     if (await primary.isVisible({ timeout: 2000 }).catch(() => false)) {
-      await this.hoverAndClick(primary);
-    } else if (await fallback.isVisible({ timeout: 2000 }).catch(() => false)) {
-      this.logger.debug('tweetButtonInline not found, using tweetButton fallback');
-      await this.hoverAndClick(fallback);
-    } else {
-      throw new Error('No reply button found — Twitter UI may have changed');
+      return primary;
+    }
+    if (await fallback.isVisible({ timeout: 2000 }).catch(() => false)) {
+      this.logger.debug(`${primarySelector} not found, using fallback ${fallbackSelector}`);
+      return fallback;
+    }
+    return null;
+  }
+
+  /**
+   * Wait for a submit button to become enabled (aria-disabled !== "true").
+   * Twitter validates text asynchronously — button may be briefly disabled after typing.
+   */
+  private async waitForButtonEnabled(
+    locator: ReturnType<Page['locator']>,
+    timeout = 5000,
+  ): Promise<boolean> {
+    const deadline = Date.now() + timeout;
+    while (Date.now() < deadline) {
+      const ariaDisabled = await locator.getAttribute('aria-disabled').catch(() => null);
+      if (ariaDisabled !== 'true') return true;
+      await new Promise<void>((r) => setTimeout(r, 300));
+    }
+    return false;
+  }
+
+  /** Read textarea content length for debugging disabled button issues. */
+  private async getTextareaCharInfo(): Promise<string> {
+    if (!this.page) return 'no page';
+    try {
+      const textContent = await this.page
+        .locator('[data-testid="tweetTextarea_0"] [data-text="true"]')
+        .allTextContents()
+        .catch(() => []);
+      const typed = textContent.join('');
+      return `${String(typed.length)} chars in textarea`;
+    } catch {
+      return 'could not read textarea';
     }
   }
 

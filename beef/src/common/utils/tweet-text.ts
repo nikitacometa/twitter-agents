@@ -1,8 +1,15 @@
 /**
- * Tweet text utilities — URL expansion and note_tweet handling.
+ * Tweet text utilities — URL expansion, note_tweet handling, weighted character counting.
  *
  * Twitter API returns t.co shortened URLs in tweet text. This module
  * replaces them with original expanded URLs so the LLM sees real content.
+ *
+ * Twitter uses weighted character counting:
+ * - Most Latin/common chars: weight 1
+ * - CJK, Korean, Thai, Arabic, etc.: weight 2
+ * - URLs: weight 23 (t.co shortened)
+ * - Emojis (surrogate pairs): weight 2
+ * See: https://developer.x.com/en/docs/counting-characters
  */
 
 interface UrlEntity {
@@ -41,7 +48,48 @@ export function expandTcoUrls(
   return result.replace(/  +/g, ' ').trim();
 }
 
+/** URL pattern for Twitter-weighted counting (each URL = 23 chars regardless of length). */
+const URL_RE = /https?:\/\/\S+/g;
 const TCO_RE = /https?:\/\/t\.co\/\w+/g;
+
+/**
+ * Unicode ranges that Twitter counts as weight 2 (each code point = 2 chars).
+ * Simplified from twitter-text ranges — covers CJK, Korean, Japanese, Thai, Arabic, Devanagari.
+ */
+function isWeight2CodePoint(cp: number): boolean {
+  return (
+    (cp >= 0x1100 && cp <= 0x11ff) || // Hangul Jamo
+    (cp >= 0x2e80 && cp <= 0x9fff) || // CJK unified ideographs + radicals + symbols
+    (cp >= 0xac00 && cp <= 0xd7af) || // Hangul syllables
+    (cp >= 0xf900 && cp <= 0xfaff) || // CJK compatibility ideographs
+    (cp >= 0xfe30 && cp <= 0xfe4f) || // CJK compatibility forms
+    (cp >= 0x1f000 && cp <= 0x1faff) || // Emoticons, symbols, dingbats
+    (cp >= 0x20000 && cp <= 0x2fa1f) // CJK extension B-F + supplement
+  );
+}
+
+/**
+ * Count tweet length using Twitter's weighted character rules.
+ * - URLs → 23 chars each (regardless of actual length)
+ * - CJK/emoji code points → 2 each
+ * - Everything else → 1 each
+ *
+ * Returns the weighted count (Twitter limit is 280).
+ */
+export function twitterWeightedLength(text: string): number {
+  // Replace URLs with 23-char placeholders
+  const withoutUrls = text.replace(URL_RE, '');
+  const urlMatches = text.match(URL_RE);
+  const urlWeight = (urlMatches?.length ?? 0) * 23;
+
+  let charWeight = 0;
+  for (const char of withoutUrls) {
+    const cp = char.codePointAt(0) ?? 0;
+    charWeight += isWeight2CodePoint(cp) ? 2 : 1;
+  }
+
+  return charWeight + urlWeight;
+}
 
 /**
  * Replace t.co URLs in text using an array of expanded URLs (positional matching).
