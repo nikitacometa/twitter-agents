@@ -27,7 +27,7 @@ Status: `[ ]` pending, `[~]` in progress, `[x]` done, `[!]` blocked
 [x] #B-1 — ISP proxy setup: Decodo static residential (3 IPs: SG×2 + HK×1), PROXY_URL validated in env schema, HybridTwitterClient wired in index.ts. Shipped 2026-03-29
 [ ] #B-2 — DB backup cron on VPS
 [x] #B-3 — Replace auto re-login with Telegram alert on cookie expiry
-[ ] #B-4 — Circuit breaker for Error 226 (3x/1h → disable 6h → Telegram alert)
+[x] #B-4 — Circuit breaker for Error 226 (3x/1h → disable 6h → Telegram alert). Permanent vs transient discrimination, auto-reset, /replyguy reset admin command. Shipped 2026-03-31
 
 ## Backlog: Infrastructure
 
@@ -71,6 +71,7 @@ Status: `[ ]` pending, `[~]` in progress, `[x]` done, `[!]` blocked
 [x] #B-44 — Reply-guy pipeline: fire-and-forget from monitor, hard filter + LLM eval + lightning roast, dry-run mode, 6 new files + migration 018. Deployed 2026-03-29
 [x] #B-47 — Reply-guy pipeline router: Max (Opus) for S/A-tier, Lightning (Sonnet) for rest. Concurrent Max + sequential Lightning, fallback, runner-up variants in TG notifications. 3 audit bugs fixed. Shipped 2026-03-30
 [x] #B-46 — /roast_max command: 3 parallel pipelines (Opus+Sonnet+R+Sonnet) → cross-pipeline dedup → rankBatch → serious eval → top 3. prepareTweetContext extracted, variant count 10 for all pipelines. Shipped 2026-03-30
+[x] #B-48 — Patchright migration + Playwright hardening: rebrowser→patchright 1.58.2 (22 CDP patches), WebRTC leak prevention (JS + Chrome args), session persistence (storageState + restore-last-session), auto-restart (3/hour limit), CB error discrimination, session expiry alerts, t.co URL expansion + note_tweet. Shipped 2026-03-31
 [ ] #B-45 — Reply-guy live mode: switch REPLY_GUY_DRY_RUN=false, reduce cap to 20, raise min roastability to 7, verify Playwright posting
 [ ] #B-33 — Auto-farm cron: every 6h farm top 3-5 targets from timeline monitor, dedup 48h, stockpile low alert
 [ ] #B-34 — Auto-post from stockpile: every 3h post best entry (humanScore ≥ 4, buffer ≥ 5), max 3/day, notify after
