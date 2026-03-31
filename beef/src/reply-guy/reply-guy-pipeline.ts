@@ -373,6 +373,18 @@ export class ReplyGuyPipeline {
       } else {
         logger.error({ tweetId: t.tweetId }, 'Reply guy: replyToTweet returned null — posting failed');
         result.errors++;
+        try {
+          const tweetUrl = `https://x.com/i/status/${t.tweetId}`;
+          const html = [
+            `❌ <b>Reply Guy posting failed</b>`,
+            `Target: <a href="${tweetUrl}">@${winner.tweet.authorHandle}</a> (${pipelineType})`,
+            `Roast: <code>${roastText.slice(0, 200)}</code>`,
+            `Duration: ${String(Math.round(durationMs / 1000))}s`,
+          ].join('\n');
+          await sendReplyGuyNotification(this.config.telegramToken, this.config.adminChatId, html);
+        } catch (notifErr) {
+          logger.warn({ err: notifErr }, 'Reply guy: failed to send error notification');
+        }
       }
     }
   }
