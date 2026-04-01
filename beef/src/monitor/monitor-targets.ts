@@ -52,6 +52,13 @@ export const MONITOR_TARGETS: readonly MonitorTarget[] = [
   { handle: 'luna_virtuals', followersK: 51, tier: 'B', category: 'base' },
   { handle: 'dolos_diary', followersK: 37, tier: 'B', category: 'base' },
   { handle: 'clanker_world', followersK: 34, tier: 'C', category: 'base' },
+  { handle: 'iamheci', followersK: 38, tier: 'B', category: 'base' },
+  { handle: 'drewcoffman', followersK: 21, tier: 'B', category: 'base' },
+  { handle: '_proxystudio', followersK: 20, tier: 'B', category: 'base' },
+  { handle: 'toady_hawk', followersK: 18, tier: 'B', category: 'base' },
+  { handle: 'CryptoStatuette', followersK: 12, tier: 'B', category: 'base' },
+  { handle: 'goyabean_eth', followersK: 11, tier: 'B', category: 'base' },
+  { handle: 'apex_ether', followersK: 8, tier: 'B', category: 'base' },
   { handle: 'ethermage', followersK: 30, tier: 'B', category: 'base' },
   { handle: 'GMX_IO', followersK: 225, tier: 'B', category: 'base' },
   { handle: 'beefyfinance', followersK: 260, tier: 'B', category: 'base' },
@@ -75,6 +82,9 @@ export const MONITOR_TARGETS: readonly MonitorTarget[] = [
   { handle: 'Vader_AI_', followersK: 39, tier: 'C', category: 'base' },
   { handle: 'ExtraFi_io', followersK: 20, tier: 'C', category: 'base' },
   { handle: 'overnight_fi', followersK: 20, tier: 'C', category: 'base' },
+  { handle: '0xalixbtno', followersK: 4, tier: 'C', category: 'base' },
+  { handle: 'kennyistyping', followersK: 3, tier: 'C', category: 'base' },
+  { handle: 'darkohh', followersK: 2, tier: 'C', category: 'base' },
   { handle: 'AlienBaseDex', followersK: 11, tier: 'C', category: 'base' },
 ] as const;
 
