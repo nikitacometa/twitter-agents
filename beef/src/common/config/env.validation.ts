@@ -151,6 +151,10 @@ const envSchema = z
     REPLY_GUY_MAX_AGE_MINUTES: z.coerce.number().int().min(10).max(180).default(60),
     REPLY_GUY_MAX_PER_CYCLE: z.coerce.number().int().min(1).max(10).default(3),
     REPLY_GUY_MAX_DAILY: z.coerce.number().int().min(0).max(20).default(7),
+    DISABLE_QUIET_HOURS: z
+      .enum(['true', 'false'])
+      .default('false')
+      .transform((v) => v === 'true'),
 
     ENABLE_LEARNING_LOOP: z
       .enum(['true', 'false'])

@@ -38,7 +38,7 @@ import { ScraperTwitterClient } from './twitter/scraper-twitter-client.js';
 import { PlaywrightTwitterClient } from './twitter/playwright-twitter-client.js';
 import { HybridTwitterClient } from './twitter/hybrid-twitter-client.js';
 import { MentionHandler } from './twitter/mention-handler.js';
-import { Scheduler } from './scheduler/scheduler.js';
+import { Scheduler, setQuietHoursDisabled } from './scheduler/scheduler.js';
 import { QueueManager } from './queue/queue-manager.js';
 import type { QueueProcessResult } from './queue/queue-manager.js';
 import { EngagementTracker } from './learning/engagement-tracker.js';
@@ -52,6 +52,10 @@ import { MemeGenerator } from './meme/meme-generator.js';
 import { ApiServer } from './api/api-server.js';
 
 const config = validateEnv();
+
+if (config.DISABLE_QUIET_HOURS) {
+  setQuietHoursDisabled(true);
+}
 
 const botUsername = config.TWITTER_BOT_USERNAME || config.TWITTER_USERNAME || '0xBeefer';
 

@@ -69,12 +69,21 @@ export class Scheduler {
   }
 }
 
+/** Whether quiet hours are globally disabled (set via DISABLE_QUIET_HOURS env). */
+let quietHoursDisabled = false;
+
+export function setQuietHoursDisabled(disabled: boolean): void {
+  quietHoursDisabled = disabled;
+}
+
 /**
  * Check if current hour (UTC) is within quiet hours (5-10 UTC).
  * Covers the true CT dead zone: US sleeping (1-6 AM EDT), EU commuting (6-11 AM CET).
  * Frees up 02-05 UTC for Asian prime (11 AM-2 PM KST) + US night owls.
+ * Returns false when quiet hours are disabled via DISABLE_QUIET_HOURS=true.
  */
 export function isQuietHour(): boolean {
+  if (quietHoursDisabled) return false;
   const hour = new Date().getUTCHours();
   return hour >= 5 && hour < 10;
 }
