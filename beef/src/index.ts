@@ -662,6 +662,7 @@ if (twitter && 'searchRecentTweets' in twitter && config.TELEGRAM_BOT_TOKEN && m
         dailyCap: config.REPLY_GUY_DAILY_CAP,
         minRoastability: config.REPLY_GUY_MIN_ROASTABILITY,
         maxPerCycle: config.REPLY_GUY_MAX_PER_CYCLE,
+        maxPerAuthorDaily: config.REPLY_GUY_MAX_PER_AUTHOR_DAILY,
       },
       feedbackRepo,
       configRepo,

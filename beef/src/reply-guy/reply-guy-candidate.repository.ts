@@ -21,7 +21,7 @@ export class ReplyGuyCandidateRepository {
   private readonly todayCountStmt: Database.Statement;
   private readonly todayPostedCountStmt: Database.Statement;
   private readonly todayMaxCountStmt: Database.Statement;
-  private readonly recentAuthorStmt: Database.Statement;
+  private readonly recentAuthorCountStmt: Database.Statement;
   private readonly pruneStmt: Database.Statement;
   private readonly dailyStatsStmt: Database.Statement;
 
@@ -91,11 +91,11 @@ export class ReplyGuyCandidateRepository {
         AND status IN ('generated', 'posted')
     `);
 
-    this.recentAuthorStmt = db.prepare(`
-      SELECT 1 FROM reply_guy_candidates
+    this.recentAuthorCountStmt = db.prepare(`
+      SELECT COUNT(*) as cnt FROM reply_guy_candidates
       WHERE author_handle = ?
         AND status IN ('generated', 'posted')
-        AND created_at >= datetime('now', '-24 hours')
+        AND created_at >= datetime('now', 'start of day')
     `);
 
     this.pruneStmt = db.prepare(
@@ -182,8 +182,9 @@ export class ReplyGuyCandidateRepository {
     return row.total;
   }
 
-  hasRecentAuthor(authorHandle: string): boolean {
-    return this.recentAuthorStmt.get(authorHandle) !== undefined;
+  getRecentAuthorCount(authorHandle: string): number {
+    const row = this.recentAuthorCountStmt.get(authorHandle) as { cnt: number };
+    return row.cnt;
   }
 
   pruneOld(): number {

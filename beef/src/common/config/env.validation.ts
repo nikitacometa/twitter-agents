@@ -152,6 +152,7 @@ const envSchema = z
     REPLY_GUY_MIN_SCORE: z.coerce.number().int().min(5).max(25).default(12),
     REPLY_GUY_MAX_PER_CYCLE: z.coerce.number().int().min(1).max(10).default(3),
     REPLY_GUY_MAX_DAILY_POSTS: z.coerce.number().int().min(0).max(30).default(7),
+    REPLY_GUY_MAX_PER_AUTHOR_DAILY: z.coerce.number().int().min(1).max(10).default(2),
     DISABLE_QUIET_HOURS: z
       .enum(['true', 'false'])
       .default('false')

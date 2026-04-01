@@ -26,6 +26,7 @@ export interface SelectorConfig {
   dailyCap: number;
   minRoastability: number;
   maxPerCycle: number;
+  maxPerAuthorDaily: number;
 }
 
 export class ReplyGuySelector {
@@ -52,7 +53,8 @@ export class ReplyGuySelector {
         if (t.ageMinutes > config.maxAgeMinutes) { rejected[t.tweetId] = `age ${t.ageMinutes}m > ${config.maxAgeMinutes}m`; return false; }
         if (t.text.length < 50) { rejected[t.tweetId] = `text too short (${t.text.length})`; return false; }
         if (this.candidateRepo.hasSeen(t.tweetId)) { rejected[t.tweetId] = 'already seen'; return false; }
-        if (this.candidateRepo.hasRecentAuthor(t.authorHandle)) { rejected[t.tweetId] = `recent author @${t.authorHandle}`; return false; }
+        const authorCount = this.candidateRepo.getRecentAuthorCount(t.authorHandle);
+        if (authorCount >= config.maxPerAuthorDaily) { rejected[t.tweetId] = `author @${t.authorHandle} (${authorCount}/${config.maxPerAuthorDaily} today)`; return false; }
         return true;
       })
       .sort((a, b) => b.score - a.score)
