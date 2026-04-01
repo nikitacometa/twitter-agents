@@ -51,7 +51,7 @@ export const MONITOR_TARGETS: readonly MonitorTarget[] = [
   { handle: 'CoinbaseDev', followersK: 61, tier: 'B', category: 'base' },
   { handle: 'luna_virtuals', followersK: 51, tier: 'B', category: 'base' },
   { handle: 'dolos_diary', followersK: 37, tier: 'B', category: 'base' },
-  { handle: 'clanker_world', followersK: 34, tier: 'B', category: 'base' },
+  { handle: 'clanker_world', followersK: 34, tier: 'C', category: 'base' },
   { handle: 'ethermage', followersK: 30, tier: 'B', category: 'base' },
   { handle: 'GMX_IO', followersK: 225, tier: 'B', category: 'base' },
   { handle: 'beefyfinance', followersK: 260, tier: 'B', category: 'base' },

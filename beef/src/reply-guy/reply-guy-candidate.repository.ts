@@ -19,6 +19,7 @@ export class ReplyGuyCandidateRepository {
   private readonly markPostedStmt: Database.Statement;
   private readonly markSkippedStmt: Database.Statement;
   private readonly todayCountStmt: Database.Statement;
+  private readonly todayPostedCountStmt: Database.Statement;
   private readonly todayMaxCountStmt: Database.Statement;
   private readonly recentAuthorStmt: Database.Statement;
   private readonly pruneStmt: Database.Statement;
@@ -75,6 +76,12 @@ export class ReplyGuyCandidateRepository {
       SELECT COUNT(*) as total FROM reply_guy_candidates
       WHERE posted_at >= datetime('now', 'start of day')
         AND status IN ('generated', 'posted')
+    `);
+
+    this.todayPostedCountStmt = db.prepare(`
+      SELECT COUNT(*) as total FROM reply_guy_candidates
+      WHERE status = 'posted'
+        AND posted_at >= datetime('now', 'start of day')
     `);
 
     this.todayMaxCountStmt = db.prepare(`
@@ -162,6 +169,11 @@ export class ReplyGuyCandidateRepository {
 
   getTodayCount(): number {
     const row = this.todayCountStmt.get() as { total: number };
+    return row.total;
+  }
+
+  getTodayPostedCount(): number {
+    const row = this.todayPostedCountStmt.get() as { total: number };
     return row.total;
   }
 

@@ -40,6 +40,7 @@ export interface ReplyGuyPipelineConfig {
   telegramToken: string;
   adminChatId: number | string;
   dryRun: boolean;
+  maxDailyPosts: number;
   selectorConfig: SelectorConfig;
   // Repos for roast generation
   feedbackRepo?: FeedbackRepository;
@@ -117,15 +118,26 @@ export class ReplyGuyPipeline {
         return result;
       }
 
-      // 3. Route all candidates to Max (Lightning only as fallback)
-      const decisions = routeCandidates(winners);
+      // 3. Check daily posting cap
+      const todayPosted = this.config.candidateRepo.getTodayPostedCount();
+      const postsRemaining = this.config.maxDailyPosts - todayPosted;
+      if (postsRemaining <= 0) {
+        this.config.logger.info(
+          { todayPosted, cap: this.config.maxDailyPosts },
+          'Reply guy: daily posting cap reached — skipping generation',
+        );
+        return result;
+      }
+
+      // 4. Route all candidates to Max (Lightning only as fallback)
+      const decisions = routeCandidates(winners).slice(0, postsRemaining);
 
       this.config.logger.info(
-        { total: winners.length, dryRun: this.config.dryRun },
+        { total: decisions.length, dryRun: this.config.dryRun, todayPosted, postsRemaining },
         'Reply guy: processing winners via Max pipeline',
       );
 
-      // 4. Process all winners sequentially via Max with Lightning fallback
+      // 5. Process all winners sequentially via Max with Lightning fallback
       for (const decision of decisions) {
         if (Date.now() - cycleStart > CYCLE_TIMEOUT_MS) {
           this.config.logger.warn(

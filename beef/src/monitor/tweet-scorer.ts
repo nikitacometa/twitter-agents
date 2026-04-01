@@ -33,6 +33,10 @@ const OPINION_MARKERS = [
   'i think', 'imo', 'unpopular opinion', 'hot take', 'prediction',
   'calling it', 'controversial', 'overrated', 'underrated', 'bullish on',
   'bearish on', 'this is', 'nobody talks about', 'hear me out',
+  // Crypto-native opinion signals
+  'few understand', 'dead project', 'this changes everything', 'cope',
+  'seethe', 'grift', 'ponzi', 'just launched', 'alpha leak',
+  'not financial advice', 'if you know you know',
 ];
 
 export function scoreTweet(
@@ -81,10 +85,10 @@ export function scoreTweet(
   // 4. Length (>100 chars = more substance)
   if (text.length > 100) score += 2;
 
-  // 5. Opinion / question
+  // 5. Opinion / question (strongest roastability predictor from data)
   const hasQuestion = text.includes('?');
   const hasOpinion = OPINION_MARKERS.some((marker) => lower.includes(marker));
-  if (hasQuestion || hasOpinion) score += 2;
+  if (hasQuestion || hasOpinion) score += 3;
 
   return {
     tweetId,

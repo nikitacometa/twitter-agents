@@ -655,8 +655,9 @@ if (twitter && 'searchRecentTweets' in twitter && config.TELEGRAM_BOT_TOKEN && m
       telegramToken: config.TELEGRAM_BOT_TOKEN,
       adminChatId,
       dryRun: config.REPLY_GUY_DRY_RUN,
+      maxDailyPosts: config.REPLY_GUY_MAX_DAILY_POSTS,
       selectorConfig: {
-        minScore: 12,
+        minScore: config.REPLY_GUY_MIN_SCORE,
         maxAgeMinutes: config.REPLY_GUY_MAX_AGE_MINUTES,
         dailyCap: config.REPLY_GUY_DAILY_CAP,
         minRoastability: config.REPLY_GUY_MIN_ROASTABILITY,

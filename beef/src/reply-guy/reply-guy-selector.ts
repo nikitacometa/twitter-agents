@@ -6,6 +6,13 @@ import type { EvaluatedCandidate } from './types.js';
 import { getErrorMessage } from '../common/utils/error.util.js';
 import { TIER_SCORES } from '../monitor/monitor-targets.js';
 
+/** Skip automated deploy/mint tweets — no opinion to attack */
+const DEPLOY_BOT_PATTERNS = [
+  /\b(deployed|created|minted|spawned)\s+\$/i,
+  /\bnew token\s+(deployed|created|live)\b/i,
+  /\btoken deployed\b/i,
+];
+
 interface EvalResponseItem {
   tweetId: string;
   roastability: number;
@@ -40,6 +47,7 @@ export class ReplyGuySelector {
 
     const filtered = tweets
       .filter((t) => {
+        if (DEPLOY_BOT_PATTERNS.some((p) => p.test(t.text))) { rejected[t.tweetId] = 'deploy-bot tweet'; return false; }
         if (t.score < config.minScore) { rejected[t.tweetId] = `score ${t.score} < ${config.minScore}`; return false; }
         if (t.ageMinutes > config.maxAgeMinutes) { rejected[t.tweetId] = `age ${t.ageMinutes}m > ${config.maxAgeMinutes}m`; return false; }
         if (t.text.length < 50) { rejected[t.tweetId] = `text too short (${t.text.length})`; return false; }
