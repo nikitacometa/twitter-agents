@@ -154,7 +154,7 @@ export class PlaywrightTwitterClient implements ITwitterClient {
       this.page.setDefaultNavigationTimeout(NAVIGATION_TIMEOUT);
 
       // Verify session — persistent profile → saved storage state → injected cookies
-      this._isLoggedIn = await this.checkLoggedIn();
+      this._isLoggedIn = (await this.checkLoggedIn()) === 'logged_in';
       if (!this._isLoggedIn) {
         // Try loading saved storage state (created on clean shutdown)
         const storageStatePath = resolve(this.config.profilePath, 'storage-state.json');
@@ -162,7 +162,7 @@ export class PlaywrightTwitterClient implements ITwitterClient {
           try {
             this.logger.info('Session not found in profile — loading saved storage state');
             await this.loadStorageState(storageStatePath);
-            this._isLoggedIn = await this.checkLoggedIn();
+            this._isLoggedIn = (await this.checkLoggedIn()) === 'logged_in';
           } catch (err) {
             this.logger.warn({ err }, 'Failed to load storage state');
           }
@@ -171,7 +171,7 @@ export class PlaywrightTwitterClient implements ITwitterClient {
       if (!this._isLoggedIn && this.config.cookies) {
         this.logger.info('Session not found — injecting cookies from env');
         await this.injectCookies(this.config.cookies);
-        this._isLoggedIn = await this.checkLoggedIn();
+        this._isLoggedIn = (await this.checkLoggedIn()) === 'logged_in';
       }
 
       if (!this._isLoggedIn) {
