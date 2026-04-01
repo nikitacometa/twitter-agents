@@ -31,23 +31,30 @@ export class ReplyGuySelector {
   filterCandidates(tweets: ScoredTweet[], config: SelectorConfig): ScoredTweet[] {
     const todayCount = this.candidateRepo.getTodayCount();
     if (todayCount >= config.dailyCap) {
-      this.logger.debug({ todayCount, cap: config.dailyCap }, 'Reply guy: daily cap reached');
+      this.logger.info({ todayCount, cap: config.dailyCap }, 'Reply guy: daily cap reached');
       return [];
     }
 
     const remaining = config.dailyCap - todayCount;
+    const rejected: Record<string, string> = {};
 
-    return tweets
+    const filtered = tweets
       .filter((t) => {
-        if (t.score < config.minScore) return false;
-        if (t.ageMinutes > config.maxAgeMinutes) return false;
-        if (t.text.length < 50) return false;
-        if (this.candidateRepo.hasSeen(t.tweetId)) return false;
-        if (this.candidateRepo.hasRecentAuthor(t.authorHandle)) return false;
+        if (t.score < config.minScore) { rejected[t.tweetId] = `score ${t.score} < ${config.minScore}`; return false; }
+        if (t.ageMinutes > config.maxAgeMinutes) { rejected[t.tweetId] = `age ${t.ageMinutes}m > ${config.maxAgeMinutes}m`; return false; }
+        if (t.text.length < 50) { rejected[t.tweetId] = `text too short (${t.text.length})`; return false; }
+        if (this.candidateRepo.hasSeen(t.tweetId)) { rejected[t.tweetId] = 'already seen'; return false; }
+        if (this.candidateRepo.hasRecentAuthor(t.authorHandle)) { rejected[t.tweetId] = `recent author @${t.authorHandle}`; return false; }
         return true;
       })
       .sort((a, b) => b.score - a.score)
       .slice(0, Math.min(8, remaining));
+
+    if (Object.keys(rejected).length > 0) {
+      this.logger.info({ rejected, todayCount, remaining }, 'Reply guy: hard filter rejections');
+    }
+
+    return filtered;
   }
 
   async evaluateBatch(

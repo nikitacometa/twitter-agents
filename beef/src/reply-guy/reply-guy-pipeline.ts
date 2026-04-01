@@ -66,7 +66,7 @@ export class ReplyGuyPipeline {
 
   async processCycle(scoredTweets: ScoredTweet[]): Promise<CycleResult> {
     if (this.isRunning) {
-      this.config.logger.debug('Reply guy: cycle skipped — already running');
+      this.config.logger.info('Reply guy: cycle skipped — already running');
       return { candidates: 0, evaluated: 0, winners: 0, generated: 0, notified: 0, errors: 0 };
     }
 
@@ -75,15 +75,17 @@ export class ReplyGuyPipeline {
     const result: CycleResult = { candidates: 0, evaluated: 0, winners: 0, generated: 0, notified: 0, errors: 0 };
 
     try {
+      this.config.logger.info({ tweets: scoredTweets.length }, 'Reply guy: cycle started');
+
       // 0a. Skip during quiet hours (UTC 5-10 — US sleeping, EU commuting)
       if (isQuietHour()) {
-        this.config.logger.debug('Reply guy: skipping cycle — quiet hours');
+        this.config.logger.info('Reply guy: skipping cycle — quiet hours');
         return result;
       }
 
       // 0b. Kill-switch via Telegram /replyguy off
       if (this.config.configRepo?.get('reply_guy_enabled') === 'false') {
-        this.config.logger.debug('Reply guy: skipping cycle — disabled via kill-switch');
+        this.config.logger.info('Reply guy: skipping cycle — disabled via kill-switch');
         return result;
       }
 
@@ -92,6 +94,7 @@ export class ReplyGuyPipeline {
       result.candidates = candidates.length;
 
       if (candidates.length === 0) {
+        this.config.logger.info({ total: scoredTweets.length }, 'Reply guy: no candidates after hard filter');
         return result;
       }
 
