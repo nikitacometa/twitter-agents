@@ -130,7 +130,15 @@ export class ReplyGuyPipeline {
       }
 
       // 4. Route all candidates to Max (Lightning only as fallback)
-      const decisions = routeCandidates(winners).slice(0, postsRemaining);
+      // Deduplicate by author — keep only the best tweet per author per cycle
+      const seenAuthors = new Set<string>();
+      const uniqueWinners = winners.filter((w) => {
+        const author = w.tweet.authorHandle.toLowerCase();
+        if (seenAuthors.has(author)) return false;
+        seenAuthors.add(author);
+        return true;
+      });
+      const decisions = routeCandidates(uniqueWinners).slice(0, postsRemaining);
 
       this.config.logger.info(
         { total: decisions.length, dryRun: this.config.dryRun, todayPosted, postsRemaining },
