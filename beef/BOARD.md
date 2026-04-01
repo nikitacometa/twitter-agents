@@ -74,6 +74,7 @@ Status: `[ ]` pending, `[~]` in progress, `[x]` done, `[!]` blocked
 [x] #B-48 — Patchright migration + Playwright hardening: rebrowser→patchright 1.58.2 (22 CDP patches), WebRTC leak prevention (JS + Chrome args), session persistence (storageState + restore-last-session), auto-restart (3/hour limit), CB error discrimination, session expiry alerts, t.co URL expansion + note_tweet. Shipped 2026-03-31
 [x] #B-45 — Reply-guy live mode: REPLY_GUY_DRY_RUN=false, cap 20, roastability 7, max_daily 7, Playwright posting via Patchright. Shipped 2026-03-31
 [x] #B-49 — Reply-guy Max-default: all candidates use Max pipeline (3 parallel legs + judge ranking), Lightning as fallback only. Generation metadata in DB (duration, variant counts, runner-ups, pipeline stats). Posts recorded in bot_tweets for metrics. farm-evaluate timeout 120s→300s. Migration 020. Shipped 2026-03-31
+[x] #B-50 — /queue <url> Max pipeline: replaces farm-generate with generateRoastsMax (3 parallel pipelines → ranked), shows top 3 with Post buttons per variant, Regen support, `manual_tweet` source type, migration 021. Shipped 2026-04-01
 [ ] #B-33 — Auto-farm cron: every 6h farm top 3-5 targets from timeline monitor, dedup 48h, stockpile low alert
 [ ] #B-34 — Auto-post from stockpile: every 3h post best entry (humanScore ≥ 4, buffer ≥ 5), max 3/day, notify after
 [ ] #B-35 — Smart reply autonomy: stratify by follower count (<1K auto, 1-10K auto if eval ≥ 4.0, >10K require approval)
