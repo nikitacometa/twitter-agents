@@ -16,6 +16,25 @@ export interface Alerter {
 const FAILURE_THRESHOLD = 3;
 const RECOVERY_CHECK_MS = 15 * 60 * 1000;
 
+/** Extract human-readable reason from raw Claude CLI error output. */
+function parseProviderFailureReason(raw: string): string {
+  if (raw.includes('hit your limit') || raw.includes("You've hit your limit")) {
+    const resetMatch = raw.match(/resets\s+(\d+(?:am|pm)\s*\(?\w*\)?)/i);
+    const resetTime = resetMatch ? ` Resets ${resetMatch[1]}.` : '';
+    return `Claude Max quota exhausted.${resetTime}`;
+  }
+  if (raw.includes('rate limit') || raw.includes('429')) {
+    return 'Claude API rate limited (429).';
+  }
+  if (raw.includes('ECONNREFUSED') || raw.includes('ETIMEDOUT') || raw.includes('fetch failed')) {
+    return 'Network error — cannot reach Claude API.';
+  }
+  if (raw.includes('exit code')) {
+    return `Claude CLI crashed (${raw.slice(0, 120)}).`;
+  }
+  return raw.length > 150 ? `${raw.slice(0, 150)}…` : raw;
+}
+
 export class ProviderManager implements LLMProvider {
   readonly name: ProviderName = 'claude-code';
   private _mode: ProviderMode = 'primary';
@@ -159,10 +178,11 @@ export class ProviderManager implements LLMProvider {
     this._mode = 'degraded';
     this.startRecoveryTimer();
     const fbNames = this.fallbacks.map((fb) => fb.name).join(' → ');
-    this.logger.warn({ reason, chain: fbNames }, 'Entering degraded mode');
+    const humanReason = parseProviderFailureReason(reason);
+    this.logger.warn({ reason: humanReason, rawReason: reason, chain: fbNames }, 'Entering degraded mode');
     await this.alerter.send(
-      `⚠️ Claude Code CLI unavailable\n\n` +
-      `Reason: ${reason}\n` +
+      `⚠️ <b>Claude Code CLI unavailable</b>\n\n` +
+      `Reason: ${humanReason}\n` +
       `Fallback: ${fbNames}\n` +
       `Recovery: auto-check every 15 min`,
     );

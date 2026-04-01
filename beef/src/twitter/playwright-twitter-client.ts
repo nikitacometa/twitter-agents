@@ -504,20 +504,24 @@ export class PlaywrightTwitterClient implements ITwitterClient {
     }
   }
 
-  private async checkLoggedIn(): Promise<boolean> {
-    if (!this.page) return false;
+  /**
+   * Returns 'logged_in', 'session_expired', or 'error' (timeout/network/crash).
+   * Only 'session_expired' means an actual login redirect was detected.
+   */
+  private async checkLoggedIn(): Promise<'logged_in' | 'session_expired' | 'error'> {
+    if (!this.page) return 'error';
     try {
       await this.page.goto('https://x.com/home', { waitUntil: 'domcontentloaded' });
-      // Wait for a meaningful indicator instead of unconditional 3s sleep
       await this.page.waitForSelector(
         '[data-testid="primaryColumn"], [data-testid="loginButton"], [href="/login"]',
         { timeout: 5_000 },
       ).catch(() => {});
       const url = this.page.url();
-      return !url.includes('/login') && !url.includes('/i/flow/login');
+      const isLoginPage = url.includes('/login') || url.includes('/i/flow/login');
+      return isLoginPage ? 'session_expired' : 'logged_in';
     } catch (error) {
-      this.logger.error({ err: error }, 'Session check failed');
-      return false;
+      this.logger.warn({ err: error }, 'Health check navigation failed (timeout or network issue)');
+      return 'error';
     }
   }
 
@@ -530,11 +534,16 @@ export class PlaywrightTwitterClient implements ITwitterClient {
 
     this.busy = true;
     try {
-      this._isLoggedIn = await this.checkLoggedIn();
-      if (!this._isLoggedIn) {
-        this.logger.error('Twitter session expired — manual re-login required');
+      const status = await this.checkLoggedIn();
+      if (status === 'session_expired') {
+        this._isLoggedIn = false;
+        this.logger.error('Twitter session expired — redirected to login page');
         void this.sendSessionExpiryAlert();
+      } else if (status === 'error') {
+        // Don't change _isLoggedIn on transient errors — assume still logged in
+        this.logger.warn('Health check inconclusive (timeout/crash) — skipping session alert');
       }
+      // status === 'logged_in' → no action needed, _isLoggedIn stays true
     } finally {
       this.busy = false;
     }
