@@ -270,7 +270,7 @@ export function createBot(opts: {
         '━━━━━━━━━━━━━━━━━━━━━━',
         '<b>📋 Queue &amp; Posting</b>',
         '<code>/queue &lt;target&gt;</code> — add target to posting queue',
-        '<code>/queue &lt;tweet_url&gt;</code> — roast a specific tweet (reply)',
+        '<code>/queue &lt;tweet_url&gt;</code> — Max pipeline roast → pick &amp; post as reply',
         '<code>/trigger</code> — force-process next queue item',
         '<code>/poll</code> — check for new mentions',
         '<code>/approve on|off</code> — require approval for feed posts',
@@ -1214,6 +1214,17 @@ export function createBot(opts: {
     quick: boolean;
   }>();
 
+  // Queue-post contexts — stores Max pipeline results for /queue <url> Post buttons
+  const queuePostContexts = new Map<string, {
+    tweetUrl: string;
+    tweetId: string;
+    targetName: string;
+    profileContext?: string;
+    imagePaths: string[];
+    cleanup?: () => Promise<void>;
+    variants: MaxRoastResult['variants'];
+  }>();
+
   const PIPELINE_LABELS: Record<MaxPipeline, string> = {
     'opus': 'Opus',
     'sonnet-research': 'Sonnet+R',
@@ -2090,128 +2101,145 @@ export function createBot(opts: {
     if (!target) {
       const count = queueManager.getPendingCount();
       await ctx.reply(
-        `📋 Queue: <b>${String(count)}</b> items pending\n\nUsage:\n<code>/queue &lt;target&gt;</code> — add target\n<code>/queue &lt;tweet_url&gt;</code> — roast a specific tweet`,
+        `📋 Queue: <b>${String(count)}</b> items pending\n\nUsage:\n<code>/queue &lt;target&gt;</code> — add target\n<code>/queue &lt;tweet_url&gt;</code> — Max pipeline → pick &amp; post reply`,
         { parse_mode: 'HTML' },
       );
       return;
     }
 
-    // Tweet URL → fetch tweet, enqueue as reply, auto-trigger processing
+    // Tweet URL → Max pipeline (3 parallel pipelines) → top 3 with Post buttons
     if (isTweetUrl(target)) {
+      if (!provider) {
+        await ctx.reply('⚠️ LLM provider not configured.');
+        return;
+      }
       const chatId = ctx.chat?.id;
       if (!chatId) return;
       const api = ctx.api;
-      const qm = queueManager;
 
       const statusMsg = await ctx.reply('🔍 Fetching tweet...');
 
-      // Fire-and-forget: don't block grammY's update loop
       void (async () => {
+        const startTime = Date.now();
+        let mediaCleanup: (() => Promise<void>) | undefined;
+
+        const updateStatus = (text: string): void => {
+          const elapsed = Math.round((Date.now() - startTime) / 1000);
+          api.editMessageText(chatId, statusMsg.message_id, `${text} <i>(${String(elapsed)}s)</i>`, { parse_mode: 'HTML' }).catch(() => {});
+        };
+
         try {
-          const enqueued = await qm.enqueueTweetUrl(target);
-          if (!enqueued) {
-            await api.editMessageText(
-              chatId,
-              statusMsg.message_id,
-              '❌ Failed to fetch tweet. Check the URL and try again.',
-            );
+          const tweetId = parseTweetUrl(target);
+          if (!tweetId) {
+            await api.editMessageText(chatId, statusMsg.message_id, '❌ Invalid tweet URL.');
             return;
           }
 
-          await api.editMessageText(
-            chatId,
-            statusMsg.message_id,
-            `✅ Queued: <b>${escapeHtml(enqueued.targetName.slice(0, 100))}</b>\n⚡ Processing...`,
-            { parse_mode: 'HTML' },
-          );
-
-          // Auto-trigger processing
-          const startTime = Date.now();
-          const progressInterval = setInterval(() => {
-            const elapsed = Math.round((Date.now() - startTime) / 1000);
-            api
-              .editMessageText(
-                chatId,
-                statusMsg.message_id,
-                `✅ Queued: <b>${escapeHtml(enqueued.targetName.slice(0, 100))}</b>\n⚡ Processing... <i>(${String(elapsed)}s)</i>`,
-                { parse_mode: 'HTML' },
-              )
-              .catch(() => {});
-          }, 15_000);
-
-          try {
-            const result = await qm.processNextManual();
-            clearInterval(progressInterval);
-            const elapsed = Math.round((Date.now() - startTime) / 1000);
-
-            if (result.pendingApproval && result.roastId) {
-              const evalInfo = result.evaluationScore
-                ? `\nEval: <b>${result.evaluationScore.toFixed(1)}</b>/5`
-                : '';
-              await api.editMessageText(
-                chatId,
-                statusMsg.message_id,
-                `💬 <b>Review</b> — ${escapeHtml(result.target ?? '?')} <i>(${String(elapsed)}s)</i>${evalInfo}`,
-                { parse_mode: 'HTML' },
-              );
-
-              if (result.postedText) {
-                const keyboard = new InlineKeyboard()
-                  .text('Post', `approve:${String(result.roastId)}`)
-                  .text('Skip', `reject:${String(result.roastId)}`)
-                  .text('🔄 Regen', `regenerate:${String(result.roastId)}`);
-                await api.sendMessage(
-                  chatId,
-                  `<code>${escapeHtml(result.postedText)}</code>`,
-                  { parse_mode: 'HTML', reply_markup: keyboard },
-                );
-              }
-            } else if (result.posted || result.savedOnly) {
-              const statusEmoji = result.posted ? '✅' : '📝';
-              const statusLabel = result.posted ? 'Posted' : 'Generated (Twitter disabled)';
-              const stockpileInfo = result.fromStockpile ? ' (from stockpile)' : '';
-              const evalInfo = result.evaluationScore
-                ? `\nEval: <b>${result.evaluationScore.toFixed(1)}</b>/5`
-                : '';
-              const tweetIdLine = result.tweetId ? `\n🔗 ${tweetLink(result.tweetId, twitterUsername)}` : '';
-              await api.editMessageText(
-                chatId,
-                statusMsg.message_id,
-                `${statusEmoji} ${statusLabel} in ${String(elapsed)}s${stockpileInfo}\nTarget: <b>${escapeHtml(result.target ?? '?')}</b>${tweetIdLine}${evalInfo}`,
-                { parse_mode: 'HTML' },
-              );
-              if (result.postedText) {
-                await api.sendMessage(chatId, `🔥 <b>Reply:</b>\n<code>${escapeHtml(result.postedText)}</code>`, { parse_mode: 'HTML' }).catch(() => {});
-              }
-            } else {
-              const reason = result.error ?? 'Processing failed';
-              await api.editMessageText(
-                chatId,
-                statusMsg.message_id,
-                `❌ ${escapeHtml(reason)}`,
-                { parse_mode: 'HTML' },
-              );
-            }
-          } catch (error) {
-            clearInterval(progressInterval);
-            await api
-              .editMessageText(
-                chatId,
-                statusMsg.message_id,
-                `❌ Processing failed: ${escapeHtml(getErrorMessage(error).slice(0, 200))}`,
-                { parse_mode: 'HTML' },
-              )
-              .catch(() => {});
+          const prep = await prepareTweetContext(target, updateStatus);
+          if ('error' in prep) {
+            await api.editMessageText(chatId, statusMsg.message_id, prep.error);
+            return;
           }
-        } catch (error) {
-          await api
-            .editMessageText(
-              chatId,
-              statusMsg.message_id,
-              `❌ Failed: ${escapeHtml(getErrorMessage(error).slice(0, 200))}`,
+
+          const { targetName, profileContext, imagePaths } = prep;
+          mediaCleanup = prep.mediaCleanup;
+
+          updateStatus(`🚀 MAX for <b>${escapeHtml(targetName)}</b> — launching 3 pipelines...`);
+
+          const pipelineStatuses: string[] = [];
+          const onProgress = (pipeline: MaxPipeline, status: string, variants: number, durationMs: number): void => {
+            const label = PIPELINE_LABELS[pipeline];
+            const sec = Math.round(durationMs / 1000);
+            if (status === 'ok') {
+              pipelineStatuses.push(`✅ ${label}: ${String(variants)} (${String(sec)}s)`);
+            } else {
+              pipelineStatuses.push(`❌ ${label}: ${status} (${String(sec)}s)`);
+            }
+            const remaining = 3 - pipelineStatuses.length;
+            const progressLine = pipelineStatuses.join('\n');
+            const waitLine = remaining > 0 ? `\n⏳ Waiting for ${String(remaining)} more...` : '\n⚖️ Ranking...';
+            updateStatus(`🚀 MAX <b>${escapeHtml(targetName)}</b>\n${progressLine}${waitLine}`);
+          };
+
+          const result = await generateRoastsMax({
+            targetName,
+            provider,
+            logger,
+            feedbackRepo,
+            configRepo,
+            exampleRepo,
+            patternRepo,
+            stockpileRepo,
+            farmAttemptRepo,
+            imagePaths: imagePaths.length > 0 ? imagePaths : undefined,
+            profileContext,
+            tweetMode: true,
+            onProgress,
+          });
+
+          const elapsed = Math.round((Date.now() - startTime) / 1000);
+          const normalizedUrl = target.startsWith('http') ? target : `https://${target}`;
+
+          if (result.variants.length === 0) {
+            await api.editMessageText(
+              chatId, statusMsg.message_id,
+              `🚀 MAX <b>${escapeHtml(targetName)}</b> — ${String(elapsed)}s\n<a href="${escapeHtml(normalizedUrl)}">Original tweet</a>\n\n❌ <i>All variants filtered or scored below threshold.</i>`,
               { parse_mode: 'HTML' },
-            )
-            .catch(() => {});
+            );
+            if (mediaCleanup) mediaCleanup().catch(() => {});
+            return;
+          }
+
+          // Store context for Post/Regen buttons
+          const ctxKey = `qp-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+          queuePostContexts.set(ctxKey, {
+            tweetUrl: target,
+            tweetId,
+            targetName,
+            profileContext,
+            imagePaths,
+            cleanup: mediaCleanup,
+            variants: result.variants,
+          });
+          // Auto-cleanup after 10 min
+          setTimeout(() => {
+            const stored = queuePostContexts.get(ctxKey);
+            if (stored?.cleanup) stored.cleanup().catch(() => {});
+            queuePostContexts.delete(ctxKey);
+          }, 600_000);
+          mediaCleanup = undefined; // ownership transferred
+
+          // Format output with Post buttons per variant
+          const headerLines = [
+            `🚀 MAX <b>${escapeHtml(targetName)}</b> — ${String(elapsed)}s`,
+            `<a href="${escapeHtml(normalizedUrl)}">Original tweet</a>`,
+            '',
+          ];
+          const body = headerLines.join('\n') + formatMaxOutput(result);
+
+          const keyboard = new InlineKeyboard();
+          const topCount = Math.min(3, result.variants.length);
+          for (let i = 0; i < topCount; i++) {
+            keyboard.text(`Post #${String(i + 1)}`, `qp-post:${ctxKey}:${String(i)}`);
+          }
+          keyboard.row().text('🔄 Regen', `qp-regen:${ctxKey}`);
+
+          await api.deleteMessage(chatId, statusMsg.message_id).catch(() => {});
+          await api.sendMessage(chatId, body, {
+            parse_mode: 'HTML',
+            reply_markup: keyboard,
+            link_preview_options: { is_disabled: true },
+          });
+        } catch (error) {
+          const elapsed = Math.round((Date.now() - startTime) / 1000);
+          logger.error({ err: error, url: target, elapsedSec: elapsed }, 'Queue Max tweet roast failed');
+          await api.editMessageText(
+            chatId, statusMsg.message_id,
+            `❌ Failed after ${String(elapsed)}s: ${escapeHtml(getErrorMessage(error).slice(0, 200))}`,
+            { parse_mode: 'HTML' },
+          ).catch(() => {});
+        } finally {
+          if (mediaCleanup) mediaCleanup().catch(() => {});
         }
       })();
       return;
@@ -3752,6 +3780,163 @@ export function createBot(opts: {
           });
         } catch (error) {
           logger.error({ err: error, ctxKey }, 'mx-regen callback failed');
+          await ctx.editMessageText(
+            `❌ <b>Regen failed:</b> ${escapeHtml(getErrorMessage(error).slice(0, 200))}`,
+            { parse_mode: 'HTML' },
+          ).catch(() => {});
+        }
+      })();
+
+    // --- Queue Post (post variant as reply to tweet) ---
+    } else if (data.startsWith('qp-post:')) {
+      const parts = data.slice(8).split(':');
+      const ctxKey = parts[0]!;
+      const varIdx = parseInt(parts[1] ?? '', 10);
+      const storedCtx = queuePostContexts.get(ctxKey);
+
+      if (!storedCtx) {
+        await ctx.answerCallbackQuery({ text: 'Context expired — run /queue again', show_alert: true });
+        return;
+      }
+      if (Number.isNaN(varIdx) || varIdx < 0 || varIdx >= storedCtx.variants.length) {
+        await ctx.answerCallbackQuery({ text: 'Invalid variant index', show_alert: true });
+        return;
+      }
+
+      const twitterClient = opts.twitterClient;
+      if (!twitterClient) {
+        await ctx.answerCallbackQuery({ text: 'Twitter client not configured', show_alert: true });
+        return;
+      }
+
+      const variant = storedCtx.variants[varIdx]!;
+      await ctx.answerCallbackQuery({ text: 'Posting reply...' });
+
+      const chatId = ctx.chat?.id;
+      if (!chatId) return;
+
+      void (async () => {
+        try {
+          const postResult = await twitterClient.replyToTweet(variant.text, storedCtx.tweetId);
+          if (postResult) {
+            // Save to roast repo
+            if (roastRepo) {
+              roastRepo.insert({
+                targetName: storedCtx.targetName,
+                targetType: 'project',
+                tweetText: variant.text,
+                replyToId: storedCtx.tweetId,
+                source: 'manual_tweet',
+                status: 'posted',
+                factChecked: true,
+                angle: variant.angle,
+              });
+            }
+            await ctx.editMessageText(
+              `✅ <b>Posted reply!</b>\n${tweetLink(postResult.tweetId, twitterUsername)}\n\n<pre>${escapeHtml(variant.text)}</pre>`,
+              { parse_mode: 'HTML' },
+            );
+            // Clean up context
+            if (storedCtx.cleanup) storedCtx.cleanup().catch(() => {});
+            queuePostContexts.delete(ctxKey);
+          } else {
+            await ctx.editMessageText(
+              '❌ Twitter returned null — tweet may exceed 280 chars',
+              { parse_mode: 'HTML' },
+            );
+          }
+        } catch (error) {
+          const errMsg = getErrorMessage(error);
+          logger.error({ err: error, tweetId: storedCtx.tweetId, variant: varIdx }, 'Queue post failed');
+          if (errMsg.includes('403')) {
+            await ctx.editMessageText(
+              `❌ Reply blocked (403). Tweet might be restricted.\n\n<pre>${escapeHtml(variant.text)}</pre>`,
+              { parse_mode: 'HTML' },
+            );
+          } else {
+            await ctx.editMessageText(
+              `❌ Post failed: ${escapeHtml(errMsg.slice(0, 200))}`,
+              { parse_mode: 'HTML' },
+            );
+          }
+        }
+      })();
+
+    // --- Queue Regen (regenerate Max pipeline for queued tweet) ---
+    } else if (data.startsWith('qp-regen:')) {
+      const ctxKey = data.slice(9);
+      const storedCtx = queuePostContexts.get(ctxKey);
+      if (!storedCtx) {
+        await ctx.answerCallbackQuery({ text: 'Context expired — run /queue again', show_alert: true });
+        return;
+      }
+
+      if (!provider) {
+        await ctx.answerCallbackQuery({ text: 'Provider not available', show_alert: true });
+        return;
+      }
+
+      await ctx.answerCallbackQuery({ text: 'Regenerating (3 pipelines)...' });
+      await ctx.editMessageText('🚀 <b>Regenerating MAX...</b>', { parse_mode: 'HTML' });
+
+      const chatId = ctx.chat?.id;
+      if (!chatId) return;
+
+      void (async () => {
+        try {
+          const startTime = Date.now();
+          const result = await generateRoastsMax({
+            targetName: storedCtx.targetName,
+            provider,
+            logger,
+            feedbackRepo,
+            configRepo,
+            exampleRepo,
+            patternRepo,
+            stockpileRepo,
+            farmAttemptRepo,
+            imagePaths: storedCtx.imagePaths.length > 0 ? storedCtx.imagePaths : undefined,
+            profileContext: storedCtx.profileContext,
+            tweetMode: true,
+          });
+
+          // Update stored variants
+          storedCtx.variants = result.variants;
+
+          const elapsed = Math.round((Date.now() - startTime) / 1000);
+          const normalizedUrl = storedCtx.tweetUrl.startsWith('http') ? storedCtx.tweetUrl : `https://${storedCtx.tweetUrl}`;
+          const regenLines: string[] = [
+            `🔄 MAX <b>${escapeHtml(storedCtx.targetName)}</b> — regenerated, ${String(elapsed)}s`,
+            `<a href="${escapeHtml(normalizedUrl)}">Original tweet</a>`,
+            '',
+          ];
+
+          if (result.variants.length === 0) {
+            regenLines.push('❌ <i>All variants filtered or scored below threshold.</i>');
+          } else {
+            regenLines.push(formatMaxOutput(result));
+          }
+
+          const keyboard = new InlineKeyboard();
+          if (result.variants.length > 0) {
+            const topCount = Math.min(3, result.variants.length);
+            for (let i = 0; i < topCount; i++) {
+              keyboard.text(`Post #${String(i + 1)}`, `qp-post:${ctxKey}:${String(i)}`);
+            }
+            keyboard.row().text('🔄 Regen', `qp-regen:${ctxKey}`);
+          }
+
+          const regenMsgId = ctx.callbackQuery?.message?.message_id;
+          if (chatId && regenMsgId) {
+            await bot.api.deleteMessage(chatId, regenMsgId).catch(() => {});
+          }
+          await ctx.reply(regenLines.join('\n'), {
+            parse_mode: 'HTML',
+            reply_markup: result.variants.length > 0 ? keyboard : undefined,
+            link_preview_options: { is_disabled: true },
+          });
+        } catch (error) {
+          logger.error({ err: error, ctxKey }, 'qp-regen callback failed');
           await ctx.editMessageText(
             `❌ <b>Regen failed:</b> ${escapeHtml(getErrorMessage(error).slice(0, 200))}`,
             { parse_mode: 'HTML' },
