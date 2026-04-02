@@ -17,7 +17,9 @@ export type TaskProfile =
   | 'roast-fast-research'
   | 'roast-fast-gen'
   | 'roast-lightning'
-  | 'roast-lightning-research';
+  | 'roast-lightning-research'
+  | 'news-research'
+  | 'news-generate';
 
 export interface AgentTask {
   prompt: string;

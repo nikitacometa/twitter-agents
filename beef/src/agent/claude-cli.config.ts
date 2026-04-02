@@ -182,6 +182,20 @@ const DEFAULT_PRESETS: Record<TaskProfile, TaskPreset> = {
     timeoutMs: 180_000,
     fallbackModel: 'haiku',
   },
+  'news-research': {
+    model: 'opus',
+    effort: 'high',
+    tools: RESEARCH_TOOLS,
+    maxTurns: 15,
+    timeoutMs: 300_000,
+  },
+  'news-generate': {
+    model: 'opus',
+    effort: 'high',
+    tools: RESEARCH_TOOLS,
+    maxTurns: 15,
+    timeoutMs: 600_000,
+  },
 };
 
 // --- Environment for all CLI subprocesses ---

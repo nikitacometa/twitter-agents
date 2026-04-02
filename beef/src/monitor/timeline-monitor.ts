@@ -2,6 +2,7 @@ import type { Logger } from 'pino';
 import type { TwitterClient } from '@twitter/twitter-client.js';
 import type { ConfigRepository } from '@storage/repositories/config.repository.js';
 import type { MonitorRepository } from './monitor.repository.js';
+import type { NewsEventRepository } from '@news/news-event.repository.js';
 import type { SearchBatch } from './monitor-targets.js';
 import { MONITOR_TARGETS, buildSearchBatches, buildSearchQuery, buildTargetMap } from './monitor-targets.js';
 import type { ScoredTweet } from './tweet-scorer.js';
@@ -17,6 +18,7 @@ export interface MonitorPollResult {
 const DEFAULT_BUDGET_CEILING = 17_500;
 const SECTION_TOP_N = 7;
 const BASE_REPLIES_TOP_N = 5;
+const NEWS_ACCUMULATE_THRESHOLD = 12;
 
 export class TimelineMonitor {
   private readonly twitter: TwitterClient;
@@ -28,6 +30,7 @@ export class TimelineMonitor {
   private readonly budgetCeiling: number;
   private readonly batches: SearchBatch[];
   private readonly targetMap: Map<string, (typeof MONITOR_TARGETS)[number]>;
+  private readonly newsEventRepo?: NewsEventRepository;
   private readonly onNewTweets?: (tweets: ScoredTweet[]) => void;
   private isRunning = false;
 
@@ -39,6 +42,7 @@ export class TimelineMonitor {
     monitorChatId: number | string;
     logger: Logger;
     budgetCeiling?: number;
+    newsEventRepo?: NewsEventRepository;
     onNewTweets?: (tweets: ScoredTweet[]) => void;
   }) {
     this.twitter = opts.twitter;
@@ -48,6 +52,7 @@ export class TimelineMonitor {
     this.monitorChatId = opts.monitorChatId;
     this.logger = opts.logger;
     this.budgetCeiling = opts.budgetCeiling ?? DEFAULT_BUDGET_CEILING;
+    this.newsEventRepo = opts.newsEventRepo;
     this.onNewTweets = opts.onNewTweets;
     this.batches = buildSearchBatches(MONITOR_TARGETS);
     this.targetMap = buildTargetMap(MONITOR_TARGETS);
@@ -135,6 +140,28 @@ export class TimelineMonitor {
     // Sort by score desc, then freshness (lower age = better)
     allScored.sort((a, b) => b.score - a.score || a.ageMinutes - b.ageMinutes);
 
+    // News accumulator: save high-scored tweets for /news pipeline
+    if (this.newsEventRepo) {
+      for (const scored of allScored) {
+        if (scored.score >= NEWS_ACCUMULATE_THRESHOLD) {
+          try {
+            this.newsEventRepo.upsert({
+              tweetId: scored.tweetId,
+              authorHandle: scored.authorHandle,
+              authorTier: scored.tier,
+              tweetText: scored.text,
+              tweetUrl: scored.tweetUrl,
+              monitorScore: scored.score,
+              followersK: scored.followersK,
+              isReply: scored.isReply,
+            });
+          } catch (err) {
+            this.logger.warn({ err, tweetId: scored.tweetId }, 'Failed to accumulate news event');
+          }
+        }
+      }
+    }
+
     // Top N per section for digest: Base Posts (priority) → Base Replies (capped)
     const basePosts = allScored.filter((t) => t.category === 'base' && !t.isReply).slice(0, SECTION_TOP_N);
     const baseReplies = allScored.filter((t) => t.category === 'base' && t.isReply).slice(0, BASE_REPLIES_TOP_N);
@@ -179,6 +206,12 @@ export class TimelineMonitor {
       const pruned = this.monitorRepo.pruneOld();
       if (pruned > 0) {
         this.logger.info({ pruned }, 'Pruned old monitor records');
+      }
+      if (this.newsEventRepo) {
+        const newsPruned = this.newsEventRepo.pruneOld();
+        if (newsPruned > 0) {
+          this.logger.info({ newsPruned }, 'Pruned old news events');
+        }
       }
     }
 
