@@ -36,6 +36,7 @@ import { pickStrategies } from '@meme/meme-strategies.js';
 import type { MemeStrategy } from '@meme/meme-strategies.js';
 import { InputFile } from 'grammy';
 import type { MetricsRepository } from '@metrics/metrics.repository.js';
+import type { NewsEventRepository } from '@news/news-event.repository.js';
 import {
   escapeHtml,
   formatStatsMessage,
@@ -169,6 +170,8 @@ export function createBot(opts: {
   memeGenerator?: MemeGenerator;
   memeHistoryRepo?: MemeHistoryRepository;
   metricsRepo?: MetricsRepository;
+  newsEventRepo?: NewsEventRepository;
+  telegramChatId?: number | string;
   anthropicApiKey?: string;
   openaiApiKey?: string;
   resetCircuitBreaker?: () => void;
@@ -262,6 +265,10 @@ export function createBot(opts: {
         '  <code>/roast_max @handle</code> — person',
         '  <code>/roast_max hyperliquid</code> — freeform',
         '  <code>--quick</code> skip serious eval (rankBatch only)',
+        '',
+        '<b>📰 /news</b>',
+        'News digest: research → generate → judge → top 5 standalone roasts',
+        '  <code>--quick</code> skip serious eval',
         '',
         '━━━━━━━━━━━━━━━━━━━━━━',
         '<b>🐦 Twitter</b>',
@@ -4339,6 +4346,83 @@ If no contradictions found, return {"contradictions":[]}`;
         for (const p of tmpPaths) {
           try { await unlink(p); } catch { /* already cleaned */ }
         }
+      }
+    })();
+  });
+
+  // ---------------------------------------------------------------------------
+  // /news — News roast digest pipeline
+  // ---------------------------------------------------------------------------
+  bot.command('news', (ctx) => {
+    if (!provider) {
+      void ctx.reply('⚠️ LLM provider not configured.');
+      return;
+    }
+    if (!opts.newsEventRepo) {
+      void ctx.reply('⚠️ NewsEventRepository not available.');
+      return;
+    }
+    if (!opts.stockpileRepo) {
+      void ctx.reply('⚠️ StockpileRepository not available.');
+      return;
+    }
+    if (!opts.telegramChatId) {
+      void ctx.reply('⚠️ TELEGRAM_CHAT_ID not configured.');
+      return;
+    }
+
+    const arg = ctx.match?.trim().toLowerCase() ?? '';
+    const quick = arg.includes('--quick');
+
+    const chatId = ctx.chat.id;
+    const api = ctx.api;
+    const newsEventRepo = opts.newsEventRepo;
+    const newsStockpileRepo = opts.stockpileRepo;
+    const telegramChatId = opts.telegramChatId;
+
+    void (async () => {
+      const statusMsg = await api.sendMessage(chatId,
+        `📰 <b>News pipeline starting${quick ? ' (quick mode)' : ''}...</b>\n\nPhase 1: gathering data...`,
+        { parse_mode: 'HTML' },
+      );
+
+      const pipelineStart = Date.now();
+
+      try {
+        const { runNewsPipeline } = await import('@news/news-pipeline.js');
+
+        const result = await runNewsPipeline({
+          provider,
+          logger,
+          newsEventRepo,
+          stockpileRepo: newsStockpileRepo,
+          telegramToken: opts.token,
+          chatId: telegramChatId,
+          quick,
+        });
+
+        const elapsed = Math.round((Date.now() - pipelineStart) / 1000);
+        const stats = result.stats;
+
+        await api.editMessageText(chatId, statusMsg.message_id,
+          [
+            `✅ <b>News pipeline complete</b> (${String(elapsed)}s)`,
+            '',
+            `📈 Stories: ${String(stats.storiesFound)} found → ${String(stats.storiesSelected)} selected`,
+            `🎯 Variants: ${String(stats.totalGenerated)} generated → ${String(stats.selected)} selected`,
+            `🧠 Opus: ${String(stats.opusVariants)} | Sonnet: ${String(stats.lightningVariants)}`,
+            '',
+            'Full digest sent above ↑',
+          ].join('\n'),
+          { parse_mode: 'HTML' },
+        );
+      } catch (error) {
+        const elapsed = Math.round((Date.now() - pipelineStart) / 1000);
+        logger.error({ err: getErrorMessage(error) }, 'News pipeline failed');
+        await api.editMessageText(chatId, statusMsg.message_id,
+          `❌ <b>News pipeline failed</b> (${String(elapsed)}s)\n\n<code>${escapeHtml(getErrorMessage(error).slice(0, 500))}</code>`,
+          { parse_mode: 'HTML' },
+        ).catch(() => {});
       }
     })();
   });

@@ -8,7 +8,6 @@
 
 import type { Logger } from 'pino';
 import type { ProviderManager } from '@agent/provider-manager.js';
-import type { AgentRoastOutput } from '@agent/agent.types.js';
 import type { NewsStory, NewsVariant, ResearchOutput } from './types.js';
 import { getErrorMessage } from '@common/utils/error.util.js';
 
@@ -236,7 +235,7 @@ export async function runNewsGeneration(opts: {
 
   // --- Leg B: Lightning diversity (slot 2, sequential) ---
   const lightningStart = Date.now();
-  let lightningVariants: NewsVariant[] = [];
+  const lightningVariants: NewsVariant[] = [];
   let lightningSuccesses = 0;
 
   const lightningPromise = (async () => {

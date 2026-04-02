@@ -10,7 +10,6 @@ import type { Logger } from 'pino';
 import type { ProviderManager } from '@agent/provider-manager.js';
 import type { NewsEvent, ResearchOutput, NewsStory } from './types.js';
 import type { DexScreenerToken, CoinGeckoMarketItem } from '@farm/target-discoverer.js';
-import { getErrorMessage } from '@common/utils/error.util.js';
 
 // --- Data formatting for LLM context ---
 

@@ -49,6 +49,7 @@ import { ActivityLogger } from './activity/activity-logger.js';
 import { ImgflipClient } from './meme/imgflip-client.js';
 import { MemeHistoryRepository } from './meme/meme-history.repository.js';
 import { MemeGenerator } from './meme/meme-generator.js';
+import { NewsEventRepository } from './news/news-event.repository.js';
 import { ApiServer } from './api/api-server.js';
 
 const config = validateEnv();
@@ -88,6 +89,7 @@ const farmAttemptRepo = new FarmAttemptRepository(db);
 const tweetRepo = new TweetRepository(db);
 const targetRepo = new TargetRepository(db);
 const metricsRepo = new MetricsRepository(db);
+const newsEventRepo = new NewsEventRepository(db);
 
 // --- Recover stuck queue items from previous crash ---
 const resetCount = queueRepo.resetProcessing();
@@ -705,6 +707,7 @@ if (twitter && 'searchRecentTweets' in twitter && config.TELEGRAM_BOT_TOKEN && m
     telegramToken: config.TELEGRAM_BOT_TOKEN,
     monitorChatId,
     logger,
+    newsEventRepo,
     onNewTweets,
   });
 
@@ -753,6 +756,8 @@ if (config.TELEGRAM_BOT_TOKEN) {
     memeGenerator,
     memeHistoryRepo,
     metricsRepo,
+    newsEventRepo,
+    telegramChatId: config.TELEGRAM_CHAT_ID,
     anthropicApiKey: config.ANTHROPIC_API_KEY,
     openaiApiKey: config.OPENAI_API_KEY,
     resetCircuitBreaker: playwrightClientRef ? (() => { const pw = playwrightClientRef; pw?.resetCircuitBreaker(); }) : undefined,
