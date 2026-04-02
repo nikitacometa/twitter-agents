@@ -134,31 +134,30 @@ Composite: (FUNNY × 0.5) + (IMPACT × 0.3) + (ORIGINAL × 0.2).
 Return ALL 10 variants sorted by composite score (highest first).`;
 }
 
-// --- Parse variants from LLM output ---
+// --- LLM output parsing helpers ---
 
-function parseVariants(data: unknown, storyId: string, pipeline: 'opus' | 'lightning'): NewsVariant[] {
-  let obj: Record<string, unknown>;
-
+function parseJsonObject(data: unknown): Record<string, unknown> | null {
   if (typeof data === 'string') {
     const cleaned = data.replace(/^```(?:json)?\s*\n?/m, '').replace(/\n?```\s*$/m, '').trim();
     const jsonMatch = cleaned.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) return [];
+    if (!jsonMatch) return null;
     try {
-      obj = JSON.parse(jsonMatch[0]) as Record<string, unknown>;
+      return JSON.parse(jsonMatch[0]) as Record<string, unknown>;
     } catch {
-      return [];
+      return null;
     }
-  } else if (typeof data === 'object' && data !== null) {
-    const wrapper = data as Record<string, unknown>;
-    if (typeof wrapper['text'] === 'string') {
-      return parseVariants(wrapper['text'], storyId, pipeline);
-    }
-    obj = wrapper;
-  } else {
-    return [];
   }
+  if (typeof data === 'object' && data !== null) {
+    const wrapper = data as Record<string, unknown>;
+    if (typeof wrapper['text'] === 'string') return parseJsonObject(wrapper['text']);
+    return wrapper;
+  }
+  return null;
+}
 
-  if (!Array.isArray(obj['variants'])) return [];
+function parseVariants(data: unknown, storyId: string, pipeline: 'opus' | 'lightning'): NewsVariant[] {
+  const obj = parseJsonObject(data);
+  if (!obj || !Array.isArray(obj['variants'])) return [];
 
   const variants: NewsVariant[] = [];
   for (const raw of obj['variants'] as Array<Record<string, unknown>>) {
@@ -178,13 +177,20 @@ function parseVariants(data: unknown, storyId: string, pipeline: 'opus' | 'light
   return variants;
 }
 
+function extractResearchNotes(data: unknown): string | null {
+  const obj = parseJsonObject(data);
+  if (!obj) return null;
+  return typeof obj['researchNotes'] === 'string' ? obj['researchNotes'] : null;
+}
+
 // --- Timeout helper ---
 
 function raceTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
+  let timer: ReturnType<typeof setTimeout>;
   return Promise.race([
-    promise,
+    promise.finally(() => clearTimeout(timer)),
     new Promise<never>((_resolve, reject) => {
-      setTimeout(() => reject(new Error(`${label} timed out after ${String(Math.round(ms / 1000))}s`)), ms);
+      timer = setTimeout(() => reject(new Error(`${label} timed out after ${String(Math.round(ms / 1000))}s`)), ms);
     }),
   ]);
 }
@@ -280,11 +286,7 @@ export async function runNewsGeneration(opts: {
     opusVariants = allOpus;
     opusStatus = 'ok';
 
-    // Extract research notes
-    if (typeof opusResult.value.data === 'string') {
-      const noteMatch = opusResult.value.data.match(/"researchNotes"\s*:\s*"([^"]*)"/);
-      if (noteMatch) researchNotes = noteMatch[1] ?? null;
-    }
+    researchNotes = extractResearchNotes(opusResult.value.data);
 
     logger.info(
       { variants: opusVariants.length, durationMs: opusDurationMs },

@@ -93,6 +93,31 @@ export function formatNewsDigest(
   return lines.join('\n');
 }
 
+const TELEGRAM_LIMIT = 4096;
+
+function chunkMessage(text: string, limit: number): string[] {
+  if (text.length <= limit) return [text];
+
+  const chunks: string[] = [];
+  let remaining = text;
+
+  while (remaining.length > 0) {
+    if (remaining.length <= limit) {
+      chunks.push(remaining);
+      break;
+    }
+
+    const slice = remaining.slice(0, limit);
+    const lastNewline = slice.lastIndexOf('\n');
+    const cutAt = lastNewline > limit * 0.5 ? lastNewline + 1 : limit;
+
+    chunks.push(remaining.slice(0, cutAt));
+    remaining = remaining.slice(cutAt);
+  }
+
+  return chunks;
+}
+
 interface TelegramApiResponse {
   ok: boolean;
   description?: string;
@@ -103,20 +128,24 @@ export async function sendNewsDigest(
   chatId: number | string,
   html: string,
 ): Promise<void> {
-  const url = `https://api.telegram.org/bot${token}/sendMessage`;
-  const response = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      chat_id: chatId,
-      text: html,
-      parse_mode: 'HTML',
-      disable_web_page_preview: true,
-    }),
-  });
+  const chunks = chunkMessage(html, TELEGRAM_LIMIT);
 
-  const body = (await response.json()) as TelegramApiResponse;
-  if (!response.ok || !body.ok) {
-    throw new Error(`Telegram API error (${String(response.status)}): ${body.description ?? 'unknown'}`);
+  for (const chunk of chunks) {
+    const url = `https://api.telegram.org/bot${token}/sendMessage`;
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        chat_id: chatId,
+        text: chunk,
+        parse_mode: 'HTML',
+        disable_web_page_preview: true,
+      }),
+    });
+
+    const body = (await response.json()) as TelegramApiResponse;
+    if (!response.ok || !body.ok) {
+      throw new Error(`Telegram API error (${String(response.status)}): ${body.description ?? 'unknown'}`);
+    }
   }
 }

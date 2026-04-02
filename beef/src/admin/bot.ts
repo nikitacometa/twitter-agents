@@ -4353,7 +4353,13 @@ If no contradictions found, return {"contradictions":[]}`;
   // ---------------------------------------------------------------------------
   // /news — News roast digest pipeline
   // ---------------------------------------------------------------------------
+  let newsRunning = false;
+
   bot.command('news', (ctx) => {
+    if (newsRunning) {
+      void ctx.reply('⚠️ News pipeline already running.');
+      return;
+    }
     if (!provider) {
       void ctx.reply('⚠️ LLM provider not configured.');
       return;
@@ -4380,49 +4386,56 @@ If no contradictions found, return {"contradictions":[]}`;
     const newsStockpileRepo = opts.stockpileRepo;
     const telegramChatId = opts.telegramChatId;
 
+    newsRunning = true;
     void (async () => {
-      const statusMsg = await api.sendMessage(chatId,
-        `📰 <b>News pipeline starting${quick ? ' (quick mode)' : ''}...</b>\n\nPhase 1: gathering data...`,
-        { parse_mode: 'HTML' },
-      );
-
-      const pipelineStart = Date.now();
-
       try {
-        const { runNewsPipeline } = await import('@news/news-pipeline.js');
-
-        const result = await runNewsPipeline({
-          provider,
-          logger,
-          newsEventRepo,
-          stockpileRepo: newsStockpileRepo,
-          telegramToken: opts.token,
-          chatId: telegramChatId,
-          quick,
-        });
-
-        const elapsed = Math.round((Date.now() - pipelineStart) / 1000);
-        const stats = result.stats;
-
-        await api.editMessageText(chatId, statusMsg.message_id,
-          [
-            `✅ <b>News pipeline complete</b> (${String(elapsed)}s)`,
-            '',
-            `📈 Stories: ${String(stats.storiesFound)} found → ${String(stats.storiesSelected)} selected`,
-            `🎯 Variants: ${String(stats.totalGenerated)} generated → ${String(stats.selected)} selected`,
-            `🧠 Opus: ${String(stats.opusVariants)} | Sonnet: ${String(stats.lightningVariants)}`,
-            '',
-            'Full digest sent above ↑',
-          ].join('\n'),
+        const statusMsg = await api.sendMessage(chatId,
+          `📰 <b>News pipeline starting${quick ? ' (quick mode)' : ''}...</b>\n\nPhase 1: gathering data...`,
           { parse_mode: 'HTML' },
         );
-      } catch (error) {
-        const elapsed = Math.round((Date.now() - pipelineStart) / 1000);
-        logger.error({ err: getErrorMessage(error) }, 'News pipeline failed');
-        await api.editMessageText(chatId, statusMsg.message_id,
-          `❌ <b>News pipeline failed</b> (${String(elapsed)}s)\n\n<code>${escapeHtml(getErrorMessage(error).slice(0, 500))}</code>`,
-          { parse_mode: 'HTML' },
-        ).catch(() => {});
+
+        const pipelineStart = Date.now();
+
+        try {
+          const { runNewsPipeline } = await import('@news/news-pipeline.js');
+
+          const result = await runNewsPipeline({
+            provider,
+            logger,
+            newsEventRepo,
+            stockpileRepo: newsStockpileRepo,
+            telegramToken: opts.token,
+            chatId: telegramChatId,
+            quick,
+          });
+
+          const elapsed = Math.round((Date.now() - pipelineStart) / 1000);
+          const stats = result.stats;
+
+          await api.editMessageText(chatId, statusMsg.message_id,
+            [
+              `✅ <b>News pipeline complete</b> (${String(elapsed)}s)`,
+              '',
+              `📈 Stories: ${String(stats.storiesFound)} found → ${String(stats.storiesSelected)} selected`,
+              `🎯 Variants: ${String(stats.totalGenerated)} generated → ${String(stats.selected)} selected`,
+              `🧠 Opus: ${String(stats.opusVariants)} | Sonnet: ${String(stats.lightningVariants)}`,
+              '',
+              'Full digest sent above ↑',
+            ].join('\n'),
+            { parse_mode: 'HTML' },
+          );
+        } catch (error) {
+          const elapsed = Math.round((Date.now() - pipelineStart) / 1000);
+          logger.error({ err: getErrorMessage(error) }, 'News pipeline failed');
+          await api.editMessageText(chatId, statusMsg.message_id,
+            `❌ <b>News pipeline failed</b> (${String(elapsed)}s)\n\n<code>${escapeHtml(getErrorMessage(error).slice(0, 500))}</code>`,
+            { parse_mode: 'HTML' },
+          ).catch(() => {});
+        }
+      } catch (err) {
+        logger.error({ err: getErrorMessage(err) }, 'News command failed');
+      } finally {
+        newsRunning = false;
       }
     })();
   });

@@ -34,6 +34,7 @@ interface NewsDigestRow {
 }
 
 export class NewsEventRepository {
+  private readonly db: Database.Database;
   private readonly upsertStmt: Database.Statement;
   private readonly getRecentStmt: Database.Statement;
   private readonly getUnusedRecentStmt: Database.Statement;
@@ -44,6 +45,7 @@ export class NewsEventRepository {
   private readonly getLastDigestStmt: Database.Statement;
 
   constructor(db: Database.Database) {
+    this.db = db;
     this.upsertStmt = db.prepare(`
       INSERT INTO news_events
         (tweet_id, author_handle, author_tier, tweet_text, tweet_url, monitor_score, followers_k, is_reply)
@@ -115,9 +117,12 @@ export class NewsEventRepository {
   }
 
   markUsed(tweetIds: string[]): void {
-    for (const id of tweetIds) {
-      this.markUsedStmt.run(id);
-    }
+    if (tweetIds.length === 0) return;
+    this.db.transaction(() => {
+      for (const id of tweetIds) {
+        this.markUsedStmt.run(id);
+      }
+    })();
   }
 
   countRecent(hoursBack: number = 24): number {

@@ -225,7 +225,7 @@ export async function runNewsPipeline(opts: NewsPipelineOptions): Promise<NewsPi
       id: `news-eval-${String(i)}`,
       targetName: v.storyId,
       tweetText: v.text,
-      researchNotes: genResult.researchNotes,
+      researchNotes: genResult.researchNotes ?? research.researchSummary,
     }));
 
     try {
@@ -327,13 +327,10 @@ export async function runNewsPipeline(opts: NewsPipelineOptions): Promise<NewsPi
     }
   }
 
-  // Mark source tweets as used
-  const usedTweetIds = events
-    .filter((e) => stories.some((s) => s.sourceTweetIds.includes(e.tweetId)))
-    .map((e) => e.tweetId);
-  if (usedTweetIds.length > 0) {
-    newsEventRepo.markUsed(usedTweetIds);
-  }
+  // Mark all events from this window as used — sourceTweetIds is unreliable
+  // because LLM may not populate it, and all events contributed context to research
+  const allTweetIds = events.map((e) => e.tweetId);
+  newsEventRepo.markUsed(allTweetIds);
 
   // Log digest
   newsEventRepo.insertDigest({
