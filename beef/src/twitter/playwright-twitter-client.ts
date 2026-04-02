@@ -314,22 +314,10 @@ export class PlaywrightTwitterClient implements ITwitterClient {
     }
     this.busy = true;
     try {
-      // Navigate to the target tweet
-      await this.page.goto(`https://x.com/i/status/${replyToId}`, {
-        waitUntil: 'domcontentloaded',
-      });
-      await this.humanDelay(2000, 5000);
+      // Navigate to the target tweet and wait for React render
+      const replyButton = await this.navigateAndFindReply(replyToId);
+      if (!replyButton) return null;
 
-      if (this.isLoginRedirect()) {
-        this.logger.error({ replyToId }, 'Session expired — redirected to login during replyToTweet');
-        this._isLoggedIn = false;
-        this.recordFailure(true);
-        return null;
-      }
-
-      // Click reply button on the tweet
-      const replyButton = this.page.locator('[data-testid="reply"]').first();
-      await replyButton.waitFor({ state: 'visible' });
       await this.hoverAndClick(replyButton);
       await this.humanDelay(500, 1500);
 
@@ -435,6 +423,112 @@ export class PlaywrightTwitterClient implements ITwitterClient {
       await new Promise<void>((r) => setTimeout(r, 300));
     }
     return !this.busy;
+  }
+
+  /**
+   * Navigate to a tweet and locate the reply button with retry logic.
+   *
+   * Handles: slow page loads via proxy, deleted/suspended tweets, sensitive
+   * content interstitials, and transient render failures (one page refresh).
+   * Returns the reply button locator, or null if tweet is unavailable / unreachable.
+   */
+  private async navigateAndFindReply(
+    replyToId: string,
+  ): Promise<ReturnType<Page['locator']> | null> {
+    if (!this.page) return null;
+
+    await this.page.goto(`https://x.com/i/status/${replyToId}`, {
+      waitUntil: 'domcontentloaded',
+    });
+    await this.humanDelay(2000, 5000);
+
+    if (this.isLoginRedirect()) {
+      this.logger.error({ replyToId }, 'Session expired — redirected to login during replyToTweet');
+      this._isLoggedIn = false;
+      this.recordFailure(true);
+      return null;
+    }
+
+    // Wait for React to render tweet content (confirms page actually loaded, not just DOM)
+    const contentSelector = '[data-testid="tweetText"], [data-testid="tweet"], [data-testid="tombstone"]';
+    const contentVisible = await this.page.locator(contentSelector).first()
+      .waitFor({ state: 'visible', timeout: 20_000 })
+      .then(() => true).catch(() => false);
+
+    if (!contentVisible) {
+      // Page didn't render — try one refresh before giving up
+      this.logger.warn({ replyToId }, 'Tweet content not visible — refreshing page');
+      await this.page.reload({ waitUntil: 'domcontentloaded' });
+      await this.humanDelay(3000, 5000);
+
+      const retryVisible = await this.page.locator(contentSelector).first()
+        .waitFor({ state: 'visible', timeout: 20_000 })
+        .then(() => true).catch(() => false);
+
+      if (!retryVisible) {
+        this.logger.error({ replyToId, url: this.page.url() }, 'Tweet still not visible after refresh');
+        await this.captureAndSendScreenshot('replyToTweet-no-content', replyToId);
+        this.recordFailure();
+        return null;
+      }
+    }
+
+    // Check for deleted / suspended / unavailable tweet (tombstone shown instead of tweet)
+    if (await this.isTweetUnavailable()) {
+      this.logger.warn({ replyToId }, 'Tweet unavailable (deleted/suspended) — skipping reply');
+      return null; // Not a Playwright failure — don't record or trip circuit breaker
+    }
+
+    // Dismiss sensitive content warning if present
+    await this.dismissSensitiveWarning();
+
+    // Find reply button with generous timeout (action bar renders after tweet text)
+    const replyButton = this.page.locator('[data-testid="reply"]').first();
+    const found = await replyButton.waitFor({ state: 'visible', timeout: 15_000 })
+      .then(() => true).catch(() => false);
+
+    if (found) return replyButton;
+
+    // Reply button missing despite tweet visible — one more refresh attempt
+    this.logger.warn({ replyToId }, 'Reply button not found — refreshing page for retry');
+    await this.page.reload({ waitUntil: 'domcontentloaded' });
+    await this.humanDelay(3000, 5000);
+    await this.dismissSensitiveWarning();
+
+    const retryButton = this.page.locator('[data-testid="reply"]').first();
+    const retryFound = await retryButton.waitFor({ state: 'visible', timeout: 15_000 })
+      .then(() => true).catch(() => false);
+
+    if (retryFound) return retryButton;
+
+    this.logger.error({ replyToId, url: this.page.url() }, 'Reply button not found after retry');
+    await this.captureAndSendScreenshot('replyToTweet-no-reply-btn', replyToId);
+    this.recordFailure();
+    return null;
+  }
+
+  /** Check if the current page shows a tombstone or "unavailable" message instead of a tweet. */
+  private async isTweetUnavailable(): Promise<boolean> {
+    if (!this.page) return false;
+    const tombstone = await this.page.locator('[data-testid="tombstone"]').count().catch(() => 0);
+    if (tombstone > 0) return true;
+
+    const mainText = await this.page.locator('main').textContent({ timeout: 2_000 }).catch(() => '');
+    return /doesn.t exist|has been deleted|suspended|unavailable|this account doesn/i.test(mainText ?? '');
+  }
+
+  /** Dismiss Twitter's sensitive content interstitial if present. */
+  private async dismissSensitiveWarning(): Promise<void> {
+    if (!this.page) return;
+    // Twitter shows a "View" button over sensitive content
+    const viewBtn = this.page.locator('[data-testid="tweet"] button, [role="button"]')
+      .filter({ hasText: /^View$/ }).first();
+    const visible = await viewBtn.isVisible().catch(() => false);
+    if (visible) {
+      this.logger.info('Dismissing sensitive content warning');
+      await viewBtn.click().catch(() => {});
+      await this.humanDelay(1000, 2000);
+    }
   }
 
   /** Parse proxy URL into Playwright's proxy config format (separate server/username/password). */
