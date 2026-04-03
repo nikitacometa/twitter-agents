@@ -44,7 +44,7 @@ const TICKER_MAP: Record<string, string> = {
   // DeFi
   uniswap: 'UNI', aave: 'AAVE', makerdao: 'MKR', maker: 'MKR',
   lidofinance: 'LDO', lido: 'LDO', curvefi: 'CRV', curve: 'CRV',
-  jupiterexchange: 'JUP', jupiter: 'JUP',
+  jupiterexchange: 'JUP', jupiter: 'JUP', jlp: 'JUP',
   daboraprotocol: 'DRIFT', driftprotocol: 'DRIFT', drift: 'DRIFT',
   // AI agents
   virtuals_io: 'VIRTUAL', virtuals: 'VIRTUAL',
@@ -62,14 +62,27 @@ const TICKER_MAP: Record<string, string> = {
 };
 
 function deriveCashtag(story: NewsStory): string | undefined {
+  // 1. Exact match on targetHandle or target
   const handle = (story.ammunition.targetHandle || story.target)
     .toLowerCase()
     .replace(/^@/, '');
-  const ticker = TICKER_MAP[handle];
-  if (ticker) return `$${ticker}`;
-  // Check if label contains an obvious $TICKER
-  const match = story.label.match(/\$([A-Z]{2,10})\b/);
-  if (match) return match[0];
+  const exact = TICKER_MAP[handle];
+  if (exact) return `$${exact}`;
+
+  // 2. Explicit $TICKER in label (e.g. "$SOL dumps 20%")
+  const tickerMatch = story.label.match(/\$([A-Z]{2,10})\b/);
+  if (tickerMatch) return tickerMatch[0];
+
+  // 3. Fuzzy: scan storyId + label + target for known project names
+  const haystack = `${story.storyId} ${story.label} ${story.target}`.toLowerCase();
+  for (const [keyword, ticker] of Object.entries(TICKER_MAP)) {
+    // Only match keywords 3+ chars to avoid false positives (e.g. "sol" in "solution")
+    if (keyword.length < 3) continue;
+    // Match as whole word boundary
+    const pattern = new RegExp(`\\b${keyword}\\b`);
+    if (pattern.test(haystack)) return `$${ticker}`;
+  }
+
   return undefined;
 }
 
