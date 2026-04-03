@@ -21,10 +21,10 @@ import { twitterWeightedLength } from '@common/utils/tweet-text.js';
 // Research: Tue–Thu 09:00–11:00 EST = 14:00–16:00 UTC (Buffer 8.7M tweets).
 const OPTIMAL_HOUR_UTC = 14;
 
-/** Minimum delay between thread tweets (ms). */
-const MIN_TWEET_DELAY = 45_000;
-/** Maximum delay between thread tweets (ms). */
-const MAX_TWEET_DELAY = 90_000;
+/** Minimum delay between thread tweets (ms). API needs 2-3s to register the previous tweet. */
+const MIN_TWEET_DELAY = 3_000;
+/** Maximum delay between thread tweets (ms). No anti-bot concern for self-threads via API. */
+const MAX_TWEET_DELAY = 8_000;
 /** Twitter character limit. */
 const TWEET_LIMIT = 280;
 

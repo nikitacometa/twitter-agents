@@ -10,11 +10,11 @@ import type {
 } from './twitter-client.interface.js';
 
 /**
- * Hybrid Twitter client: API v2 for reads, Playwright for writes.
+ * Hybrid Twitter client: API v2 primary, Playwright fallback for writes.
  *
- * Twitter API v2 returns 403 on non-mention replies (since Feb 2026).
- * Playwright with ISP residential proxy bypasses this restriction.
- * API handles mentions, metrics, search — all read operations.
+ * API handles all reads and most writes. Playwright activates only when
+ * the API fails (e.g., 403 on non-mention replies to other accounts).
+ * Self-replies (threads) work fine via API.
  */
 export class HybridTwitterClient implements ITwitterClient {
   private readonly apiClient: ITwitterClient;
@@ -32,29 +32,35 @@ export class HybridTwitterClient implements ITwitterClient {
   }
 
   get isConfigured(): boolean {
-    // API must be configured for reads. Playwright may be down (login expired) —
-    // we still function in degraded mode (reads work, writes fail gracefully).
     return this.apiClient.isConfigured;
   }
 
-  // ─── Writes → Playwright ───────────────────────────────
+  // ─── Writes → API first, Playwright fallback ──────────
 
   async postTweet(text: string): Promise<PostResult | null> {
-    if (!this.playwrightClient.isConfigured) {
-      this.logger.warn('Playwright not configured — falling back to API for postTweet');
-      return this.apiClient.postTweet(text);
+    if (this.apiClient.isConfigured) {
+      const result = await this.apiClient.postTweet(text);
+      if (result) return result;
+      this.logger.warn('API postTweet failed — trying Playwright fallback');
     }
-    return this.playwrightClient.postTweet(text);
+    if (this.playwrightClient.isConfigured) {
+      return this.playwrightClient.postTweet(text);
+    }
+    this.logger.error('Both API and Playwright unavailable for postTweet');
+    return null;
   }
 
   async replyToTweet(text: string, replyToId: string): Promise<PostResult | null> {
-    if (!this.playwrightClient.isConfigured) {
-      // No API fallback for replies — API v2 returns 403 on non-mention replies,
-      // which is the primary reason hybrid mode exists.
-      this.logger.error('Playwright not configured — cannot reply (API v2 returns 403 on non-mention replies)');
-      return null;
+    if (this.apiClient.isConfigured) {
+      const result = await this.apiClient.replyToTweet(text, replyToId);
+      if (result) return result;
+      this.logger.warn('API replyToTweet failed — trying Playwright fallback');
     }
-    return this.playwrightClient.replyToTweet(text, replyToId);
+    if (this.playwrightClient.isConfigured) {
+      return this.playwrightClient.replyToTweet(text, replyToId);
+    }
+    this.logger.error('Both API and Playwright unavailable for replyToTweet');
+    return null;
   }
 
   // ─── Reads → API v2 ───────────────────────────────────
