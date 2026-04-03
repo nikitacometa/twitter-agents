@@ -4070,9 +4070,6 @@ export function createBot(opts: {
       const chatId = ctx.chat?.id;
       if (!chatId) return;
 
-      // Cancel old draft
-      opts.newsThreadRepo.updateStatus(threadId, 'cancelled');
-
       const threadRepo = opts.newsThreadRepo;
       const newsEventRepo = opts.newsEventRepo;
       const newsStockpileRepo = opts.stockpileRepo;
@@ -4107,6 +4104,9 @@ export function createBot(opts: {
               tweets,
               scheduledAt: slot.toISOString(),
             });
+
+            // Cancel old draft only after new one is created
+            threadRepo.updateStatus(threadId, 'cancelled');
 
             const preview = formatThreadPreview(tweets, result.stats);
             const keyboard = new InlineKeyboard()

@@ -234,8 +234,11 @@ export async function runNewsPipeline(opts: NewsPipelineOptions): Promise<NewsPi
       const evalResults = await seriousEvaluator.evaluateBatch(evalInputs, 3);
       evaluated = evalResults.length;
 
-      for (let i = 0; i < evalResults.length; i++) {
-        const evalResult = evalResults[i]!;
+      // Map results back by id (evaluateBatch drops failures, so index != position)
+      const evalById = new Map(evalResults.map((r) => [r.id, r]));
+      for (let i = 0; i < topN.length; i++) {
+        const evalResult = evalById.get(`news-eval-${String(i)}`);
+        if (!evalResult) continue;
         const variant = topN[i]!;
         variant.judgeScore = evalResult.compositeScore;
         if (evalResult.verdict === 'discard') {

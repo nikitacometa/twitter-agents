@@ -37,7 +37,7 @@ export class NewsThreadRepository {
 
     this.getPendingStmt = db.prepare(`
       SELECT * FROM news_threads
-      WHERE status = 'pending' AND scheduled_at <= datetime('now')
+      WHERE status = 'pending' AND datetime(scheduled_at) <= datetime('now')
       ORDER BY scheduled_at ASC
       LIMIT 1
     `);
