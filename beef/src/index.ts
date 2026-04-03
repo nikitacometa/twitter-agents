@@ -50,6 +50,7 @@ import { ImgflipClient } from './meme/imgflip-client.js';
 import { MemeHistoryRepository } from './meme/meme-history.repository.js';
 import { MemeGenerator } from './meme/meme-generator.js';
 import { NewsEventRepository } from './news/news-event.repository.js';
+import { NewsThreadRepository } from './news/news-thread.repository.js';
 import { ApiServer } from './api/api-server.js';
 
 const config = validateEnv();
@@ -90,6 +91,7 @@ const tweetRepo = new TweetRepository(db);
 const targetRepo = new TargetRepository(db);
 const metricsRepo = new MetricsRepository(db);
 const newsEventRepo = new NewsEventRepository(db);
+const newsThreadRepo = new NewsThreadRepository(db);
 
 // --- Recover stuck queue items from previous crash ---
 const resetCount = queueRepo.resetProcessing();
@@ -725,6 +727,110 @@ if (twitter && 'searchRecentTweets' in twitter && config.TELEGRAM_BOT_TOKEN && m
   logger.info('Timeline monitor registered (every 10 min + jitter)');
 }
 
+// --- Daily News Thread Cron (14:00 UTC) ---
+if (provider && config.TELEGRAM_BOT_TOKEN && config.TELEGRAM_CHAT_ID && twitter) {
+  const newsCronProvider = provider;
+  const newsCronTwitter = twitter;
+  const newsCronToken = config.TELEGRAM_BOT_TOKEN;
+  const newsCronChatId = config.TELEGRAM_CHAT_ID;
+
+  scheduler.register({
+    name: 'news-thread',
+    cronTime: '0 14 * * *',
+    jitterMs: 5 * 60 * 1000,
+    handler: async () => {
+      // Skip if already posted today
+      if (newsThreadRepo.hasPostedToday()) {
+        logger.info('News thread cron: already posted today, skipping');
+        return;
+      }
+
+      // Check for manually scheduled thread
+      const pending = newsThreadRepo.getPendingForNow();
+      if (pending) {
+        logger.info({ threadId: pending.id }, 'News thread cron: posting scheduled thread');
+        const { postNewsThread, formatPostResult } = await import('./news/news-thread.js');
+        const result = await postNewsThread(pending.tweets, newsCronTwitter, logger);
+        if (result.tweetIds.length > 0) {
+          newsThreadRepo.markPosted(pending.id, result.tweetIds);
+        } else {
+          newsThreadRepo.updateStatus(pending.id, 'failed');
+        }
+        // Notify via Telegram
+        const msg = formatPostResult(
+          result.tweetIds, pending.tweets, result.partialFailure,
+          botUsername,
+        );
+        const url = `https://api.telegram.org/bot${newsCronToken}/sendMessage`;
+        await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            chat_id: newsCronChatId,
+            text: `🤖 <b>Auto news thread</b>\n\n${msg}`,
+            parse_mode: 'HTML',
+            disable_web_page_preview: true,
+          }),
+        });
+        return;
+      }
+
+      // No scheduled thread — generate and post automatically
+      logger.info('News thread cron: no scheduled thread, generating fresh');
+      const { runNewsPipeline } = await import('./news/news-pipeline.js');
+      const { formatNewsThread, postNewsThread, formatPostResult } = await import('./news/news-thread.js');
+
+      const pipelineResult = await runNewsPipeline({
+        provider: newsCronProvider,
+        logger,
+        newsEventRepo,
+        stockpileRepo,
+        telegramToken: newsCronToken,
+        chatId: newsCronChatId,
+        skipNotify: true,
+      });
+
+      const tweets = formatNewsThread(pipelineResult);
+      if (tweets.length === 0) {
+        logger.warn('News thread cron: no tweets generated');
+        return;
+      }
+
+      // Save thread record
+      const threadId = newsThreadRepo.insert({
+        tweets,
+        scheduledAt: new Date().toISOString(),
+        status: 'pending',
+      });
+
+      const result = await postNewsThread(tweets, newsCronTwitter, logger);
+      if (result.tweetIds.length > 0) {
+        newsThreadRepo.markPosted(threadId, result.tweetIds);
+      } else {
+        newsThreadRepo.updateStatus(threadId, 'failed');
+      }
+
+      // Notify
+      const msg = formatPostResult(
+        result.tweetIds, tweets, result.partialFailure,
+        botUsername,
+      );
+      const url = `https://api.telegram.org/bot${newsCronToken}/sendMessage`;
+      await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          chat_id: newsCronChatId,
+          text: `🤖 <b>Auto news thread</b>\n\n${msg}`,
+          parse_mode: 'HTML',
+          disable_web_page_preview: true,
+        }),
+      });
+    },
+  });
+  logger.info('News thread cron registered (daily 14:00 UTC + 5min jitter)');
+}
+
 // --- Telegram Bot ---
 let bot: ReturnType<typeof createBot> | null = null;
 if (config.TELEGRAM_BOT_TOKEN) {
@@ -757,6 +863,7 @@ if (config.TELEGRAM_BOT_TOKEN) {
     memeHistoryRepo,
     metricsRepo,
     newsEventRepo,
+    newsThreadRepo,
     telegramChatId: config.TELEGRAM_CHAT_ID,
     anthropicApiKey: config.ANTHROPIC_API_KEY,
     openaiApiKey: config.OPENAI_API_KEY,

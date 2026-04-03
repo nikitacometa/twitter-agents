@@ -111,6 +111,35 @@ export interface InsertNewsDigest {
   durationMs: number;
 }
 
+// --- News thread (for scheduled posting) ---
+
+export interface ThreadTweet {
+  text: string;
+  role: 'hook' | 'middle' | 'closer';
+  storyId?: string;
+  storyLabel?: string;
+  cashtag?: string;
+}
+
+export interface NewsThread {
+  id: number;
+  tweets: ThreadTweet[];
+  scheduledAt: string;
+  status: 'draft' | 'pending' | 'posted' | 'cancelled' | 'failed';
+  postedAt: string | null;
+  rootTweetId: string | null;
+  tweetIds: string[];
+  digestId: number | null;
+  createdAt: string;
+}
+
+export interface InsertNewsThread {
+  tweets: ThreadTweet[];
+  scheduledAt: string;
+  status?: 'draft' | 'pending';
+  digestId?: number;
+}
+
 // --- Pipeline result (returned to caller) ---
 
 export interface NewsPipelineResult {

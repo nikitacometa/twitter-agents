@@ -37,6 +37,7 @@ import type { MemeStrategy } from '@meme/meme-strategies.js';
 import { InputFile } from 'grammy';
 import type { MetricsRepository } from '@metrics/metrics.repository.js';
 import type { NewsEventRepository } from '@news/news-event.repository.js';
+import type { NewsThreadRepository } from '@news/news-thread.repository.js';
 import {
   escapeHtml,
   formatStatsMessage,
@@ -141,6 +142,23 @@ function splitMessage(text: string, maxLen: number): string[] {
   return chunks;
 }
 
+async function sendChunked(
+  api: Bot['api'],
+  chatId: number | string,
+  text: string,
+  keyboard?: InlineKeyboard,
+): Promise<void> {
+  const chunks = splitMessage(text, 4000);
+  for (let i = 0; i < chunks.length; i++) {
+    const isLast = i === chunks.length - 1;
+    await api.sendMessage(chatId, chunks[i]!, {
+      parse_mode: 'HTML',
+      link_preview_options: { is_disabled: true },
+      reply_markup: isLast ? keyboard : undefined,
+    });
+  }
+}
+
 function isGroupChat(ctx: Context): boolean {
   return ctx.chat?.type === 'group' || ctx.chat?.type === 'supergroup';
 }
@@ -171,6 +189,7 @@ export function createBot(opts: {
   memeHistoryRepo?: MemeHistoryRepository;
   metricsRepo?: MetricsRepository;
   newsEventRepo?: NewsEventRepository;
+  newsThreadRepo?: NewsThreadRepository;
   telegramChatId?: number | string;
   anthropicApiKey?: string;
   openaiApiKey?: string;
@@ -267,7 +286,7 @@ export function createBot(opts: {
         '  <code>--quick</code> skip serious eval (rankBatch only)',
         '',
         '<b>📰 /news</b>',
-        'News digest: research → generate → judge → top 5 standalone roasts',
+        'News thread: research → generate → judge → thread preview (Schedule / Post Now / Regen)',
         '  <code>--quick</code> skip serious eval',
         '',
         '━━━━━━━━━━━━━━━━━━━━━━',
@@ -3426,6 +3445,9 @@ export function createBot(opts: {
     fireBanter(chatId, history, false);
   });
 
+  // --- State flags ---
+  let newsRunning = false;
+
   // --- Inline button callbacks (approve/reject roasts) ---
   bot.on('callback_query:data', async (ctx) => {
     const data = ctx.callbackQuery.data;
@@ -3951,6 +3973,166 @@ export function createBot(opts: {
         }
       })();
 
+    // --- News thread actions ---
+    } else if (data.startsWith('news-schedule:') && opts.newsThreadRepo) {
+      const threadId = parseInt(data.slice(14), 10);
+      if (Number.isNaN(threadId)) {
+        await ctx.answerCallbackQuery({ text: 'Invalid thread ID', show_alert: true });
+        return;
+      }
+      const thread = opts.newsThreadRepo.getById(threadId);
+      if (!thread || thread.status !== 'draft') {
+        await ctx.answerCallbackQuery({ text: 'Thread not found or already scheduled', show_alert: true });
+        return;
+      }
+
+      const { getNextPostingSlot } = await import('@news/news-thread.js');
+      const slot = getNextPostingSlot();
+      opts.newsThreadRepo.schedule(threadId, slot.toISOString());
+
+      const timeStr = slot.toISOString().replace('T', ' ').slice(0, 16) + ' UTC';
+      await ctx.editMessageReplyMarkup({ reply_markup: undefined });
+      await ctx.answerCallbackQuery({ text: `Scheduled for ${timeStr}` });
+      const chatId = ctx.chat?.id;
+      if (chatId) {
+        await bot.api.sendMessage(chatId,
+          `📅 <b>Thread #${String(threadId)} scheduled</b> for ${timeStr}\n\nWill auto-post at that time.`,
+          { parse_mode: 'HTML' },
+        ).catch(() => {});
+      }
+
+    } else if (data.startsWith('news-post:') && opts.newsThreadRepo && opts.twitterClient) {
+      const threadId = parseInt(data.slice(10), 10);
+      if (Number.isNaN(threadId)) {
+        await ctx.answerCallbackQuery({ text: 'Invalid thread ID', show_alert: true });
+        return;
+      }
+      const thread = opts.newsThreadRepo.getById(threadId);
+      if (!thread || (thread.status !== 'draft' && thread.status !== 'pending')) {
+        await ctx.answerCallbackQuery({ text: 'Thread not found or already posted', show_alert: true });
+        return;
+      }
+
+      await ctx.answerCallbackQuery({ text: 'Posting thread...' });
+      await ctx.editMessageReplyMarkup({ reply_markup: undefined });
+      const chatId = ctx.chat?.id;
+      if (!chatId) return;
+
+      const twitterClient = opts.twitterClient;
+      const threadRepo = opts.newsThreadRepo;
+
+      void (async () => {
+        try {
+          const { postNewsThread, formatPostResult } = await import('@news/news-thread.js');
+          const result = await postNewsThread(thread.tweets, twitterClient, logger);
+
+          if (result.tweetIds.length > 0) {
+            threadRepo.markPosted(threadId, result.tweetIds);
+          } else {
+            threadRepo.updateStatus(threadId, 'failed');
+          }
+
+          const msg = formatPostResult(
+            result.tweetIds, thread.tweets, result.partialFailure,
+            twitterUsername,
+          );
+          await bot.api.sendMessage(chatId, msg, {
+            parse_mode: 'HTML',
+            link_preview_options: { is_disabled: true },
+          });
+        } catch (error) {
+          logger.error({ err: getErrorMessage(error) }, 'News thread posting failed');
+          threadRepo.updateStatus(threadId, 'failed');
+          await bot.api.sendMessage(chatId,
+            `❌ Thread posting failed: ${escapeHtml(getErrorMessage(error).slice(0, 300))}`,
+            { parse_mode: 'HTML' },
+          ).catch(() => {});
+        }
+      })();
+
+    } else if (data.startsWith('news-regen:') && opts.newsThreadRepo) {
+      const threadId = parseInt(data.slice(11), 10);
+      if (Number.isNaN(threadId)) {
+        await ctx.answerCallbackQuery({ text: 'Invalid thread ID', show_alert: true });
+        return;
+      }
+      if (!provider || !opts.newsEventRepo || !opts.stockpileRepo || !opts.telegramChatId) {
+        await ctx.answerCallbackQuery({ text: 'Missing pipeline dependencies', show_alert: true });
+        return;
+      }
+      if (newsRunning) {
+        await ctx.answerCallbackQuery({ text: 'Pipeline already running', show_alert: true });
+        return;
+      }
+
+      await ctx.answerCallbackQuery({ text: 'Regenerating...' });
+      await ctx.editMessageReplyMarkup({ reply_markup: undefined });
+      const chatId = ctx.chat?.id;
+      if (!chatId) return;
+
+      // Cancel old draft
+      opts.newsThreadRepo.updateStatus(threadId, 'cancelled');
+
+      const threadRepo = opts.newsThreadRepo;
+      const newsEventRepo = opts.newsEventRepo;
+      const newsStockpileRepo = opts.stockpileRepo;
+      const telegramChatId = opts.telegramChatId;
+      const api = ctx.api;
+
+      newsRunning = true;
+      void (async () => {
+        try {
+          const statusMsg = await api.sendMessage(chatId,
+            '🔄 <b>Regenerating news thread...</b>',
+            { parse_mode: 'HTML' },
+          );
+
+          try {
+            const { runNewsPipeline } = await import('@news/news-pipeline.js');
+            const { formatNewsThread, formatThreadPreview, getNextPostingSlot } = await import('@news/news-thread.js');
+
+            const result = await runNewsPipeline({
+              provider,
+              logger,
+              newsEventRepo,
+              stockpileRepo: newsStockpileRepo,
+              telegramToken: opts.token,
+              chatId: telegramChatId,
+              skipNotify: true,
+            });
+
+            const tweets = formatNewsThread(result);
+            const slot = getNextPostingSlot();
+            const newThreadId = threadRepo.insert({
+              tweets,
+              scheduledAt: slot.toISOString(),
+            });
+
+            const preview = formatThreadPreview(tweets, result.stats);
+            const keyboard = new InlineKeyboard()
+              .text(`📅 Schedule ${slot.toISOString().slice(5, 16).replace('T', ' ')} UTC`, `news-schedule:${String(newThreadId)}`)
+              .row()
+              .text('🚀 Post Now', `news-post:${String(newThreadId)}`)
+              .text('🔄 Regen', `news-regen:${String(newThreadId)}`);
+
+            await api.editMessageText(chatId, statusMsg.message_id,
+              '✅ <b>Thread regenerated</b>', { parse_mode: 'HTML' },
+            );
+            await sendChunked(bot.api, chatId, preview, keyboard);
+          } catch (error) {
+            logger.error({ err: getErrorMessage(error) }, 'News regen failed');
+            await api.editMessageText(chatId, statusMsg.message_id,
+              `❌ <b>Regen failed</b>\n\n<code>${escapeHtml(getErrorMessage(error).slice(0, 500))}</code>`,
+              { parse_mode: 'HTML' },
+            ).catch(() => {});
+          }
+        } catch (err) {
+          logger.error({ err: getErrorMessage(err) }, 'News regen command failed');
+        } finally {
+          newsRunning = false;
+        }
+      })();
+
     // --- Meme from stockpile ---
     } else if (data.startsWith('meme:') && memeGen && stockpileRepo) {
       const stockpileId = parseInt(data.slice(5), 10);
@@ -4351,9 +4533,8 @@ If no contradictions found, return {"contradictions":[]}`;
   });
 
   // ---------------------------------------------------------------------------
-  // /news — News roast digest pipeline
+  // /news — News roast thread pipeline
   // ---------------------------------------------------------------------------
-  let newsRunning = false;
 
   bot.command('news', (ctx) => {
     if (newsRunning) {
@@ -4385,6 +4566,7 @@ If no contradictions found, return {"contradictions":[]}`;
     const newsEventRepo = opts.newsEventRepo;
     const newsStockpileRepo = opts.stockpileRepo;
     const telegramChatId = opts.telegramChatId;
+    const threadRepo = opts.newsThreadRepo;
 
     newsRunning = true;
     void (async () => {
@@ -4398,6 +4580,7 @@ If no contradictions found, return {"contradictions":[]}`;
 
         try {
           const { runNewsPipeline } = await import('@news/news-pipeline.js');
+          const { formatNewsThread, formatThreadPreview, getNextPostingSlot } = await import('@news/news-thread.js');
 
           const result = await runNewsPipeline({
             provider,
@@ -4407,23 +4590,54 @@ If no contradictions found, return {"contradictions":[]}`;
             telegramToken: opts.token,
             chatId: telegramChatId,
             quick,
+            skipNotify: !!threadRepo,
           });
 
           const elapsed = Math.round((Date.now() - pipelineStart) / 1000);
           const stats = result.stats;
 
-          await api.editMessageText(chatId, statusMsg.message_id,
-            [
-              `✅ <b>News pipeline complete</b> (${String(elapsed)}s)`,
-              '',
-              `📈 Stories: ${String(stats.storiesFound)} found → ${String(stats.storiesSelected)} selected`,
-              `🎯 Variants: ${String(stats.totalGenerated)} generated → ${String(stats.selected)} selected`,
-              `🧠 Opus: ${String(stats.opusVariants)} | Sonnet: ${String(stats.lightningVariants)}`,
-              '',
-              'Full digest sent above ↑',
-            ].join('\n'),
-            { parse_mode: 'HTML' },
-          );
+          // Format as thread and show preview with action buttons
+          if (threadRepo) {
+            const tweets = formatNewsThread(result);
+            const slot = getNextPostingSlot();
+            const newThreadId = threadRepo.insert({
+              tweets,
+              scheduledAt: slot.toISOString(),
+            });
+
+            await api.editMessageText(chatId, statusMsg.message_id,
+              [
+                `✅ <b>News pipeline complete</b> (${String(elapsed)}s)`,
+                '',
+                `📈 ${String(stats.storiesFound)} stories → ${String(stats.storiesSelected)} selected → ${String(stats.totalGenerated)} variants → ${String(stats.selected)} winners`,
+              ].join('\n'),
+              { parse_mode: 'HTML' },
+            );
+
+            // Thread preview with action buttons
+            const preview = formatThreadPreview(tweets, stats);
+            const slotLabel = slot.toISOString().slice(5, 16).replace('T', ' ') + ' UTC';
+            const keyboard = new InlineKeyboard()
+              .text(`📅 Schedule ${slotLabel}`, `news-schedule:${String(newThreadId)}`)
+              .row()
+              .text('🚀 Post Now', `news-post:${String(newThreadId)}`)
+              .text('🔄 Regen', `news-regen:${String(newThreadId)}`);
+
+            await sendChunked(bot.api, chatId, preview, keyboard);
+          } else {
+            // Fallback: old-style digest (no thread repo)
+            await api.editMessageText(chatId, statusMsg.message_id,
+              [
+                `✅ <b>News pipeline complete</b> (${String(elapsed)}s)`,
+                '',
+                `📈 Stories: ${String(stats.storiesFound)} found → ${String(stats.storiesSelected)} selected`,
+                `🎯 Variants: ${String(stats.totalGenerated)} generated → ${String(stats.selected)} selected`,
+                '',
+                'Full digest sent above ↑',
+              ].join('\n'),
+              { parse_mode: 'HTML' },
+            );
+          }
         } catch (error) {
           const elapsed = Math.round((Date.now() - pipelineStart) / 1000);
           logger.error({ err: getErrorMessage(error) }, 'News pipeline failed');

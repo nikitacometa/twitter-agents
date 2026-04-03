@@ -48,12 +48,14 @@ export interface NewsPipelineOptions {
   chatId: number | string;
   /** Skip serious eval, rankBatch only. */
   quick?: boolean;
+  /** Skip Telegram digest notification (caller handles it). */
+  skipNotify?: boolean;
 }
 
 export async function runNewsPipeline(opts: NewsPipelineOptions): Promise<NewsPipelineResult> {
   const {
     provider, logger, newsEventRepo, stockpileRepo,
-    telegramToken, chatId, quick = false,
+    telegramToken, chatId, quick = false, skipNotify = false,
   } = opts;
 
   const pipelineStart = Date.now();
@@ -299,13 +301,15 @@ export async function runNewsPipeline(opts: NewsPipelineOptions): Promise<NewsPi
     lightningVariants: genResult.lightningVariants.length,
   };
 
-  // Format and send Telegram notification
-  const html = formatNewsDigest(topRoasts, runnerUps, stories, stats);
-  try {
-    await sendNewsDigest(telegramToken, chatId, html);
-    logger.info('News digest sent to Telegram');
-  } catch (err) {
-    logger.error({ err: getErrorMessage(err) }, 'Failed to send news digest to Telegram');
+  // Format and send Telegram notification (unless caller handles it)
+  if (!skipNotify) {
+    const html = formatNewsDigest(topRoasts, runnerUps, stories, stats);
+    try {
+      await sendNewsDigest(telegramToken, chatId, html);
+      logger.info('News digest sent to Telegram');
+    } catch (err) {
+      logger.error({ err: getErrorMessage(err) }, 'Failed to send news digest to Telegram');
+    }
   }
 
   // Stockpile all evaluated roasts (top + runners) with 48h expiry
