@@ -1,5 +1,5 @@
 import { execFileSync, spawn } from 'node:child_process';
-import { readFile, unlink, mkdtemp } from 'node:fs/promises';
+import { readFile, mkdtemp, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import type { ChildProcess } from 'node:child_process';
@@ -24,6 +24,26 @@ const SCHEMA_DIR = new URL('./schemas/', import.meta.url).pathname;
 function getExtendedPath(): string {
   const home = process.env.HOME ?? '';
   return `${home}/.local/bin:${home}/.npm-global/bin:${process.env.PATH ?? ''}`;
+}
+
+const CODEX_ENV_KEYS = [
+  'HOME',
+  'CODEX_HOME',
+  'CODEX_API_KEY',
+  'CODEX_ACCESS_TOKEN',
+  'CODEX_CA_CERTIFICATE',
+  'SSL_CERT_FILE',
+] as const;
+
+function getCodexEnv(): NodeJS.ProcessEnv {
+  const env: NodeJS.ProcessEnv = { PATH: getExtendedPath() };
+
+  for (const key of CODEX_ENV_KEYS) {
+    const value = process.env[key];
+    if (value !== undefined) env[key] = value;
+  }
+
+  return env;
 }
 
 interface CodexProfile {
@@ -60,7 +80,7 @@ export class CodexProvider implements LLMProvider {
   readonly capabilities: ProviderCapabilities = {
     hasPerplexity: false,
     hasWebSearch: true,
-    hasFileAccess: false,
+    hasFileAccess: true,
     maxTurns: 1,
   };
 
@@ -96,11 +116,14 @@ export class CodexProvider implements LLMProvider {
         task.prompt,
         '-m', profile.model,
         '-c', `model_reasoning_effort="${profile.effort}"`,
-        '-c', 'web_search="live"',
+        '-c', `web_search="${task.requiresResearch ? 'live' : 'disabled'}"`,
+        '-c', 'shell_environment_policy.inherit="none"',
         '--output-schema', schemaPath,
         '-o', outputPath,
         '--ephemeral',
-        '--dangerously-bypass-approvals-and-sandbox',
+        '--ignore-user-config',
+        '--ignore-rules',
+        '-s', 'read-only',
         '--skip-git-repo-check',
       ];
 
@@ -108,7 +131,7 @@ export class CodexProvider implements LLMProvider {
         args.push('-i', img);
       }
 
-      await this.execCodex(args, timeout);
+      await this.execCodex(args, timeout, tmpDir);
 
       const raw = await readFile(outputPath, 'utf-8');
       const data = JSON.parse(raw) as T;
@@ -137,7 +160,7 @@ export class CodexProvider implements LLMProvider {
     } finally {
       this.runningCount--;
       if (tmpDir) {
-        void this.cleanupTmp(tmpDir);
+        await this.cleanupTmp(tmpDir);
       }
     }
   }
@@ -146,7 +169,7 @@ export class CodexProvider implements LLMProvider {
     try {
       execFileSync('codex', ['--version'], {
         timeout: HEALTH_CHECK_TIMEOUT_MS,
-        env: { ...process.env, PATH: getExtendedPath() },
+        env: getCodexEnv(),
         stdio: 'pipe',
       });
       return Promise.resolve(true);
@@ -182,11 +205,12 @@ export class CodexProvider implements LLMProvider {
     return this.runningCount;
   }
 
-  private execCodex(args: string[], timeout: number): Promise<void> {
+  private execCodex(args: string[], timeout: number, cwd: string): Promise<void> {
     return new Promise((resolve, reject) => {
       const child = spawn('codex', args, {
         stdio: ['ignore', 'pipe', 'pipe'],
-        env: { ...process.env, PATH: getExtendedPath() },
+        env: getCodexEnv(),
+        cwd,
       });
       this.childProcesses.add(child);
 
@@ -231,11 +255,7 @@ export class CodexProvider implements LLMProvider {
 
   private async cleanupTmp(dir: string): Promise<void> {
     try {
-      const outputPath = join(dir, 'output.json');
-      await unlink(outputPath).catch(() => {});
-      // rmdir only works on empty dirs — fine after unlinking the single file
-      const { rmdir } = await import('node:fs/promises');
-      await rmdir(dir).catch(() => {});
+      await rm(dir, { recursive: true, force: true });
     } catch {
       // Best-effort cleanup
     }
@@ -249,7 +269,7 @@ export function createCodexProvider(
   try {
     const out = execFileSync('codex', ['--version'], {
       timeout: 3_000,
-      env: { ...process.env, PATH: getExtendedPath() },
+      env: getCodexEnv(),
       stdio: 'pipe',
     });
     const version = out.toString().trim();

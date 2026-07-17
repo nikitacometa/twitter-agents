@@ -4,23 +4,24 @@ import { join } from 'node:path';
 // Mock child_process before importing provider
 const mockSpawn = vi.fn();
 const mockExecFileSync = vi.fn();
+function callMock(mock: ReturnType<typeof vi.fn>, args: unknown[]): unknown {
+  return mock(...args) as unknown;
+}
 vi.mock('node:child_process', () => ({
-  spawn: (...args: unknown[]) => mockSpawn(...args),
-  execFileSync: (...args: unknown[]) => mockExecFileSync(...args),
+  spawn: (...args: unknown[]) => callMock(mockSpawn, args),
+  execFileSync: (...args: unknown[]) => callMock(mockExecFileSync, args),
 }));
 
 // Mock fs operations
 const mockReadFile = vi.fn();
-const mockUnlink = vi.fn();
 const mockMkdtemp = vi.fn();
 const mockWriteFile = vi.fn();
-const mockRmdir = vi.fn();
+const mockRm = vi.fn();
 vi.mock('node:fs/promises', () => ({
-  readFile: (...args: unknown[]) => mockReadFile(...args),
-  unlink: (...args: unknown[]) => mockUnlink(...args),
-  mkdtemp: (...args: unknown[]) => mockMkdtemp(...args),
-  writeFile: (...args: unknown[]) => mockWriteFile(...args),
-  rmdir: (...args: unknown[]) => mockRmdir(...args),
+  readFile: (...args: unknown[]) => callMock(mockReadFile, args),
+  mkdtemp: (...args: unknown[]) => callMock(mockMkdtemp, args),
+  writeFile: (...args: unknown[]) => callMock(mockWriteFile, args),
+  rm: (...args: unknown[]) => callMock(mockRm, args),
 }));
 
 import { CodexProvider, createCodexProvider } from './codex.provider.js';
@@ -60,11 +61,13 @@ describe('CodexProvider', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.stubEnv('BEEF_TEST_SECRET', 'must-not-leak');
     provider = new CodexProvider(mockLogger, mockLogRepo);
   });
 
   afterEach(() => {
     provider.shutdown();
+    vi.unstubAllEnvs();
   });
 
   it('has correct capabilities', () => {
@@ -72,7 +75,7 @@ describe('CodexProvider', () => {
     expect(provider.capabilities).toEqual({
       hasPerplexity: false,
       hasWebSearch: true,
-      hasFileAccess: false,
+      hasFileAccess: true,
       maxTurns: 1,
     });
   });
@@ -86,8 +89,7 @@ describe('CodexProvider', () => {
       factCheckPassed: true,
       researchNotes: null,
     }));
-    mockUnlink.mockResolvedValue(undefined);
-    mockRmdir.mockResolvedValue(undefined);
+    mockRm.mockResolvedValue(undefined);
 
     const child = createMockChildProcess();
     mockSpawn.mockReturnValue(child);
@@ -113,17 +115,54 @@ describe('CodexProvider', () => {
     expect(args).toContain('-m');
     expect(args).toContain('--output-schema');
     expect(args).toContain('--ephemeral');
+    expect(args).toContain('--ignore-user-config');
+    expect(args).toContain('--ignore-rules');
     expect(args).toContain('-o');
+    expect(args).not.toContain('--dangerously-bypass-approvals-and-sandbox');
+    expect(args).toContain('-s');
+    expect(args[args.indexOf('-s') + 1]).toBe('read-only');
+    expect(args).toContain('web_search="disabled"');
+    expect(args).toContain('shell_environment_policy.inherit="none"');
     const oIdx = args.indexOf('-o');
     expect(args[oIdx + 1]).toBe(join(tmpDir, 'output.json'));
+
+    const options = spawnArgs[2] as { cwd: string; env: NodeJS.ProcessEnv };
+    expect(options.cwd).toBe(tmpDir);
+    expect(options.cwd).not.toBe(process.cwd());
+    expect(options.cwd).not.toBe(join(process.cwd(), '..'));
+    expect(options.env.BEEF_TEST_SECRET).toBeUndefined();
+    expect(Object.keys(options.env)).toEqual(expect.arrayContaining(['PATH', 'HOME']));
+    expect(Object.keys(options.env)).toEqual(
+      expect.not.arrayContaining(['OPENAI_API_KEY', 'BEEF_TEST_SECRET']),
+    );
+    expect(mockRm).toHaveBeenCalledWith(tmpDir, { recursive: true, force: true });
+  });
+
+  it('enables live web search only for research tasks', async () => {
+    mockMkdtemp.mockResolvedValue('/tmp/codex-research');
+    mockReadFile.mockResolvedValue('{"variants":[],"bestIndex":0,"factCheckPassed":true}');
+    mockRm.mockResolvedValue(undefined);
+
+    const child = createMockChildProcess();
+    mockSpawn.mockReturnValue(child);
+
+    const resultPromise = provider.run('test-research', {
+      prompt: 'research test',
+      requiresResearch: true,
+    });
+
+    setTimeout(() => child.emit('close', 0, null), 10);
+    await resultPromise;
+
+    const args = mockSpawn.mock.calls[0]![1] as string[];
+    expect(args).toContain('web_search="live"');
   });
 
   it('rejects on non-zero exit code', async () => {
     mockMkdtemp.mockResolvedValue('/tmp/codex-fail');
     const child = createMockChildProcess();
     mockSpawn.mockReturnValue(child);
-    mockUnlink.mockResolvedValue(undefined);
-    mockRmdir.mockResolvedValue(undefined);
+    mockRm.mockResolvedValue(undefined);
 
     const resultPromise = provider.run('test-fail', {
       prompt: 'test',
@@ -142,8 +181,7 @@ describe('CodexProvider', () => {
     mockMkdtemp.mockResolvedValue('/tmp/codex-timeout');
     const child = createMockChildProcess();
     mockSpawn.mockReturnValue(child);
-    mockUnlink.mockResolvedValue(undefined);
-    mockRmdir.mockResolvedValue(undefined);
+    mockRm.mockResolvedValue(undefined);
 
     const resultPromise = provider.run('test-timeout', {
       prompt: 'test',
@@ -158,8 +196,7 @@ describe('CodexProvider', () => {
   it('passes image paths with -i flag', async () => {
     mockMkdtemp.mockResolvedValue('/tmp/codex-img');
     mockReadFile.mockResolvedValue('{"variants":[],"bestIndex":0,"factCheckPassed":true}');
-    mockUnlink.mockResolvedValue(undefined);
-    mockRmdir.mockResolvedValue(undefined);
+    mockRm.mockResolvedValue(undefined);
 
     const child = createMockChildProcess();
     mockSpawn.mockReturnValue(child);
