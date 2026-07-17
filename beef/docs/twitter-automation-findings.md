@@ -8,7 +8,7 @@ Practical findings from E2E testing sessions (2026-03-19, 2026-03-20). What work
 
 **How it works:** Login once via `scraper.login(username, password, email, twoFactorSecret)`, save cookies to `data/twitter-cookies.json` via `CookieStore`, reuse across sessions.
 
-**Critical: verify cookie ownership.** Cookies contain a `twid` field (e.g. `u%3D2034564115918946304`) encoding the user ID. If you import cookies from DevTools, always verify the `twid` matches the target account. In our March 20 session, stale @euphoriaai_ cookies caused posts to go out from the wrong account.
+**Critical: verify cookie ownership.** Cookies contain a `twid` field (e.g. `u%3D<user_id>`) encoding the user ID. If you import cookies from DevTools, always verify the `twid` matches the target account. In our March 20 session, stale cookies from an old test account caused posts to go out from the wrong account.
 
 **Cookie import from Chrome DevTools:**
 ```bash
@@ -107,7 +107,7 @@ Separate Chrome profile per project to avoid SingletonLock conflicts.
 1. **Verify logged-in account:** Check sidebar → Profile link shows `/BeefThis82091`
 2. **Autonomous post:** Click "Post" in sidebar → opens compose dialog. If pre-filled with `@someone` (from current page context), select all + delete first
 3. **Reply to tweet:** Navigate to tweet URL → click reply textbox → type → click Reply button
-4. **Important:** Compose dialog inherits context from current page. If you're on `@EuphoriaAI_/with_replies`, compose will pre-fill `@EuphoriaAI_`. Clear it for standalone posts.
+4. **Important:** Compose dialog inherits context from current page. If you're on `@<user>/with_replies`, compose will pre-fill `@<user>`. Clear it for standalone posts.
 
 ### Known Issues
 

@@ -4,7 +4,7 @@ Research date: 2026-03-26
 
 ## Question
 
-Can two OpenClaw instances run on the same Hostinger VPS (8GB RAM, 2 vCPU, Ubuntu 24.04)? One personal (@EuphoriaAIBot), one for $BEEF. Or should we get a second server?
+Can two OpenClaw instances run on the same Hostinger VPS (8GB RAM, 2 vCPU, Ubuntu 24.04)? One personal (@PersonalBot), one for $BEEF. Or should we get a second server?
 
 ## Answer
 
@@ -25,7 +25,7 @@ Gateway occupies a range (base port + ~20 for Browser CDP + WebSocket control). 
 
 | Component | RAM |
 |-----------|-----|
-| OpenClaw #1 (personal, @EuphoriaAIBot) | ~390 MB |
+| OpenClaw #1 (personal, @PersonalBot) | ~390 MB |
 | OpenClaw #2 ($BEEF) | ~390 MB |
 | $BEEF Node.js bot (PM2) | ~59 MB |
 | OS + systemd + Node overhead | ~400-600 MB |
@@ -40,7 +40,7 @@ User: deploy (existing)
 ├── ~/.openclaw/         (personal config, chmod 700)
 ├── systemd user service: openclaw-gateway.service
 ├── Gateway: 127.0.0.1:18789
-└── Telegram: @EuphoriaAIBot
+└── Telegram: @PersonalBot
 
 User: beef-bot (new)
 ├── ~/.openclaw/         (BEEF config, chmod 700)

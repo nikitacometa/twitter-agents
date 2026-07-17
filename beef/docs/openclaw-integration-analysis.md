@@ -11,7 +11,7 @@ Analysis date: 2026-03-26
 ## What Was Analyzed
 
 1. **$BEEF codebase** — `index.ts` (678 lines), `admin/bot.ts` (2500+ lines), scheduler, agent types, timeline monitor, architecture docs
-2. **OpenClaw on VPS** — active instance (`openclaw-gateway.service`, GPT-5.2, @EuphoriaAIBot), 390MB RAM
+2. **OpenClaw on VPS** — active instance (`openclaw-gateway.service`, GPT-5.2, @PersonalBot), 390MB RAM
 3. **Local openclaw-sandbox** — configs, skills, HEARTBEAT.md, TOOLS.md
 4. **$BEEF history** — 212+ commits, PVP pivot → single roast bot → timeline monitor
 5. **OpenClaw docs** — GitHub, openclaw.ai, architecture, security reports

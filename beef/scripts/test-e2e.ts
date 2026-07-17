@@ -1,5 +1,5 @@
 /**
- * E2E test: fetch @euphoriaai_ profile + tweets, simulate mention processing.
+ * E2E test: fetch @0xBeefer profile + tweets, simulate mention processing.
  * Run: npx tsx scripts/test-e2e.ts
  */
 import 'dotenv/config';
@@ -24,9 +24,9 @@ async function run() {
   await client.initialize();
   console.log(`✓ Logged in as @${username}\n`);
 
-  // --- Step 1: Fetch @euphoriaai_ profile via getProfile (tests M2 IProfileFetcher) ---
-  console.log('=== Step 1: getProfile("euphoriaai_") ===');
-  const profile = await client.getProfile('euphoriaai_');
+  // --- Step 1: Fetch @0xBeefer profile via getProfile (tests M2 IProfileFetcher) ---
+  console.log('=== Step 1: getProfile("0xBeefer") ===');
+  const profile = await client.getProfile('0xBeefer');
   if (profile) {
     console.log(`  Username:  @${profile.username}`);
     console.log(`  Bio:       ${profile.biography ?? '(none)'}`);
@@ -41,8 +41,8 @@ async function run() {
     console.log('  ✗ getProfile returned null');
   }
 
-  // --- Step 2: Get latest tweets from @euphoriaai_ directly ---
-  console.log('\n=== Step 2: Recent tweets from @euphoriaai_ ===');
+  // --- Step 2: Get latest tweets from @0xBeefer directly ---
+  console.log('\n=== Step 2: Recent tweets from @0xBeefer ===');
   const { Scraper } = await import('@the-convocation/twitter-scraper');
   const scraper = new Scraper();
   const cookies = await (client as any).scraper.getCookies();
@@ -50,9 +50,9 @@ async function run() {
 
   const tweets: { id: string; text: string; username: string }[] = [];
   try {
-    for await (const tweet of scraper.getTweets('euphoriaai_', 5)) {
+    for await (const tweet of scraper.getTweets('0xBeefer', 5)) {
       if (tweet.id && tweet.text) {
-        tweets.push({ id: tweet.id, text: tweet.text, username: tweet.username ?? 'euphoriaai_' });
+        tweets.push({ id: tweet.id, text: tweet.text, username: tweet.username ?? '0xBeefer' });
         console.log(`  [${tweet.id}] "${tweet.text.slice(0, 120)}"`);
       }
     }

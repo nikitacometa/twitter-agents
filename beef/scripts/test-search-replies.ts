@@ -1,5 +1,5 @@
 /**
- * Find @BeefThis82091 mentions in @EuphoriaAI_'s tweets+replies
+ * Find @0xBeefer mentions in @0xBeefer's tweets+replies
  */
 import 'dotenv/config';
 import { Scraper } from '@the-convocation/twitter-scraper';
@@ -19,9 +19,9 @@ async function run() {
   const bot = process.env.TWITTER_USERNAME!.toLowerCase();
   let count = 0;
 
-  console.log(`\nSearching @EuphoriaAI_ tweets+replies for @${bot}...\n`);
+  console.log(`\nSearching @0xBeefer tweets+replies for @${bot}...\n`);
 
-  for await (const t of scraper.getTweetsAndReplies('EuphoriaAI_', 20)) {
+  for await (const t of scraper.getTweetsAndReplies('0xBeefer', 20)) {
     count++;
     const text = t.text ?? '';
     const match = text.toLowerCase().includes(`@${bot}`);

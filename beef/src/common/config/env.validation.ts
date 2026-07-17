@@ -2,7 +2,7 @@ import { z } from 'zod';
 
 const envSchema = z
   .object({
-    // Bot environment: test (Euphoria AI) or production (0xBeefer)
+    // Bot environment: test (legacy test account) or production (0xBeefer)
     BEEF_ENV: z.enum(['test', 'production']).default('test'),
 
     // Twitter API (Official API v2)

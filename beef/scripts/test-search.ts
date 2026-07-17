@@ -71,10 +71,10 @@ async function run() {
   console.log('Body length:', body2.length);
   if (body2.length > 0) console.log('Body preview:', body2.slice(0, 500));
 
-  // Test 3: just try getTweets on EuphoriaAI_ and filter
-  console.log('\n=== Test 3: getTweets("EuphoriaAI_") filtered ===');
+  // Test 3: just try getTweets on 0xBeefer and filter
+  console.log('\n=== Test 3: getTweets("0xBeefer") filtered ===');
   let count = 0;
-  for await (const tweet of scraper.getTweets('EuphoriaAI_', 20)) {
+  for await (const tweet of scraper.getTweets('0xBeefer', 20)) {
     if (tweet.text?.toLowerCase().includes(`@${botUsername.toLowerCase()}`)) {
       console.log(`  MATCH [${tweet.id}] @${tweet.username}: "${tweet.text?.slice(0, 120)}"`);
       console.log(`    inReplyTo: ${tweet.inReplyToStatusId ?? 'none'}`);

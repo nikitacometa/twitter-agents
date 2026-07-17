@@ -1,5 +1,5 @@
 /**
- * Find @BeefThis82091 mentions via parent tweets.
+ * Find @0xBeefer mentions via parent tweets.
  * Strategy: fetch @nickvrnn tweets (pinned one has the reply), then check replies.
  */
 import 'dotenv/config';
@@ -25,15 +25,15 @@ async function run() {
     }
   }
 
-  // Strategy 2: Get EuphoriaAI_ recent tweets (Posts tab only)
-  console.log('\n=== @EuphoriaAI_ Posts ===');
-  for await (const t of scraper.getTweets('EuphoriaAI_', 10)) {
+  // Strategy 2: Get 0xBeefer recent tweets (Posts tab only)
+  console.log('\n=== @0xBeefer Posts ===');
+  for await (const t of scraper.getTweets('0xBeefer', 10)) {
     console.log(`  [${t.id}] "${(t.text ?? '').slice(0, 120)}" inReplyTo=${t.inReplyToStatusId ?? 'none'}`);
   }
 
-  // Strategy 3: Try getLatestTweet for EuphoriaAI_
-  console.log('\n=== @EuphoriaAI_ latest tweet ===');
-  const latest = await scraper.getLatestTweet('EuphoriaAI_');
+  // Strategy 3: Try getLatestTweet for 0xBeefer
+  console.log('\n=== @0xBeefer latest tweet ===');
+  const latest = await scraper.getLatestTweet('0xBeefer');
   if (latest) {
     console.log(`  [${latest.id}] "${(latest.text ?? '').slice(0, 120)}" inReplyTo=${latest.inReplyToStatusId ?? 'none'}`);
   } else {
