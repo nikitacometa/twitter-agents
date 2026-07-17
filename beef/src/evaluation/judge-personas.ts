@@ -260,6 +260,18 @@ export function parseEvaluationOutput(raw: string): EvaluationResult {
     }
   }
 
+  // Scores must be finite and inside the rubric — a judge returning NaN or 7
+  // would silently distort the weighted composite and the consensus vetoes.
+  // Lower bound is 0, not 1: judges legitimately score 0 to signal total
+  // failure (the DEGEN < 1 hard veto depends on it).
+  for (const key of requiredKeys) {
+    const value = scores[key] as number;
+    if (!Number.isFinite(value)) {
+      throw new Error(`Non-finite score: ${key}`);
+    }
+    scores[key] = Math.min(5, Math.max(0, value));
+  }
+
   // Simple average as baseline composite (system may override with weighted)
   const composite = typeof parsed['composite'] === 'number'
     ? parsed['composite']

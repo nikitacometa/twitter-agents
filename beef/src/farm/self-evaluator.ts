@@ -13,6 +13,7 @@ import {
   checkFunnyConsensusVeto,
   preFilter,
   countSentences,
+  MIN_JUDGE_QUORUM,
 } from '@evaluation/evaluator.js';
 import { getErrorMessage } from '@common/utils/error.util.js';
 
@@ -99,6 +100,15 @@ export class SelfEvaluator {
       throw new Error(`All judges failed for attempt ${String(attempt.id)}`);
     }
 
+    // Refuse to score below quorum rather than silently downgrading the 5-judge
+    // panel to whatever survived — with 1-2 survivors a single judge becomes a
+    // "majority" and the consensus vetoes lose their meaning.
+    if (results.length < MIN_JUDGE_QUORUM) {
+      throw new Error(
+        `Judge quorum not met for attempt ${String(attempt.id)}: ${String(results.length)}/${String(judges.length)} judges responded (need ${String(MIN_JUDGE_QUORUM)})`,
+      );
+    }
+
     // Weighted composite per judge, then average across judges
     const composites = results.map((r) => calculateWeightedComposite(r.result.scores));
     const avgComposite = composites.reduce((a, b) => a + b, 0) / composites.length;
@@ -121,10 +131,12 @@ export class SelfEvaluator {
     const funnyVeto = checkFunnyConsensusVeto(results);
     if (funnyVeto) vetoReasons.push(funnyVeto);
 
-    // Consensus veto: if majority of judges give composite < 3.0, auto-discard
+    // Consensus veto: strict majority of judges give composite < 3.0.
+    // floor(n/2)+1, same as the FUNNY consensus — ceil(n/2) would let 2 of 4
+    // surviving judges count as a "majority".
     // Round to 1 decimal first to avoid floating-point edge cases (e.g. 2.9999... < 3.0)
     const lowJudgeCount = composites.filter((c) => Math.round(c * 10) / 10 < 3.0).length;
-    const majorityThreshold = Math.ceil(results.length / 2);
+    const majorityThreshold = Math.floor(results.length / 2) + 1;
     if (lowJudgeCount >= majorityThreshold) {
       vetoReasons.push(`CONSENSUS: ${String(lowJudgeCount)}/${String(results.length)} judges scored < 3.0`);
     }

@@ -36,6 +36,12 @@ export function calculateWeightedComposite(scores: EvaluationScores): number {
   return sum;
 }
 
+// Minimum surviving judges for a serious-mode panel verdict. Below this the
+// consensus math degenerates — with 1-2 survivors a single judge becomes a
+// "majority", reintroducing the single-judge false positives the panel exists
+// to prevent.
+export const MIN_JUDGE_QUORUM = 3;
+
 // ---------------------------------------------------------------------------
 // Hard vetoes — FUNNY uses majority-based consensus, not single-judge
 // ---------------------------------------------------------------------------
@@ -343,6 +349,15 @@ export class RoastEvaluator {
       throw new Error(`All judges failed for roast ${String(input.id)}`);
     }
 
+    // Refuse to score below quorum rather than silently downgrading a 5-judge
+    // panel to whatever survived — the caller treats this as "not evaluated",
+    // which fails closed instead of posting on a 1-judge verdict.
+    if (this.mode === 'serious' && results.length < MIN_JUDGE_QUORUM) {
+      throw new Error(
+        `Judge quorum not met for roast ${String(input.id)}: ${String(results.length)}/${String(judges.length)} judges responded (need ${String(MIN_JUDGE_QUORUM)})`,
+      );
+    }
+
     // Weighted composite per judge, then average across judges
     const composites = results.map((r) => calculateWeightedComposite(r.result.scores));
     const avgComposite = composites.reduce((a, b) => a + b, 0) / composites.length;
@@ -365,9 +380,11 @@ export class RoastEvaluator {
     const funnyVeto = checkFunnyConsensusVeto(results);
     if (funnyVeto) vetoReasons.push(funnyVeto);
 
-    // Composite consensus veto: majority of judges score composite < 3.0
+    // Composite consensus veto: strict majority of judges score composite < 3.0.
+    // floor(n/2)+1, same as the FUNNY consensus — ceil(n/2) would let 2 of 4
+    // surviving judges count as a "majority".
     const lowJudgeCount = composites.filter((c) => Math.round(c * 10) / 10 < 3.0).length;
-    const majorityThreshold = Math.ceil(results.length / 2);
+    const majorityThreshold = Math.floor(results.length / 2) + 1;
     if (lowJudgeCount >= majorityThreshold) {
       vetoReasons.push(`CONSENSUS: ${String(lowJudgeCount)}/${String(results.length)} judges scored < 3.0`);
     }
