@@ -27,6 +27,23 @@ jobs:
       - run: pnpm lint:check
       - run: pnpm test
 
+  retrieval:
+    name: retrieval-service · ruff + mypy + pytest
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: retrieval-service
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+          cache-dependency-glob: retrieval-service/uv.lock
+      - run: uv sync --frozen
+      - run: uv run ruff check .
+      - run: uv run mypy src
+      - run: uv run pytest -q
+
   web:
     name: beef-web · typecheck + build
     runs-on: ubuntu-latest
