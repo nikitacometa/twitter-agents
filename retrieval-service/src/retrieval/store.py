@@ -379,6 +379,10 @@ class QdrantStore:
         return "qdrant"
 
     def prepare_upsert(self, documents: Sequence[Document], embedding_model: str) -> UpsertPlan:
+        # Comparing whole payloads (rather than a version field) also carries
+        # schema evolution: a point written by an older payload shape can never
+        # equal the current one, so it lands in `changed` and is rewritten in
+        # full. Adding a payload key needs no separate migration step.
         if not documents:
             return UpsertPlan(documents=[], skipped=0)
         try:
