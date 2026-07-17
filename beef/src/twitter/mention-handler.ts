@@ -1,3 +1,4 @@
+import type Database from 'better-sqlite3';
 import type { Logger } from 'pino';
 import type { ITwitterClient } from './twitter-client.interface.js';
 import type { MentionRepository } from '@storage/repositories/mention.repository.js';
@@ -45,6 +46,9 @@ export class MentionHandler {
   private readonly logger: Logger;
   private readonly botUsername: string;
   private readonly activityLogger?: ActivityLogger;
+  // Wraps a synchronous ingestion block in a SQLite transaction when a db
+  // handle is provided; identity function otherwise (unit tests).
+  private readonly runTx: <T>(fn: () => T) => T;
   private isPolling = false;
 
   constructor(opts: {
@@ -55,6 +59,7 @@ export class MentionHandler {
     queueRepo: QueueRepository;
     tweetRepo?: TweetRepository;
     roastRepo?: RoastRepository;
+    db?: Database.Database;
     logger: Logger;
     botUsername?: string;
     activityLogger?: ActivityLogger;
@@ -69,6 +74,8 @@ export class MentionHandler {
     this.logger = opts.logger;
     this.botUsername = opts.botUsername?.trim() || '0xBeefer';
     this.activityLogger = opts.activityLogger;
+    const db = opts.db;
+    this.runTx = db ? (fn) => db.transaction(fn)() : (fn) => fn();
   }
 
   async poll(): Promise<PollResult> {
@@ -112,146 +119,24 @@ export class MentionHandler {
 
       if (this.mentionRepo.exists(m.tweetId)) continue;
 
-      const requestType = classifyMention(m.text, this.botUsername);
+      // One mention is one logical ingestion event: the mention row, user
+      // upsert, observed tweets, and the queue item commit atomically. Without
+      // this, a crash between the mention insert and the enqueue leaves a
+      // mention that exists() skips forever — a permanently lost request.
+      const summary = this.runTx(() => this.ingestMention(m));
 
-      this.mentionRepo.insert({
-        tweetId: m.tweetId,
-        authorId: m.authorId,
-        authorName: m.authorName,
-        text: m.text,
-        requestType,
-        conversationId: m.conversationId,
-      });
-
-      this.userRepo.upsert({
-        twitterId: m.authorId,
-        username: m.authorName,
-      });
-      this.userRepo.incrementInteraction(m.authorId);
-
-      // Persist observed tweets for corpus building
-      if (this.tweetRepo) {
-        this.tweetRepo.insert({
-          tweetId: m.tweetId,
-          authorId: m.authorId,
-          authorName: m.authorName,
-          text: m.text,
-          source: 'mention_poll',
-          createdAt: new Date().toISOString(),
-        });
-        if (m.inReplyToTweetId && m.parentTweetText && m.parentAuthorName) {
-          this.tweetRepo.insert({
-            tweetId: m.inReplyToTweetId,
-            authorId: 'unknown',
-            authorName: m.parentAuthorName,
-            text: m.parentTweetText,
-            source: 'mention_poll',
-            createdAt: new Date().toISOString(),
-          });
-        }
-      }
-
-      // Thread-aware filtering: skip chatter in threads where bot already participated
-      if (this.shouldSkipThreadMention(m, requestType)) {
-        this.logger.info(
-          { tweetId: m.tweetId, author: m.authorName, conversationId: m.conversationId, requestType },
-          'Mention skipped — thread chatter (bot already in conversation)',
-        );
-        summaries.push({
-          tweetId: m.tweetId,
-          authorName: m.authorName,
-          text: m.text,
-          requestType,
-          queued: false,
-          inReplyToTweetId: m.inReplyToTweetId,
-          parentAuthorName: m.parentAuthorName,
-          parentTextSnippet: m.parentTweetText?.slice(0, 100),
-        });
-        processed++;
-        continue;
-      }
-
-      let queued = false;
-      let queueTarget: string | undefined;
-
-      if (requestType === 'roast_request') {
-        const target = extractTarget(m.text);
-        if (target) {
-          // Scenario 1: explicit "roast @X" / "roast $TOKEN" — reply to the mention tweet, not its parent
-          const convPart = m.conversationId ? `|conversation:${m.conversationId}` : '';
-          this.queueRepo.enqueue({
-            targetName: target,
-            targetType: 'project',
-            source: 'mention',
-            priority: 3,
-            context: `reply_to:${m.tweetId}|by:@${m.authorName}|mention:${m.tweetId}${convPart}`,
-          });
-          queued = true;
-          queueTarget = target;
-          this.logger.info(
-            { tweetId: m.tweetId, target, author: m.authorName },
-            'Roast request queued from mention',
-          );
-        } else if (isRoastMe(m.text, this.botUsername)) {
-          // "roast me" / "@0xBeefer roast me gango" → target = the author
-          queueTarget = this.enqueueHandleRoast(m, m.authorName, { roastMe: true });
-          queued = true;
-          this.logger.info(
-            { tweetId: m.tweetId, author: m.authorName },
-            '"Roast me" request — targeting author',
-          );
-        } else {
-          const tagged = extractTaggedHandle(m.text, this.botUsername);
-          if (tagged && !this.isBotOrParentAuthor(tagged, m)) {
-            // Scenario 3: roast keyword + tagged handle (non-adjacent)
-            queueTarget = this.enqueueHandleRoast(m, tagged);
-            queued = true;
-          } else if (m.inReplyToTweetId && !this.isParentByBot(m)) {
-            // Scenario 2: roast keyword under someone's tweet (not bot's own)
-            queueTarget = this.enqueueParentTweetRoast(m);
-            queued = true;
-          } else {
-            // Roast request but no valid target — casual reply instead
-            queueTarget = this.enqueueCasualReply(m);
-            queued = true;
-          }
-        }
-      } else {
-        const tagged = extractTaggedHandle(m.text, this.botUsername);
-        if (tagged && !this.isBotOrParentAuthor(tagged, m)) {
-          // Scenario 3: "@0xBeefer @elonmusk" or "@0xBeefer check this @user"
-          queueTarget = this.enqueueHandleRoast(m, tagged);
-          queued = true;
-        } else if (isBareOrSimpleMention(m.text) && m.inReplyToTweetId && !this.isParentByBot(m)) {
-          // Scenario 2: bare "@0xBeefer" under a tweet (not bot's own)
-          queueTarget = this.enqueueParentTweetRoast(m);
-          queued = true;
-        } else {
-          // Casual reply — bot was mentioned but no roast target identifiable
-          queueTarget = this.enqueueCasualReply(m);
-          queued = true;
-        }
-      }
-
-      if (queued) {
+      if (summary.queued) {
         this.activityLogger?.emit({
           type: 'mention',
-          data: { author: m.authorName, target: queueTarget ?? m.authorName, requestType },
+          data: {
+            author: m.authorName,
+            target: summary.queueTarget ?? m.authorName,
+            requestType: summary.requestType,
+          },
         });
       }
 
-      summaries.push({
-        tweetId: m.tweetId,
-        authorName: m.authorName,
-        text: m.text,
-        requestType,
-        queued,
-        queueTarget,
-        inReplyToTweetId: m.inReplyToTweetId,
-        parentAuthorName: m.parentAuthorName,
-        parentTextSnippet: m.parentTweetText?.slice(0, 100),
-      });
-
+      summaries.push(summary);
       processed++;
     }
 
@@ -261,6 +146,143 @@ export class MentionHandler {
 
     this.logger.info({ processed, total: mentions.length }, 'Mentions processed');
     return { processed, mentions: summaries };
+  }
+
+  /**
+   * Classify, persist, and (when appropriate) enqueue a single mention.
+   * Runs inside a SQLite transaction — must stay synchronous.
+   */
+  private ingestMention(m: MentionData): MentionPollSummary {
+    const requestType = classifyMention(m.text, this.botUsername);
+
+    this.mentionRepo.insert({
+      tweetId: m.tweetId,
+      authorId: m.authorId,
+      authorName: m.authorName,
+      text: m.text,
+      requestType,
+      conversationId: m.conversationId,
+    });
+
+    this.userRepo.upsert({
+      twitterId: m.authorId,
+      username: m.authorName,
+    });
+    this.userRepo.incrementInteraction(m.authorId);
+
+    // Persist observed tweets for corpus building
+    if (this.tweetRepo) {
+      this.tweetRepo.insert({
+        tweetId: m.tweetId,
+        authorId: m.authorId,
+        authorName: m.authorName,
+        text: m.text,
+        source: 'mention_poll',
+        createdAt: new Date().toISOString(),
+      });
+      if (m.inReplyToTweetId && m.parentTweetText && m.parentAuthorName) {
+        this.tweetRepo.insert({
+          tweetId: m.inReplyToTweetId,
+          authorId: 'unknown',
+          authorName: m.parentAuthorName,
+          text: m.parentTweetText,
+          source: 'mention_poll',
+          createdAt: new Date().toISOString(),
+        });
+      }
+    }
+
+    // Thread-aware filtering: skip chatter in threads where bot already participated
+    if (this.shouldSkipThreadMention(m, requestType)) {
+      this.logger.info(
+        { tweetId: m.tweetId, author: m.authorName, conversationId: m.conversationId, requestType },
+        'Mention skipped — thread chatter (bot already in conversation)',
+      );
+      return {
+        tweetId: m.tweetId,
+        authorName: m.authorName,
+        text: m.text,
+        requestType,
+        queued: false,
+        inReplyToTweetId: m.inReplyToTweetId,
+        parentAuthorName: m.parentAuthorName,
+        parentTextSnippet: m.parentTweetText?.slice(0, 100),
+      };
+    }
+
+    let queued = false;
+    let queueTarget: string | undefined;
+
+    if (requestType === 'roast_request') {
+      const target = extractTarget(m.text);
+      if (target) {
+        // Scenario 1: explicit "roast @X" / "roast $TOKEN" — reply to the mention tweet, not its parent
+        const convPart = m.conversationId ? `|conversation:${m.conversationId}` : '';
+        this.queueRepo.enqueue({
+          targetName: target,
+          targetType: 'project',
+          source: 'mention',
+          priority: 3,
+          context: `reply_to:${m.tweetId}|by:@${m.authorName}|mention:${m.tweetId}${convPart}`,
+        });
+        queued = true;
+        queueTarget = target;
+        this.logger.info(
+          { tweetId: m.tweetId, target, author: m.authorName },
+          'Roast request queued from mention',
+        );
+      } else if (isRoastMe(m.text, this.botUsername)) {
+        // "roast me" / "@0xBeefer roast me gango" → target = the author
+        queueTarget = this.enqueueHandleRoast(m, m.authorName, { roastMe: true });
+        queued = true;
+        this.logger.info(
+          { tweetId: m.tweetId, author: m.authorName },
+          '"Roast me" request — targeting author',
+        );
+      } else {
+        const tagged = extractTaggedHandle(m.text, this.botUsername);
+        if (tagged && !this.isBotOrParentAuthor(tagged, m)) {
+          // Scenario 3: roast keyword + tagged handle (non-adjacent)
+          queueTarget = this.enqueueHandleRoast(m, tagged);
+          queued = true;
+        } else if (m.inReplyToTweetId && !this.isParentByBot(m)) {
+          // Scenario 2: roast keyword under someone's tweet (not bot's own)
+          queueTarget = this.enqueueParentTweetRoast(m);
+          queued = true;
+        } else {
+          // Roast request but no valid target — casual reply instead
+          queueTarget = this.enqueueCasualReply(m);
+          queued = true;
+        }
+      }
+    } else {
+      const tagged = extractTaggedHandle(m.text, this.botUsername);
+      if (tagged && !this.isBotOrParentAuthor(tagged, m)) {
+        // Scenario 3: "@0xBeefer @elonmusk" or "@0xBeefer check this @user"
+        queueTarget = this.enqueueHandleRoast(m, tagged);
+        queued = true;
+      } else if (isBareOrSimpleMention(m.text) && m.inReplyToTweetId && !this.isParentByBot(m)) {
+        // Scenario 2: bare "@0xBeefer" under a tweet (not bot's own)
+        queueTarget = this.enqueueParentTweetRoast(m);
+        queued = true;
+      } else {
+        // Casual reply — bot was mentioned but no roast target identifiable
+        queueTarget = this.enqueueCasualReply(m);
+        queued = true;
+      }
+    }
+
+    return {
+      tweetId: m.tweetId,
+      authorName: m.authorName,
+      text: m.text,
+      requestType,
+      queued,
+      queueTarget,
+      inReplyToTweetId: m.inReplyToTweetId,
+      parentAuthorName: m.parentAuthorName,
+      parentTextSnippet: m.parentTweetText?.slice(0, 100),
+    };
   }
 
   private enqueueParentTweetRoast(m: MentionData): string {

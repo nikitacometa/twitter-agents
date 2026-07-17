@@ -320,6 +320,7 @@ if (config.ENABLE_TWITTER) {
     queueRepo,
     tweetRepo,
     roastRepo,
+    db,
     logger,
     botUsername,
     activityLogger,
@@ -932,7 +933,16 @@ apiServer.start();
 scheduler.start();
 
 // --- Graceful shutdown ---
+// Re-entrancy guard: a second signal, or a failure inside shutdown itself
+// (which re-triggers the unhandledRejection handler below), must not start
+// a second teardown pass over already-closed resources.
+let shuttingDown = false;
 const shutdown = async () => {
+  if (shuttingDown) {
+    logger.warn('Shutdown already in progress — ignoring re-entrant call');
+    return;
+  }
+  shuttingDown = true;
   logger.info('Shutting down...');
   activityLogger?.emit({ type: 'sleep' });
   activityLogger?.setStatus('offline');
@@ -946,6 +956,8 @@ const shutdown = async () => {
       provider.shutdown();
     }
     if (twitter?.shutdown) await twitter.shutdown();
+  } catch (error) {
+    logger.error({ err: error }, 'Error during shutdown — continuing to close DB');
   } finally {
     activityLogger?.flush();
     db.close();
