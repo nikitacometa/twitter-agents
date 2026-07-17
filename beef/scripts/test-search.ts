@@ -23,6 +23,7 @@ async function run() {
   const ct0 = (cookies.find((c: { key: string }) => c.key === 'ct0') as { value: string } | undefined)?.value ?? '';
   const cookieStr = cookies.map((c: { key: string; value: string }) => `${c.key}=${c.value}`).join('; ');
 
+  // Twitter's PUBLIC web-client bearer token (same for all visitors, shipped in x.com's JS bundle) — not a secret
   const bearer = 'AAAAAAAAAAAAAAAAAAAAANRILgAAAAAAnNwIzUejRCOuH5E6I8xnZz4puTs%3D1Zv7ttfk8LF81IUq16cHjhLTvJu4FA33AGWWjCpTnA';
   const botUsername = process.env.TWITTER_USERNAME!;
 

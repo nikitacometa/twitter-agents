@@ -4,6 +4,12 @@ import { cycleTLSFetch, cycleTLSExit } from '@the-convocation/twitter-scraper/cy
 // Must match CycleTLS Chrome fingerprint version for consistent TLS/UA pairing
 const CHROME_USER_AGENT =
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36';
+
+// Twitter's PUBLIC web-client bearer token — baked into x.com's JavaScript bundle,
+// identical for every visitor, and required on all web-client API calls. Not a secret:
+// it grants nothing by itself; per-account auth comes from the cookie jar (auth_token/ct0).
+const TWITTER_PUBLIC_WEB_BEARER_TOKEN =
+  'AAAAAAAAAAAAAAAAAAAAANRILgAAAAAAnNwIzUejRCOuH5E6I8xnZz4puTs%3D1Zv7ttfk8LF81IUq16cHjhLTvJu4FA33AGWWjCpTnA';
 import type { Logger } from 'pino';
 import type { TweetMetrics } from '@common/types/index.js';
 import type { ITwitterClient, IProfileFetcher, TwitterProfile, PostResult, MentionData, TweetData } from './twitter-client.interface.js';
@@ -198,8 +204,7 @@ export class ScraperTwitterClient implements ITwitterClient, IProfileFetcher {
       .map((c: { key: string; value: string }) => `${c.key}=${c.value}`)
       .join('; ');
 
-    const bearerToken =
-      'AAAAAAAAAAAAAAAAAAAAANRILgAAAAAAnNwIzUejRCOuH5E6I8xnZz4puTs%3D1Zv7ttfk8LF81IUq16cHjhLTvJu4FA33AGWWjCpTnA';
+    const bearerToken = TWITTER_PUBLIC_WEB_BEARER_TOKEN;
 
     const queryId = '7TKRKCPuAGsmYde0CudbVg';
 
@@ -436,8 +441,7 @@ export class ScraperTwitterClient implements ITwitterClient, IProfileFetcher {
       ext: 'mediaStats,highlightedLabel,voiceInfo,superFollowMetadata,unmentionInfo,editControl',
     });
 
-    const bearerToken =
-      'AAAAAAAAAAAAAAAAAAAAANRILgAAAAAAnNwIzUejRCOuH5E6I8xnZz4puTs%3D1Zv7ttfk8LF81IUq16cHjhLTvJu4FA33AGWWjCpTnA';
+    const bearerToken = TWITTER_PUBLIC_WEB_BEARER_TOKEN;
 
     const resp = await fetch(
       `https://x.com/i/api/2/notifications/all.json?${params.toString()}`,
@@ -576,8 +580,7 @@ export class ScraperTwitterClient implements ITwitterClient, IProfileFetcher {
       .map((c: { key: string; value: string }) => `${c.key}=${c.value}`)
       .join('; ');
 
-    const bearerToken =
-      'AAAAAAAAAAAAAAAAAAAAANRILgAAAAAAnNwIzUejRCOuH5E6I8xnZz4puTs%3D1Zv7ttfk8LF81IUq16cHjhLTvJu4FA33AGWWjCpTnA';
+    const bearerToken = TWITTER_PUBLIC_WEB_BEARER_TOKEN;
 
     const params = new URLSearchParams({
       q: `@${this.botUsername}`,
