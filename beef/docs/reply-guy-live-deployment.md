@@ -118,7 +118,7 @@ Committed in `1e64eee`:
 #### 1.1 — Verify existing state
 
 ```bash
-ssh hostinger "export PATH=\$HOME/.npm-global/bin:\$PATH && \
+ssh beef-vps "export PATH=\$HOME/.npm-global/bin:\$PATH && \
   echo '--- Xvfb ---' && which Xvfb 2>/dev/null || echo 'NOT INSTALLED' && \
   echo '--- Chrome profile ---' && ls -la \$HOME/.chrome-profiles/twitter/ 2>/dev/null || echo 'NOT FOUND' && \
   echo '--- env vars ---' && grep -E 'CLIENT_MODE|PROXY_URL|CHROME_PROFILE' \$HOME/twitter-agents/beef/.env.production 2>/dev/null || echo 'NOT SET'"
@@ -162,7 +162,7 @@ mkdir -p /home/deploy/.chrome-profiles/twitter
 x11vnc -display :99 -nopw -listen localhost -N &
 
 # SSH tunnel (from local machine)
-ssh -L 5900:localhost:5900 hostinger
+ssh -L 5900:localhost:5900 beef-vps
 # Connect VNC client to localhost:5900
 ```
 
@@ -199,7 +199,7 @@ Also add `DISPLAY=:99` to `ecosystem.config.cjs` `env_production`.
 
 ```bash
 git push origin main
-ssh hostinger "export PATH=\$HOME/.npm-global/bin:\$PATH && \
+ssh beef-vps "export PATH=\$HOME/.npm-global/bin:\$PATH && \
   cd /home/deploy/twitter-agents && git pull origin main && \
   cd beef && pnpm install --frozen-lockfile && pm2 restart beef-bot"
 ```

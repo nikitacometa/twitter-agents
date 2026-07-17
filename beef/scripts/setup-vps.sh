@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-VPS_HOST="hostinger"
+VPS_HOST="beef-vps"
 REPO_URL="git@github.com:nikitacometa/twitter-agents.git"
 REMOTE_DIR="/home/deploy/twitter-agents"
 BEEF_DIR="$REMOTE_DIR/beef"

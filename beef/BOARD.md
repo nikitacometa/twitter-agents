@@ -10,7 +10,7 @@ Status: `[ ]` pending, `[~]` in progress, `[x]` done, `[!]` blocked
 
 ## Current Iteration (I1)
 
-[x] #I1-1 — Set TELEGRAM_ADMIN_IDS (<admin_id_1>, <admin_id_2>)
+[x] #I1-1 — Set TELEGRAM_ADMIN_IDS (redacted)
 [x] #I1-2 — Fix generate command race condition
 [x] #I1-3 — Prompt injection input sanitization (targetName added to all 6 builders 2026-03-23)
 [x] #I1-4 — Extract shared evaluation module

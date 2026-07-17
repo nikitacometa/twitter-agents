@@ -143,7 +143,7 @@ claude login  # OAuth через браузер — нужен один раз
 
 ```bash
 # С локальной машины:
-ssh -L 8080:localhost:8080 hostinger
+ssh -L 8080:localhost:8080 beef-vps
 # На VPS: claude login → откроет localhost:8080 → туннелируется на локальную машину
 ```
 
@@ -355,29 +355,29 @@ Guard middleware фильтрует **все** сообщения до обра�
 
 ```bash
 # 1. Установить pnpm
-ssh hostinger "npm install -g pnpm"
+ssh beef-vps "npm install -g pnpm"
 
 # 2. Установить PM2 глобально
-ssh hostinger "npm install -g pm2"
+ssh beef-vps "npm install -g pm2"
 
 # 3. Установить Claude Code CLI
-ssh hostinger "npm install -g @anthropic-ai/claude-code"
+ssh beef-vps "npm install -g @anthropic-ai/claude-code"
 
 # 4. Авторизовать Claude Code (через SSH tunnel)
 # Локально:
-ssh -L 8080:localhost:8080 hostinger
+ssh -L 8080:localhost:8080 beef-vps
 # На VPS:
 claude login
 # Браузер откроется через туннель → OAuth → done
 
 # 5. Клонировать репо
-ssh hostinger "cd /home/deploy && git clone https://github.com/nikitacometa/twitter-agents.git"
+ssh beef-vps "cd /home/deploy && git clone https://github.com/nikitacometa/twitter-agents.git"
 
 # 6. Установить зависимости
-ssh hostinger "cd /home/deploy/twitter-agents/beef && pnpm install --frozen-lockfile"
+ssh beef-vps "cd /home/deploy/twitter-agents/beef && pnpm install --frozen-lockfile"
 
 # 7. Создать .env
-ssh hostinger "nano /home/deploy/twitter-agents/beef/.env"
+ssh beef-vps "nano /home/deploy/twitter-agents/beef/.env"
 ```
 
 #### PM2 Ecosystem
@@ -412,7 +412,7 @@ module.exports = {
 # scripts/deploy.sh — run from local machine
 set -e
 
-HOST="hostinger"
+HOST="beef-vps"
 DIR="/home/deploy/twitter-agents"
 
 echo "🔨 Building locally..."

@@ -1,6 +1,6 @@
 # Feedback Session Analysis — 2026-03-26
 
-Session: `data/feedback-sessions/2026-03-26T08-09.md` (on VPS `ssh hostinger`)
+Session: `data/feedback-sessions/2026-03-26T08-09.md` (on VPS `ssh beef-vps`)
 Evaluators: Nikita Gorokhov + Nikita Voronin (co-founders)
 Roasts reviewed: 25 targets, ~75 rated variants
 Context: First human evaluation after the March 25 pipeline overhaul (unified strategy, micro-personas, angle additions, few-shot curation)

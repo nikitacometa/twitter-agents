@@ -41,7 +41,7 @@ V2 landing — "Bloomberg Terminal meets butcher shop":
 Landing deploys through the aisatisfy-blog Hugo pipeline:
 
 ```bash
-ssh hostinger 'cd ~/aisatisfy-blog && git pull && docker compose -f docker-compose.prod.yml up -d --build'
+ssh beef-vps 'cd ~/aisatisfy-blog && git pull && docker compose -f docker-compose.prod.yml up -d --build'
 curl -s -o /dev/null -w '%{http_code}' https://0xbeef.wtf/
 ```
 
@@ -50,11 +50,11 @@ curl -s -o /dev/null -w '%{http_code}' https://0xbeef.wtf/
 ```bash
 # 1. DNS: A record app.0xbeef.wtf → <redacted>
 # 2. Copy proxy config
-scp deploy/cometa-proxy.conf hostinger:/home/deploy/cometa/proxy/conf.d/app.0xbeef.wtf.conf
-ssh hostinger 'cd ~/cometa && docker compose exec proxy nginx -s reload'
+scp deploy/cometa-proxy.conf beef-vps:/home/deploy/cometa/proxy/conf.d/app.0xbeef.wtf.conf
+ssh beef-vps 'cd ~/cometa && docker compose exec proxy nginx -s reload'
 
 # 3. SSL
-ssh hostinger 'certbot --nginx -d app.0xbeef.wtf'
+ssh beef-vps 'certbot --nginx -d app.0xbeef.wtf'
 
 # 4. Deploy
 cp .env.example .env  # edit VITE_FEED_URL if needed
