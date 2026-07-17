@@ -13,7 +13,7 @@
 [![CI](https://github.com/nikitacometa/twitter-agents/actions/workflows/ci.yml/badge.svg)](https://github.com/nikitacometa/twitter-agents/actions/workflows/ci.yml)
 [![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178C6?logo=typescript&logoColor=white)](beef/tsconfig.json)
 [![Node](https://img.shields.io/badge/Node-%E2%89%A520-339933?logo=nodedotjs&logoColor=white)](#getting-started)
-[![Tests](https://img.shields.io/badge/tests-590%20passing-31c754)](beef/src)
+[![Tests](https://img.shields.io/badge/tests-600%2B%20passing-31c754)](beef/src)
 [![Source](https://img.shields.io/badge/src-38k%20LOC%20%C2%B7%20133%20files-8957e5)](beef/src)
 [![License](https://img.shields.io/badge/license-MIT-c0392b)](LICENSE)
 
@@ -27,7 +27,7 @@
 
 A **Node.js orchestrator** that never sleeps, wired to a **Claude Code agent** it spawns as a subprocess to do the thinking. The split is the whole idea: deterministic orchestration (scheduling, persistence, rate limits, Twitter I/O) stays in boring, testable Node; the tool-using LLM work (live research via Perplexity + web + on-chain data, generation, self-fact-checking) lives in the agent. Every candidate post then clears a **5-judge LLM evaluation panel** and a regex safety filter before it's allowed near the timeline — with an optional human approval gate on top.
 
-It's a small production system: a priority queue, a circuit-breaker'd 3-tier LLM fallback chain, a stealth-capable Twitter client, a human-feedback learning loop, and 590 tests holding it together.
+It's a small production system: a priority queue, a circuit-breaker'd 3-tier LLM fallback chain, a stealth-capable Twitter client, human-feedback tooling, and 600+ tests holding it together.
 
 <table>
 <tr>
@@ -65,7 +65,7 @@ It's a small production system: a priority queue, a circuit-breaker'd 3-tier LLM
 | ⚖️ **A 5-judge LLM-as-a-Judge panel gates every roast** | In serious-eval mode, five distinct LLM personas score 8 dimensions in parallel; weighted composite + hard per-judge vetoes + a *majority-consensus* funny-veto tuned to kill single-judge false positives on deadpan jokes, behind a 3-judge quorum so a partial panel can't quietly become a one-judge verdict. The gate fails closed. A regex pre-filter rejects garbage before any judge is billed. [`evaluator.ts`](beef/src/evaluation/evaluator.ts) · [evaluation framework](beef/docs/evaluation-framework.md) |
 | 🔎 **Hybrid retrieval, and the eval that says when it loses** | A [Python/FastAPI service](retrieval-service/) embeds the roast corpus and fuses BM25 + vector cosine with Reciprocal Rank Fusion, upgrading lexical FTS5 dedup to semantic near-duplicate detection. A 20-query golden set measures recall@k/MRR per mode — and reports that pure vector *beats* the hybrid default on it, with the reasoning for keeping hybrid anyway. [`hybrid.py`](retrieval-service/src/retrieval/hybrid.py) |
 | ⌨️ **Human-behavior modeling for a hostile platform** | The browser client types with inter-keystroke intervals drawn from a **log-normal distribution fit to a 136M-keystroke public dataset** (Aalto, CHI 2018), plus word-boundary pauses — statistical realism instead of a flat `sleep(50)`. Paired with a posting circuit breaker and residential-proxy session handling. [`playwright-twitter-client.ts`](beef/src/twitter/playwright-twitter-client.ts) |
-| 📈 **It learns from human ratings** | Telegram feedback (text/voice, Whisper-transcribed) feeds a style-analyzer that rewrites part of the prompt — best/worst angles, ideal length — closing a real loop back into generation. [`style-analyzer.ts`](beef/src/learning/style-analyzer.ts) |
+| 📊 **It collects human ratings** | Telegram feedback supports text, voice, and Whisper-transcribed review sessions; the stored ratings support offline analysis and evaluator calibration. [`feedback-collector.ts`](beef/src/admin/feedback-collector.ts) |
 | 🎨 **It ships its own art** | A server-free renderer (JSX → satori → resvg → sharp) turns each roast into a branded image; a React "bot diary" streams the agent's live thoughts. See [the web layer](#the-web-layer). |
 
 ---
@@ -82,20 +82,19 @@ flowchart TB
     TW["📤 Twitter Client<br/><small>API v2 reads · Playwright writes</small>"]
     TG["📱 Telegram Admin<br/><small>34 commands · approval gate</small>"]
     DB[("🗄️ SQLite<br/>30 tables · 3× FTS5")]
-    LEARN["📈 Learning loop<br/><small>engagement + human feedback</small>"]
+    METRICS["📈 Metrics + feedback<br/><small>engagement tracking · human review</small>"]
 
     TRIG --> ORCH --> ROAST --> ENGINE --> GATE
     GATE -->|pass| TW
     GATE -->|hold| TG -->|approve| TW
     TW --> DB
-    TW --> LEARN
-    LEARN -.->|reshapes prompt| ROAST
+    TW --> METRICS
     ORCH <-.-> DB
 
     classDef node fill:#160606,stroke:#cc2222,color:#ffe9e0
     classDef brain fill:#0c0a16,stroke:#8957e5,color:#ece6ff
     classDef gate fill:#0a1408,stroke:#1f9e3a,color:#e3ffe8
-    class TRIG,ORCH,ROAST,TW,TG,LEARN node
+    class TRIG,ORCH,ROAST,TW,TG,METRICS node
     class ENGINE brain
     class GATE gate
 ```
@@ -121,7 +120,6 @@ flowchart LR
     J -->|score ≥ bar<br/>no veto| P["📤 Post / reply"]
     J -->|vetoed| S["🗄️ Stockpile / discard"]
     P --> M["📈 Track"]
-    M -.->|human ratings| R
 
     classDef hot fill:#160606,stroke:#cc2222,color:#ffe9e0
     class T,E,R,G,F,J,P,S,M hot
@@ -261,7 +259,7 @@ The transferable parts are language-agnostic anyway: the provider fallback state
 | **Storage** | `better-sqlite3` (WAL) · 30 tables · 3 FTS5 virtual tables · hand-rolled migration runner |
 | **Bot / infra** | `grammy` (Telegram) · `cron` · `viem` (Base) · `zod` boundary validation · `pino` |
 | **Web** | React 19 · Vite 6 · satori · resvg · sharp · CSS Modules |
-| **Quality** | Vitest (590 tests, 28 specs) · ESLint 9 flat + `no-floating-promises` · Prettier · Husky |
+| **Quality** | Vitest (600+ tests) · ESLint 9 flat + `no-floating-promises` · Prettier · Husky |
 
 ---
 
@@ -270,7 +268,7 @@ The transferable parts are language-agnostic anyway: the provider fallback state
 Enforced in CI and pre-commit, not decoration:
 
 - **Strict TypeScript everywhere**, no loosening. `unknown` over `any`, typed errors, declared return types.
-- **590 tests / 28 spec files**, Vitest, `clearMocks`; every `mockResolvedValue` pairs with a rejection test.
+- **600+ tests**, Vitest, `clearMocks`; every `mockResolvedValue` pairs with a rejection test.
 - **`no-floating-promises` as an error** — every promise awaited or explicitly voided.
 - **Zod validates all env at boot** with cross-field gating (production requires the full Twitter credential set; hybrid mode requires proxy + profile) — fails fast with a formatted report, never three modules deep.
 - **Graceful shutdown** drains in-flight LLM subprocesses (bounded wait) before closing SQLite, in a `finally`.
@@ -294,7 +292,7 @@ twitter-agents/
 │   │   ├── reply-guy/     # proactive reply pipeline
 │   │   ├── monitor/ news/ # timeline + news-thread pipelines
 │   │   ├── queue/ scheduler/ storage/   # SQLite queue, jitter, repositories
-│   │   ├── learning/      # engagement tracking + feedback → prompt loop
+│   │   ├── learning/      # engagement tracking + analysis utilities
 │   │   └── admin/ health/ # Telegram admin bot, health monitor
 │   ├── characters/        # bot personality definition
 │   └── docs/              # architecture, playbooks, audits, metrics reports
@@ -318,7 +316,7 @@ The bot exposes several generation entry points (`roast`, `roast_fast`, `roast_m
 cd beef
 pnpm install
 cp .env.example .env          # fill in Twitter creds + Telegram token
-pnpm typecheck && pnpm test   # 590 tests, ~3s
+pnpm typecheck && pnpm test   # 600+ tests
 DRY_RUN=true pnpm dev         # full pipeline, nothing posted
 
 pnpm farm generate            # offline: batch-generate & self-score roasts
