@@ -31,13 +31,13 @@ Status: `[ ]` pending, `[~]` in progress, `[x]` done, `[!]` blocked
 
 ## Backlog: Infrastructure
 
-[ ] #B-5 — CI/CD pipeline (GitHub Actions: typecheck + lint + test)
+[x] #B-5 — CI/CD pipeline (GitHub Actions: typecheck + lint + test). Extended 2026-07-17 with a retrieval-service job (ruff + mypy --strict + pytest); all 3 jobs green
 [ ] #B-6 — Sentry initialization in production entry point
 [ ] #B-7 — PM2 log rotation config (max_size 50M, retain 7)
 [ ] #B-8 — Deploy rollback mechanism in deploy.sh
 [ ] #B-9 — UptimeRobot/BetterUptime on /health endpoint
 [ ] #B-10 — QueueManager test coverage (processNext, approve, casual replies)
-[ ] #B-11 — Scheduler overlap protection (dedup guard)
+[x] #B-11 — Scheduler overlap protection (dedup guard). Single-flight guard in QueueManager.dequeueAndProcess — the scheduler cron and mention-triggered processing could both pass the daily-limit check before either recorded a post. Shipped 2026-07-17
 [ ] #B-12 — Fix farm/logger.ts — add production env guard for pino-pretty
 [ ] #B-13 — Replace console.warn in retryWithBackoff with pino logger
 
@@ -94,3 +94,12 @@ Status: `[ ]` pending, `[~]` in progress, `[x]` done, `[!]` blocked
 [ ] #B-30 — Milestone detection: after successful post, check if totalPosted hits round numbers (100, 250, 500, 1000...) → generate number-card and post celebration tweet
 [ ] #B-31 — Data cards in farm pipeline: when enricher returns numeric data points about a target, generate stat-duo (2 numbers) or stat-quad (4 numbers) alongside the roast text, save card buffer to stockpile for later posting
 [ ] #B-32 — Telegram card preview: in admin bot approval flow, render roast card and send as photo alongside the text preview, so admins see exactly what will be posted
+
+## Backlog: Retrieval & Quality (opened 2026-07-17)
+
+[x] #B-53 — Semantic retrieval service (`retrieval-service/`): FastAPI + hybrid BM25/vector search with RRF, SQLite float32 store + optional Qdrant swap, 20-query golden set with recall@k/MRR, own CI job. Wired into the stockpile dedup flow as an optional dependency (degrades to FTS5 when down). Shipped 2026-07-17
+[ ] #B-54 — DECISION NEEDED: retune `sanitizeInput` injection patterns for precision. All 6 probed patterns redact benign crypto text ("you are a peer-reviewed lemonade stand" → `[REDACTED]`, "never forget your bags", "your bags act as collateral", "the system: broken by design"). The `forget` pattern has every group optional, so it matches the bare word. Applied to untrusted prompt input, so over-redaction is the safe direction — current behaviour is pinned in `content-filter.spec.ts` under "known over-matching (accepted trade-off)". Retuning must keep the injection-detection tests green
+[ ] #B-55 — Split `admin/bot.ts`: `createBot()` is one ~4,525-line function holding 37 inline handlers plus a 733-line callback if/else chain. Extract per-domain registrars (`registerRoastCommands(bot, deps)` etc.) and dispatch callbacks via a prefix→handler Map
+[ ] #B-56 — Coverage thresholds: `vitest.config.ts` configures the v8 provider but sets no thresholds, and CI runs `pnpm test`, not `pnpm test:cov`. Measure the baseline, set thresholds, gate in CI
+[ ] #B-57 — Curate `docs/` (78 files): add a `docs/README.md` index, keep the canonical set (architecture, evaluation-framework, both metrics reports) discoverable, move superseded audits/session notes to an archive subdirectory
+[ ] #B-58 — `learning/style-analyzer.ts` is dead code — `computeStyleSupplement` has zero call sites, yet the root README cites it as the human-feedback learning loop. Either wire it into prompt construction or correct the README claim
