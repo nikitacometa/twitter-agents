@@ -106,6 +106,10 @@ const envSchema = z
     // OpenAI (Whisper transcription for feedback)
     OPENAI_API_KEY: z.string().optional(),
 
+    // Retrieval service (semantic dedup / search over the roast corpus) —
+    // optional; the bot falls back to lexical FTS5 dedup when unset or down
+    RETRIEVAL_SERVICE_URL: z.string().url().optional(),
+
     // Imgflip (meme generation)
     IMGFLIP_USERNAME: z.string().optional(),
     IMGFLIP_PASSWORD: z.string().optional(),

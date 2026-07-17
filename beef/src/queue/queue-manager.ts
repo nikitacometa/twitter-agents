@@ -25,6 +25,7 @@ import { isQuietHour } from '@scheduler/scheduler.js';
 import { downloadTweetMedia } from '@common/utils/media-downloader.js';
 import type { TwitterEnricher } from '@farm/twitter-enricher.js';
 import type { ActivityLogger } from '../activity/activity-logger.js';
+import type { RetrievalClient } from '../retrieval/retrieval-client.js';
 
 export interface QueueProcessResult {
   dequeued: boolean;
@@ -68,6 +69,7 @@ export class QueueManager {
   private readonly minFollowerThreshold: number;
   private readonly twitterEnricher?: TwitterEnricher;
   private readonly activityLogger?: ActivityLogger;
+  private readonly retrieval?: RetrievalClient;
   private cachedRoastEngine: RoastEngine | null = null;
   private cachedEvaluator: SelfEvaluator | null = null;
   private readonly pendingApprovals = new Map<number, { stockpileId?: number; mentionTweetId?: string }>();
@@ -98,6 +100,7 @@ export class QueueManager {
     evaluationThreshold?: number;
     minFollowerThreshold?: number;
     activityLogger?: ActivityLogger;
+    retrieval?: RetrievalClient;
   }) {
     this.queueRepo = opts.queueRepo;
     this.roastRepo = opts.roastRepo;
@@ -121,6 +124,7 @@ export class QueueManager {
     this.minFollowerThreshold = opts.minFollowerThreshold ?? 0;
     this.enableMentionReplies = opts.enableMentionReplies;
     this.activityLogger = opts.activityLogger;
+    this.retrieval = opts.retrieval;
   }
 
   /**
@@ -665,10 +669,15 @@ export class QueueManager {
         );
 
         if (evalResult.verdict === 'stockpile' && this.stockpile) {
-          // Check for duplicates before adding to stockpile
-          if (!this.stockpile.isDuplicate(variant.text, targetName)) {
+          // Two-stage dedup: cheap lexical FTS5 first, then the semantic
+          // retrieval service for paraphrased near-duplicates FTS5 can't see.
+          // The service is optional — when unreachable, lexical-only applies.
+          const isDuplicate =
+            this.stockpile.isDuplicate(variant.text, targetName) ||
+            (await this.isSemanticDuplicate(variant.text, targetName));
+          if (!isDuplicate) {
             const freshness = classifyFreshness(variant.text, output.researchNotes ?? null);
-            this.stockpile.insert({
+            const stockpileId = this.stockpile.insert({
               targetName,
               targetType,
               tweetText: variant.text,
@@ -681,6 +690,17 @@ export class QueueManager {
             });
             newStockpileCount++;
             stockpiledVariants.push({ text: variant.text, score: evalResult.compositeScore, angle: variant.angle });
+            // Best-effort corpus ingest (client never throws) so future
+            // semantic dedup sees this roast.
+            void this.retrieval?.ingestDocuments([
+              {
+                id: `stockpile:${String(stockpileId)}`,
+                text: variant.text,
+                kind: 'roast',
+                target: targetName,
+                score: evalResult.compositeScore,
+              },
+            ]);
             this.logger.info(
               { target: targetName, score: evalResult.compositeScore, angle: variant.angle },
               'Variant added to stockpile',
@@ -712,6 +732,22 @@ export class QueueManager {
       newStockpileCount,
       stockpiledVariants,
     };
+  }
+
+  /**
+   * Semantic near-duplicate check via the retrieval service. Unknown states
+   * (service unset or unreachable → null) count as "not a duplicate" so the
+   * lexical FTS5 check remains the only hard gate.
+   */
+  private async isSemanticDuplicate(text: string, targetName: string): Promise<boolean> {
+    if (!this.retrieval) return false;
+    const hits = await this.retrieval.findSimilar(text);
+    if (hits === null || hits.length === 0) return false;
+    this.logger.info(
+      { target: targetName, matches: hits.length, topSimilarity: hits[0]?.similarity },
+      'Variant rejected — semantic near-duplicate in stockpile corpus',
+    );
+    return true;
   }
 
   /**

@@ -40,6 +40,7 @@ import { HybridTwitterClient } from './twitter/hybrid-twitter-client.js';
 import { MentionHandler } from './twitter/mention-handler.js';
 import { Scheduler, setQuietHoursDisabled } from './scheduler/scheduler.js';
 import { QueueManager } from './queue/queue-manager.js';
+import { RetrievalClient } from './retrieval/retrieval-client.js';
 import type { QueueProcessResult } from './queue/queue-manager.js';
 import { EngagementTracker } from './learning/engagement-tracker.js';
 import { HealthMonitor } from './health/health-monitor.js';
@@ -346,6 +347,13 @@ if (config.IMGFLIP_USERNAME && config.IMGFLIP_PASSWORD && provider) {
   logger.info('Meme generator initialized');
 }
 
+// --- Retrieval service client (optional — semantic dedup over the roast corpus) ---
+let retrievalClient: RetrievalClient | undefined;
+if (config.RETRIEVAL_SERVICE_URL) {
+  retrievalClient = new RetrievalClient({ baseUrl: config.RETRIEVAL_SERVICE_URL, logger });
+  logger.info({ url: config.RETRIEVAL_SERVICE_URL }, 'Retrieval service client initialized');
+}
+
 // --- Queue Manager ---
 let queueManager: QueueManager | null = null;
 if (provider) {
@@ -370,6 +378,7 @@ if (provider) {
     minFollowerThreshold: config.MIN_FOLLOWER_THRESHOLD,
     enableMentionReplies: config.ENABLE_MENTION_REPLIES,
     activityLogger,
+    retrieval: retrievalClient,
   });
   logger.info({ dailyLimit: config.ROASTS_PER_DAY }, 'Queue manager initialized');
 }
