@@ -13,6 +13,7 @@ import type {
 
 const MODEL = 'claude-sonnet-4-20250514';
 const DEFAULT_MAX_TOKENS = 4096;
+const IDLE_POLL_MS = 250;
 export class AnthropicSDKProvider implements LLMProvider {
   readonly name: ProviderName = 'anthropic-sdk';
   readonly capabilities: ProviderCapabilities = {
@@ -23,6 +24,7 @@ export class AnthropicSDKProvider implements LLMProvider {
   };
 
   private readonly client: Anthropic;
+  private inFlight = 0;
 
   constructor(
     apiKey: string,
@@ -34,6 +36,7 @@ export class AnthropicSDKProvider implements LLMProvider {
 
   async run<T>(taskId: string, task: AgentTask): Promise<AgentResult<T>> {
     const start = Date.now();
+    this.inFlight++;
 
     try {
       const content = await this.buildMessageContent(task);
@@ -80,6 +83,22 @@ export class AnthropicSDKProvider implements LLMProvider {
         `Anthropic SDK provider failed: ${getErrorMessage(error)}`,
       );
       throw error;
+    } finally {
+      this.inFlight--;
+    }
+  }
+
+  async waitForIdle(maxWaitMs: number): Promise<void> {
+    if (this.inFlight === 0) return;
+
+    this.logger.info({ active: this.inFlight }, 'Waiting for active SDK requests to finish...');
+    const deadline = Date.now() + maxWaitMs;
+    while (this.inFlight > 0 && Date.now() < deadline) {
+      await new Promise((resolve) => setTimeout(resolve, IDLE_POLL_MS));
+    }
+
+    if (this.inFlight > 0) {
+      this.logger.warn({ active: this.inFlight }, 'Timeout waiting for SDK requests — abandoning');
     }
   }
 

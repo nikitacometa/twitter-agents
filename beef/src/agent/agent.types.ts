@@ -54,7 +54,8 @@ export interface ProviderCapabilities {
 export interface LLMProvider {
   run<T>(taskId: string, task: AgentTask): Promise<AgentResult<T>>;
   healthCheck(): Promise<boolean>;
-  waitForIdle?(maxWaitMs: number): Promise<void>;
+  /** Resolve once all in-flight tasks finish or maxWaitMs elapses — required so graceful shutdown drains every provider, not just the primary. */
+  waitForIdle(maxWaitMs: number): Promise<void>;
   shutdown(): void;
   readonly name: ProviderName;
   readonly capabilities: ProviderCapabilities;

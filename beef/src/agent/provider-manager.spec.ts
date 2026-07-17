@@ -14,6 +14,7 @@ function createMockProvider(
 ): LLMProvider & {
   run: ReturnType<typeof vi.fn>;
   healthCheck: ReturnType<typeof vi.fn>;
+  waitForIdle: ReturnType<typeof vi.fn>;
   shutdown: ReturnType<typeof vi.fn>;
 } {
   return {
@@ -27,6 +28,7 @@ function createMockProvider(
     },
     run: vi.fn(),
     healthCheck: vi.fn().mockResolvedValue(true),
+    waitForIdle: vi.fn().mockResolvedValue(undefined),
     shutdown: vi.fn(),
   };
 }

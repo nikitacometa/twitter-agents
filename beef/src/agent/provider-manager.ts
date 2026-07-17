@@ -142,7 +142,12 @@ export class ProviderManager implements LLMProvider {
   }
 
   async waitForIdle(maxWaitMs: number): Promise<void> {
-    await this.primary.waitForIdle?.(maxWaitMs);
+    // Drain every provider, not just the primary — degraded mode means
+    // in-flight work may be running on a fallback when shutdown starts.
+    await Promise.all([
+      this.primary.waitForIdle(maxWaitMs),
+      ...this.fallbacks.map((fb) => fb.waitForIdle(maxWaitMs)),
+    ]);
   }
 
   shutdown(): void {
