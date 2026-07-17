@@ -202,6 +202,16 @@ export function createBot(opts: {
   const feedbackCollector = new FeedbackCollector(logger);
   const bot = new Bot(token);
 
+  // Fire-and-forget reply for sync guard clauses. A bare void'ed ctx.reply()
+  // detaches the promise from grammY's error boundary (bot.catch), so a
+  // transient Telegram failure would escalate to the process-level
+  // unhandledRejection handler and take the whole bot down.
+  const safeReply = (ctx: Context, ...args: Parameters<Context['reply']>): void => {
+    void ctx.reply(...args).catch((err: unknown) => {
+      logger.warn({ err }, 'Fire-and-forget reply failed');
+    });
+  };
+
   // --- Admin guard (skip if openAccess or no IDs configured) ---
   if (!openAccess && adminIds.length > 0) {
     bot.use(async (ctx, next) => {
@@ -579,7 +589,7 @@ export function createBot(opts: {
 
   function handleTweetRoast(ctx: Context, tweetUrl: string, userContext?: string): void {
     if (!provider) {
-      void ctx.reply('⚠️ LLM provider not configured.');
+      safeReply(ctx, '⚠️ LLM provider not configured.');
       return;
     }
     const chatId = ctx.chat?.id;
@@ -710,7 +720,7 @@ export function createBot(opts: {
 
   function handlePersonRoast(ctx: Context, handle: string, flags: ParsedFlags, userContext?: string): void {
     if (!provider) {
-      void ctx.reply('⚠️ LLM provider not configured.');
+      safeReply(ctx, '⚠️ LLM provider not configured.');
       return;
     }
     const chatId = ctx.chat?.id;
@@ -981,7 +991,7 @@ export function createBot(opts: {
 
   function handleLightningTweetRoast(ctx: Context, tweetUrl: string, userContext?: string): void {
     if (!provider) {
-      void ctx.reply('⚠️ LLM provider not configured.');
+      safeReply(ctx, '⚠️ LLM provider not configured.');
       return;
     }
     const chatId = ctx.chat?.id;
@@ -1076,7 +1086,7 @@ export function createBot(opts: {
 
   function handleLightningPersonRoast(ctx: Context, handle: string, userContext?: string): void {
     if (!provider) {
-      void ctx.reply('⚠️ LLM provider not configured.');
+      safeReply(ctx, '⚠️ LLM provider not configured.');
       return;
     }
     const chatId = ctx.chat?.id;
@@ -1129,7 +1139,7 @@ export function createBot(opts: {
 
   function handleLightningFreeformRoast(ctx: Context, target: string, userContext?: string): void {
     if (!provider) {
-      void ctx.reply('⚠️ LLM provider not configured.');
+      safeReply(ctx, '⚠️ LLM provider not configured.');
       return;
     }
     const chatId = ctx.chat?.id;
@@ -1284,7 +1294,7 @@ export function createBot(opts: {
 
   function handleMaxTweetRoast(ctx: Context, tweetUrl: string, userContext?: string, quick = false): void {
     if (!provider) {
-      void ctx.reply('⚠️ LLM provider not configured.');
+      safeReply(ctx, '⚠️ LLM provider not configured.');
       return;
     }
     const chatId = ctx.chat?.id;
@@ -1412,7 +1422,7 @@ export function createBot(opts: {
 
   function handleMaxPersonRoast(ctx: Context, handle: string, userContext?: string, quick = false): void {
     if (!provider) {
-      void ctx.reply('⚠️ LLM provider not configured.');
+      safeReply(ctx, '⚠️ LLM provider not configured.');
       return;
     }
     const chatId = ctx.chat?.id;
@@ -1496,7 +1506,7 @@ export function createBot(opts: {
 
   function handleMaxFreeformRoast(ctx: Context, target: string, userContext?: string, quick = false): void {
     if (!provider) {
-      void ctx.reply('⚠️ LLM provider not configured.');
+      safeReply(ctx, '⚠️ LLM provider not configured.');
       return;
     }
     const chatId = ctx.chat?.id;
@@ -4189,7 +4199,7 @@ export function createBot(opts: {
   bot.command('memefarm', (ctx) => {
     const raw = ctx.match?.toString().trim() ?? '';
     if (!raw) {
-      void ctx.reply(
+      safeReply(ctx, 
         'Usage: /memefarm &lt;tweet_url&gt; [count] [top]\n'
         + 'Example: /memefarm https://x.com/user/status/123 10 3\n\n'
         + 'Defaults: count=10, top=3',
@@ -4199,20 +4209,20 @@ export function createBot(opts: {
     }
 
     if (!memeGen) {
-      void ctx.reply('⚠️ Meme generator not configured (IMGFLIP_USERNAME/PASSWORD missing or no LLM provider).');
+      safeReply(ctx, '⚠️ Meme generator not configured (IMGFLIP_USERNAME/PASSWORD missing or no LLM provider).');
       return;
     }
     if (!provider) {
-      void ctx.reply('⚠️ LLM provider not configured.');
+      safeReply(ctx, '⚠️ LLM provider not configured.');
       return;
     }
     if (!opts.memeHistoryRepo) {
-      void ctx.reply('⚠️ Meme history repository not available.');
+      safeReply(ctx, '⚠️ Meme history repository not available.');
       return;
     }
     const twitterClient = opts.twitterClient;
     if (!twitterClient?.getTweet) {
-      void ctx.reply('⚠️ Twitter client not configured.');
+      safeReply(ctx, '⚠️ Twitter client not configured.');
       return;
     }
 
@@ -4227,11 +4237,11 @@ export function createBot(opts: {
     const top = parts[2] ? parseInt(parts[2], 10) : 3;
 
     if (!isTweetUrl(tweetUrl)) {
-      void ctx.reply('❌ Invalid tweet URL. Provide a full x.com/twitter.com URL.');
+      safeReply(ctx, '❌ Invalid tweet URL. Provide a full x.com/twitter.com URL.');
       return;
     }
     if (count < 1 || count > 30) {
-      void ctx.reply('❌ Count must be 1-30.');
+      safeReply(ctx, '❌ Count must be 1-30.');
       return;
     }
 
@@ -4538,23 +4548,23 @@ If no contradictions found, return {"contradictions":[]}`;
 
   bot.command('news', (ctx) => {
     if (newsRunning) {
-      void ctx.reply('⚠️ News pipeline already running.');
+      safeReply(ctx, '⚠️ News pipeline already running.');
       return;
     }
     if (!provider) {
-      void ctx.reply('⚠️ LLM provider not configured.');
+      safeReply(ctx, '⚠️ LLM provider not configured.');
       return;
     }
     if (!opts.newsEventRepo) {
-      void ctx.reply('⚠️ NewsEventRepository not available.');
+      safeReply(ctx, '⚠️ NewsEventRepository not available.');
       return;
     }
     if (!opts.stockpileRepo) {
-      void ctx.reply('⚠️ StockpileRepository not available.');
+      safeReply(ctx, '⚠️ StockpileRepository not available.');
       return;
     }
     if (!opts.telegramChatId) {
-      void ctx.reply('⚠️ TELEGRAM_CHAT_ID not configured.');
+      safeReply(ctx, '⚠️ TELEGRAM_CHAT_ID not configured.');
       return;
     }
 
