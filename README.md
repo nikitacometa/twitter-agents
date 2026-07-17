@@ -62,7 +62,8 @@ It's a small production system: a priority queue, a circuit-breaker'd 3-tier LLM
 |---|---|
 | 🧠 **The LLM is a subprocess, not an API call** | The bot spawns the `claude` CLI with its own MCP tools (Perplexity, WebSearch, `curl`) and multi-turn reasoning — trading metered API billing for a Max subscription, with a hand-rolled balanced-brace JSON extractor and a concurrency semaphore around it. [`claude-code.provider.ts`](beef/src/agent/claude-code.provider.ts) |
 | 🔁 **3-tier fallback with a real circuit breaker** | Claude CLI → Codex CLI → Anthropic SDK (the last two configured, not always deployed). Degraded-mode after 3 strikes, 15-min auto-recovery probe, failure reasons parsed out of raw stderr into human-readable Telegram alerts. A bulkhead, not a `try/catch`. [`provider-manager.ts`](beef/src/agent/provider-manager.ts) |
-| ⚖️ **A 5-judge panel scores every roast** | In serious-eval mode, five distinct LLM personas score 8 dimensions in parallel; weighted composite + hard per-judge vetoes + a *majority-consensus* funny-veto tuned to kill single-judge false positives on deadpan jokes. A regex pre-filter rejects garbage before any judge is billed. [`evaluator.ts`](beef/src/evaluation/evaluator.ts) |
+| ⚖️ **A 5-judge LLM-as-a-Judge panel gates every roast** | In serious-eval mode, five distinct LLM personas score 8 dimensions in parallel; weighted composite + hard per-judge vetoes + a *majority-consensus* funny-veto tuned to kill single-judge false positives on deadpan jokes, behind a 3-judge quorum so a partial panel can't quietly become a one-judge verdict. The gate fails closed. A regex pre-filter rejects garbage before any judge is billed. [`evaluator.ts`](beef/src/evaluation/evaluator.ts) · [evaluation framework](beef/docs/evaluation-framework.md) |
+| 🔎 **Hybrid retrieval, and the eval that says when it loses** | A [Python/FastAPI service](retrieval-service/) embeds the roast corpus and fuses BM25 + vector cosine with Reciprocal Rank Fusion, upgrading lexical FTS5 dedup to semantic near-duplicate detection. A 20-query golden set measures recall@k/MRR per mode — and reports that pure vector *beats* the hybrid default on it, with the reasoning for keeping hybrid anyway. [`hybrid.py`](retrieval-service/src/retrieval/hybrid.py) |
 | ⌨️ **Human-behavior modeling for a hostile platform** | The browser client types with inter-keystroke intervals drawn from a **log-normal distribution fit to a 136M-keystroke public dataset** (Aalto, CHI 2018), plus word-boundary pauses — statistical realism instead of a flat `sleep(50)`. Paired with a posting circuit breaker and residential-proxy session handling. [`playwright-twitter-client.ts`](beef/src/twitter/playwright-twitter-client.ts) |
 | 📈 **It learns from human ratings** | Telegram feedback (text/voice, Whisper-transcribed) feeds a style-analyzer that rewrites part of the prompt — best/worst angles, ideal length — closing a real loop back into generation. [`style-analyzer.ts`](beef/src/learning/style-analyzer.ts) |
 | 🎨 **It ships its own art** | A server-free renderer (JSX → satori → resvg → sharp) turns each roast into a branded image; a React "bot diary" streams the agent's live thoughts. See [the web layer](#the-web-layer). |
@@ -222,11 +223,38 @@ The landing is a single 2,400-line static file with a live "submit to audit" ter
 
 ---
 
+## The retrieval layer
+
+The bot always did **lexical** retrieval: SQLite FTS5 near-duplicate detection over the roast stockpile, plus rating-weighted few-shot example selection feeding the prompt builder. FTS5 catches a copy; it cannot catch a *rewrite* — the same joke with different words scores zero word overlap and sails through.
+
+[**`retrieval-service/`**](retrieval-service/) is the semantic half: a small Python/FastAPI service that embeds the corpus, fuses BM25 and vector cosine with **Reciprocal Rank Fusion**, and exposes `/search`, `/similar`, and an idempotent `/documents` upsert. The Node side calls it through a typed client and treats it as an **optional dependency** — when the service is down, `findSimilar` returns `null`, and dedup degrades to the FTS5 path rather than blocking the posting pipeline. ([`retrieval-client.ts`](beef/src/retrieval/retrieval-client.ts) · [`queue-manager.ts`](beef/src/queue/queue-manager.ts))
+
+**It is evaluated, not asserted.** A 20-query golden set measures recall@5/recall@10/MRR per mode against `text-embedding-3-small`:
+
+| Mode | Recall@5 | Recall@10 | MRR |
+|---|---:|---:|---:|
+| Lexical | 0.900 | 0.900 | 0.842 |
+| Vector | **1.000** | **1.000** | **0.975** |
+| Hybrid | 0.950 | **1.000** | 0.931 |
+
+Pure vector beats the hybrid default on this set — the golden queries are paraphrases, exactly where embeddings win outright and a weaker lexical leg only costs RRF rank positions. Hybrid stays the default because production queries include tickers, handles, and contract addresses, where BM25 is strictly better and embedding a hex string is noise. That trade is [written down with the numbers](retrieval-service/README.md#evaluations) instead of assumed, along with **why there is no hosted vector DB here**: at ~10³–10⁴ rows, brute-force cosine over packed float32 blobs beats operating another service — with `VectorStore` as the explicit swap seam and a thin `QdrantStore` for when it stops being true.
+
+---
+
+## A note on the stack
+
+This is a **TypeScript** system with a Python service attached, and the split is deliberate rather than apologetic: the orchestrator's job is scheduling, persistence, and a hostile Twitter API, and it was already Node; retrieval is where Python's ecosystem actually pays, so that is where Python is. The retrieval service is held to the same bar as the bot — `mypy --strict`, `ruff`, 49 no-network tests, its own CI job.
+
+The transferable parts are language-agnostic anyway: the provider fallback state machine, the judge-panel eval design and its calibration against human ratings, RRF and retrieval evals, prompt construction from retrieved context. Those are the same problems in any runtime.
+
+---
+
 ## Tech stack
 
 | Layer | Choice |
 |---|---|
-| **Language** | TypeScript 5.7, ESM, strict + `noUncheckedIndexedAccess` + `noImplicitReturns` |
+| **Language** | TypeScript 5.7, ESM, strict + `noUncheckedIndexedAccess` + `noImplicitReturns` — plus Python 3.12 for the retrieval service |
+| **Retrieval** | FastAPI · Pydantic v2 · `uv` · SQLite FTS5 + float32 embeddings · OpenAI embeddings · optional Qdrant · `pytest`/`mypy --strict`/`ruff` |
 | **Runtime** | Node ≥20, PM2, `tsx` |
 | **LLM engine** | `claude` CLI subprocess (primary) · `codex` CLI · `@anthropic-ai/sdk` · OpenAI Whisper |
 | **Twitter** | `twitter-api-v2` · `@the-convocation/twitter-scraper` (patched) · `patchright` · `cycletls` |
@@ -246,7 +274,8 @@ Enforced in CI and pre-commit, not decoration:
 - **`no-floating-promises` as an error** — every promise awaited or explicitly voided.
 - **Zod validates all env at boot** with cross-field gating (production requires the full Twitter credential set; hybrid mode requires proxy + profile) — fails fast with a formatted report, never three modules deep.
 - **Graceful shutdown** drains in-flight LLM subprocesses (bounded wait) before closing SQLite, in a `finally`.
-- **CI** ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) runs typecheck + lint + tests for the bot and typecheck + build for the web on every push.
+- **CI** ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) runs typecheck + lint + tests for the bot, `ruff` + `mypy --strict` + `pytest` for the retrieval service, and typecheck + build for the web on every push.
+- **Quality gates fail closed.** When the judge panel rejects every variant, nothing is posted; when the panel drops below quorum, it refuses to score rather than ruling by one surviving judge.
 
 <details>
 <summary><b>Repo layout</b></summary>
@@ -270,6 +299,7 @@ twitter-agents/
 │   ├── characters/        # bot personality definition
 │   └── docs/              # architecture, playbooks, audits, metrics reports
 ├── beef-web/              # 🎨 landing + React app + card renderer
+├── retrieval-service/     # 🔎 Python/FastAPI semantic retrieval (hybrid BM25+vector, RRF, evals)
 └── docs/assets/           # README media
 ```
 
