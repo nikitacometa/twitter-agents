@@ -73,6 +73,7 @@ export class QueueManager {
   private readonly pendingApprovals = new Map<number, { stockpileId?: number; mentionTweetId?: string }>();
   private readonly approvingIds = new Set<number>();
   private readonly regeneratingIds = new Set<number>();
+  private processingInFlight = false;
 
   constructor(opts: {
     queueRepo: QueueRepository;
@@ -237,6 +238,22 @@ export class QueueManager {
   }
 
   private async dequeueAndProcess(force = false): Promise<QueueProcessResult> {
+    // Single-flight guard: the scheduler cron and mention-triggered immediate
+    // processing can overlap. Both would pass the daily-limit / dedup checks
+    // before either records its post (TOCTOU), so overlapping runs serialize here.
+    if (this.processingInFlight) {
+      this.logger.debug('Queue processing already in flight — skipping');
+      return { dequeued: false, error: 'Processing already in progress' };
+    }
+    this.processingInFlight = true;
+    try {
+      return await this.dequeueAndProcessInner(force);
+    } finally {
+      this.processingInFlight = false;
+    }
+  }
+
+  private async dequeueAndProcessInner(force = false): Promise<QueueProcessResult> {
     const item = this.queueRepo.dequeue();
     if (!item) {
       this.logger.debug('Queue empty');
@@ -507,15 +524,25 @@ export class QueueManager {
       }
 
       if (!best) {
-        // All variants discarded by judges — still try posting the top self-scored variant
+        // Every variant was vetoed by the judge panel — fail closed. Posting a
+        // self-scored variant here would silently bypass the quality gate on
+        // exactly the batches the judges liked least.
         this.logger.warn(
           { queueId: item.id, target: item.targetName, variantCount: output.variants.length },
-          'All variants discarded by evaluation — using top self-scored',
+          'All variants discarded by evaluation — rejecting queue item',
         );
-        const fallback = output.variants[output.bestIndex] ?? output.variants[0]!;
-        return await this.postGeneratedRoast(
-          item, fallback.text, output, replyToId, undefined, 0, stockpiledVariants, fallback.angle,
-        );
+        this.queueRepo.fail(item.id, 'All variants rejected by judge panel');
+        this.activityLogger?.emit({
+          type: 'error',
+          data: { error: `All variants for ${item.targetName} rejected by judge panel` },
+        });
+        return {
+          dequeued: true,
+          posted: false,
+          target: item.targetName,
+          error: 'All variants rejected by judge panel',
+          stockpiledVariants,
+        };
       }
 
       return await this.postGeneratedRoast(
