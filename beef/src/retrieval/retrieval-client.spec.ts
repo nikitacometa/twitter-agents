@@ -37,6 +37,11 @@ describe('RetrievalClient', () => {
     return new RetrievalClient({ baseUrl: 'http://localhost:8100/', logger });
   }
 
+  function sentBody(): Record<string, unknown> {
+    const init = fetchMock.mock.calls[0]![1] as RequestInit;
+    return JSON.parse(init.body as string) as Record<string, unknown>;
+  }
+
   describe('findSimilar', () => {
     it('returns duplicate hits and strips the trailing slash from the base url', async () => {
       fetchMock.mockResolvedValue(
@@ -55,12 +60,25 @@ describe('RetrievalClient', () => {
     it('passes a custom threshold through to the service', async () => {
       fetchMock.mockResolvedValue(jsonResponse({ duplicates: [] }));
 
-      await makeClient().findSimilar('text', 0.95);
+      await makeClient().findSimilar('text', { threshold: 0.95 });
 
-      const body = JSON.parse((fetchMock.mock.calls[0]![1] as RequestInit).body as string) as {
-        threshold: number;
-      };
-      expect(body.threshold).toBe(0.95);
+      expect(sentBody()).toMatchObject({ threshold: 0.95 });
+    });
+
+    it('scopes the comparison to a kind when one is given', async () => {
+      fetchMock.mockResolvedValue(jsonResponse({ duplicates: [] }));
+
+      await makeClient().findSimilar('text', { kind: 'roast' });
+
+      expect(sentBody()).toMatchObject({ kind: 'roast' });
+    });
+
+    it('omits kind entirely when unscoped, rather than sending null', async () => {
+      fetchMock.mockResolvedValue(jsonResponse({ duplicates: [] }));
+
+      await makeClient().findSimilar('text');
+
+      expect(sentBody()).not.toHaveProperty('kind');
     });
 
     it('returns null on a non-200 response', async () => {

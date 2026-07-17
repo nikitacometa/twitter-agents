@@ -6,10 +6,12 @@ export interface SimilarHit {
   similarity: number;
 }
 
+export type DocumentKind = 'roast' | 'research' | 'tweet';
+
 export interface RetrievalDocument {
   id: string;
   text: string;
-  kind: 'roast' | 'research' | 'tweet';
+  kind: DocumentKind;
   target?: string;
   score?: number;
   created_at?: string;
@@ -36,9 +38,20 @@ export class RetrievalClient {
    * Semantic near-duplicate lookup — the embedding-based upgrade of the
    * stockpile's lexical isDuplicate(). Returns null when the service is
    * unreachable so callers can distinguish "no duplicates" from "unknown".
+   *
+   * Pass `kind` to scope the comparison: the corpus mixes roasts, research
+   * claims, and observed tweets, and an unscoped query would reject a roast
+   * for paraphrasing the research claim it was written from.
    */
-  async findSimilar(text: string, threshold = 0.83): Promise<SimilarHit[] | null> {
-    const body = await this.post('/similar', { text, threshold });
+  async findSimilar(
+    text: string,
+    opts: { threshold?: number; kind?: DocumentKind } = {},
+  ): Promise<SimilarHit[] | null> {
+    const body = await this.post('/similar', {
+      text,
+      threshold: opts.threshold ?? 0.83,
+      ...(opts.kind ? { kind: opts.kind } : {}),
+    });
     if (body === null) return null;
     const parsed = body as { duplicates?: SimilarHit[] };
     return Array.isArray(parsed.duplicates) ? parsed.duplicates : null;

@@ -690,9 +690,11 @@ export class QueueManager {
             });
             newStockpileCount++;
             stockpiledVariants.push({ text: variant.text, score: evalResult.compositeScore, angle: variant.angle });
-            // Best-effort corpus ingest (client never throws) so future
-            // semantic dedup sees this roast.
-            void this.retrieval?.ingestDocuments([
+            // Awaited, not fire-and-forget: a batch generates many variants for
+            // ONE target, so the next variant's semantic check must see this row
+            // already indexed — otherwise two paraphrases of each other both pass
+            // the gate. The client reports failure instead of throwing.
+            await this.retrieval?.ingestDocuments([
               {
                 id: `stockpile:${String(stockpileId)}`,
                 text: variant.text,
@@ -741,7 +743,7 @@ export class QueueManager {
    */
   private async isSemanticDuplicate(text: string, targetName: string): Promise<boolean> {
     if (!this.retrieval) return false;
-    const hits = await this.retrieval.findSimilar(text);
+    const hits = await this.retrieval.findSimilar(text, { kind: 'roast' });
     if (hits === null || hits.length === 0) return false;
     this.logger.info(
       { target: targetName, matches: hits.length, topSimilarity: hits[0]?.similarity },
