@@ -90,6 +90,7 @@ def _document_payload(document: Document, embedding_model: str) -> dict[str, obj
         "text": document.text,
         "kind": document.kind,
         "target": document.target,
+        "target_casefold": document.target.casefold() if document.target is not None else None,
         "document_score": document.score,
         "created_at": _created_at_text(document),
         "embedding_model": embedding_model,
@@ -452,7 +453,9 @@ class QdrantStore:
             )
         if target is not None:
             conditions.append(
-                qmodels.FieldCondition(key="target", match=qmodels.MatchValue(value=target))
+                qmodels.FieldCondition(
+                    key="target_casefold", match=qmodels.MatchValue(value=target.casefold())
+                )
             )
         query_filter = qmodels.Filter(must=conditions) if conditions else None
         try:

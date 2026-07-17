@@ -2,7 +2,21 @@ import os
 
 import pytest
 
-from retrieval.store import QdrantStore
+from retrieval.models import Document
+from retrieval.store import QdrantStore, _document_payload
+
+
+@pytest.mark.parametrize(
+    ("target", "expected"),
+    [("CarDano", "cardano"), (None, None)],
+)
+def test_document_payload_casefolds_target(target: str | None, expected: str | None) -> None:
+    document = Document(id="one", text="target payload", kind="research", target=target)
+
+    payload = _document_payload(document, "test-model")
+
+    assert payload["target"] == target
+    assert payload["target_casefold"] == expected
 
 
 @pytest.mark.qdrant
