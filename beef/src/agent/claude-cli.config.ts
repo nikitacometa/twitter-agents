@@ -30,10 +30,9 @@ const RESEARCH_TOOLS = [
   'mcp__perplexity__perplexity_ask',
   'WebSearch',
   'WebFetch',
-  'Bash(curl *)',
 ];
 
-const WEB_TOOLS = ['WebSearch', 'WebFetch', 'Bash(curl *)'];
+const WEB_TOOLS = ['WebSearch', 'WebFetch'];
 const LIGHT_RESEARCH_TOOLS = ['WebSearch', 'WebFetch'];
 
 // --- Task presets ---
@@ -44,7 +43,7 @@ const LIGHT_RESEARCH_TOOLS = ['WebSearch', 'WebFetch'];
 // | roast-power      | opus   | high   | Perplexity+Web  | 15    | 600s    | Premium Opus roast — no fallback          |
 // | roast-quick      | sonnet | low    | none            | 1     | 90s     | No-research fallback — measured ~38s      |
 // | reply            | sonnet | low    | none            | 1     | 30s     | Quick reply — speed matters most          |
-// | discovery        | sonnet | medium | Web+curl        | 10    | 120s    | Target finding — structured, not creative |
+// | discovery        | sonnet | medium | Web             | 10    | 120s    | Target finding — structured, not creative |
 // | verify           | sonnet | medium | Web             | 5     | 60s     | Fact-check — straightforward lookup       |
 // | audit            | sonnet | low    | none            | 1     | 30s     | Analytics — no research needed            |
 // | example-parse    | sonnet | high   | Read            | 3     | 120s    | Parse + analyze roast examples (images)   |

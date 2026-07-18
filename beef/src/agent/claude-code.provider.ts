@@ -1,4 +1,7 @@
 import { execFile as execFileCb, spawn } from 'node:child_process';
+import { mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { promisify } from 'node:util';
 import type { ChildProcess } from 'node:child_process';
 import type { Logger } from 'pino';
@@ -19,12 +22,52 @@ const DEFAULT_TIMEOUT_MS = 120_000;
 const HEALTH_CHECK_TIMEOUT_MS = 10_000;
 const SLOT_POLL_MS = 1_000;
 
+function getExtendedPath(): string {
+  const home = process.env.HOME ?? '';
+  return `${home}/.local/bin:${home}/.npm-global/bin:${process.env.PATH ?? ''}`;
+}
+
+const CLAUDE_ENV_KEYS = [
+  'HOME',
+  'ANTHROPIC_API_KEY',
+  'CLAUDE_CONFIG_DIR',
+  'NODE_EXTRA_CA_CERTS',
+  'SSL_CERT_FILE',
+] as const;
+
+const CLAUDE_CLI_ENV_KEYS = [
+  'CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC',
+  'CLAUDE_CODE_DISABLE_CLAUDE_MDS',
+  'CLAUDE_CODE_DISABLE_GIT_INSTRUCTIONS',
+  'CLAUDE_CODE_DISABLE_AUTO_MEMORY',
+] as const;
+
+function getClaudeEnv(): NodeJS.ProcessEnv {
+  const env: NodeJS.ProcessEnv = { PATH: getExtendedPath() };
+
+  for (const key of CLAUDE_ENV_KEYS) {
+    const value = process.env[key];
+    if (value !== undefined) env[key] = value;
+  }
+
+  for (const key of CLAUDE_CLI_ENV_KEYS) {
+    const value = cliConfig.env[key];
+    if (value !== undefined) env[key] = value;
+  }
+
+  return env;
+}
+
+function isBashTool(tool: string): boolean {
+  return /^Bash(?:\(|$)/u.test(tool.trim());
+}
+
 export class ClaudeCodeProvider implements LLMProvider {
   readonly name: ProviderName = 'claude-code';
   readonly capabilities: ProviderCapabilities = {
     hasPerplexity: true,
     hasWebSearch: true,
-    hasFileAccess: false,
+    hasFileAccess: true,
     maxTurns: 25,
   };
 
@@ -46,7 +89,8 @@ export class ClaudeCodeProvider implements LLMProvider {
 
     const start = Date.now();
     const preset = getPreset(task.profile ?? 'roast-research');
-    const toolSet = task.allowedTools ?? [...preset.tools];
+    const requestedTools = task.allowedTools ?? preset.tools;
+    const toolSet = requestedTools.filter((tool) => !isBashTool(tool));
     // Add Read tool when images are provided (Claude Code reads images via Read)
     if (task.imagePaths?.length && !toolSet.includes('Read')) {
       toolSet.push('Read');
@@ -84,8 +128,11 @@ export class ClaudeCodeProvider implements LLMProvider {
       args.push('--fallback-model', preset.fallbackModel);
     }
 
+    let tmpDir: string | undefined;
+
     try {
-      const { stdout } = await this.execClaude(args, timeout);
+      tmpDir = await mkdtemp(join(tmpdir(), 'claude-code-'));
+      const { stdout } = await this.execClaude(args, timeout, tmpDir);
 
       const parsed = extractJsonFromOutput(stdout);
       const data = JSON.parse(parsed) as T;
@@ -113,16 +160,17 @@ export class ClaudeCodeProvider implements LLMProvider {
       throw error;
     } finally {
       this.runningCount--;
+      if (tmpDir) {
+        await this.cleanupTmp(tmpDir);
+      }
     }
   }
 
   async healthCheck(): Promise<boolean> {
     try {
-      const home = process.env.HOME ?? '';
-      const extendedPath = `${home}/.local/bin:${home}/.npm-global/bin:${process.env.PATH ?? ''}`;
       const { stdout } = await execFileAsync('claude', ['--version'], {
         timeout: HEALTH_CHECK_TIMEOUT_MS,
-        env: { ...process.env, PATH: extendedPath },
+        env: getClaudeEnv(),
       });
       const healthy = stdout.trim().length > 0;
       this.logger.debug({ version: stdout.trim() }, 'Claude Code health check');
@@ -159,18 +207,12 @@ export class ClaudeCodeProvider implements LLMProvider {
     return this.runningCount;
   }
 
-  private execClaude(args: string[], timeout: number): Promise<{ stdout: string }> {
+  private execClaude(args: string[], timeout: number, cwd: string): Promise<{ stdout: string }> {
     return new Promise((resolve, reject) => {
-      // Extend PATH for PM2/cron contexts where ~/.local/bin isn't in PATH
-      const home = process.env.HOME ?? '';
-      const extendedPath = `${home}/.local/bin:${home}/.npm-global/bin:${process.env.PATH ?? ''}`;
-
-      // Remove ANTHROPIC_API_KEY so Claude CLI uses subscription auth, not API key
-      const baseEnv = { ...process.env };
-      delete baseEnv.ANTHROPIC_API_KEY;
       const child = spawn('claude', args, {
         stdio: ['ignore', 'pipe', 'pipe'],
-        env: { ...baseEnv, ...cliConfig.env, PATH: extendedPath },
+        env: getClaudeEnv(),
+        cwd,
       });
       this.childProcesses.add(child);
 
@@ -215,6 +257,14 @@ export class ClaudeCodeProvider implements LLMProvider {
   private async waitForSlot(): Promise<void> {
     while (this.runningCount >= this.maxConcurrent) {
       await new Promise((resolve) => setTimeout(resolve, SLOT_POLL_MS));
+    }
+  }
+
+  private async cleanupTmp(dir: string): Promise<void> {
+    try {
+      await rm(dir, { recursive: true, force: true });
+    } catch (error) {
+      this.logger.warn({ err: error, dir }, 'Failed to clean up Claude Code temporary directory');
     }
   }
 }
